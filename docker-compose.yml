@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: fnb_rabbitmq
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    networks:
+      - fnb_network
+
+  postgres-auth:
+    image: postgres:15
+    container_name: fnb_postgres_auth
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: auth_db
+    networks:
+      - fnb_network
+
+  postgres-branch:
+    image: postgres:15
+    container_name: fnb_postgres_branch
+    ports:
+      - '5433:5432'
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: branch_db
+    networks:
+      - fnb_network
+
+  postgres-product:
+    image: postgres:15
+    container_name: fnb_postgres_product
+    ports:
+      - '5434:5432'
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: product_db
+    networks:
+      - fnb_network
+
+  postgres-order:
+    image: postgres:15
+    container_name: fnb_postgres_order
+    ports:
+      - '5435:5432'
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: order_db
+    networks:
+      - fnb_network
+
+  postgres-inventory:
+    image: postgres:15
+    container_name: fnb_postgres_inventory
+    ports:
+      - '5436:5432'
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: inventory_db
+    networks:
+      - fnb_network
+
+  postgres-reporting:
+    image: postgres:15
+    container_name: fnb_postgres_reporting
+    ports:
+      - '5437:5432'
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: reporting_db
+    networks:
+      - fnb_network
+
+networks:
+  fnb_network:
+    driver: bridge
