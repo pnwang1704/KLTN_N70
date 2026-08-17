@@ -3,7 +3,9 @@ import { AppModule } from './app.module';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 
 async function bootstrap() {
-  const app = await NestFactory.createMicroservice<MicroserviceOptions>(AppModule, {
+  const app = await NestFactory.create(AppModule);
+
+  app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.RMQ,
     options: {
       urls: ['amqp://user:password@localhost:5672'],
@@ -13,6 +15,10 @@ async function bootstrap() {
       },
     },
   });
-  await app.listen();
+
+  app.enableCors({ origin: '*' });
+  
+  await app.startAllMicroservices();
+  await app.listen(3004);
 }
 bootstrap();
