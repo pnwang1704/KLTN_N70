@@ -14,7 +14,7 @@ export class EventsGateway {
 
   @SubscribeMessage('joinBranchRoom')
   handleJoinBranchRoom(
-    @MessageBody('branchId') branchId: string,
+    @MessageBody() branchId: string,
     @ConnectedSocket() client: Socket,
   ) {
     client.join(branchId);
