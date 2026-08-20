@@ -1,5 +1,6 @@
 import { Controller, Post, Get, Put, Body, Param, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
+import { Roles } from './common/decorators/roles.decorator';
 import { CreateIngredientDto, UpdateIngredientDto, CreateRecipeDto, UpdateRecipeDto, StockInDto } from './dto/inventory.dto';
 
 @Controller('inventory')
@@ -9,6 +10,7 @@ export class InventoryController {
   ) {}
 
   // --- INGREDIENTS ---
+  @Roles('ADMIN', 'MANAGER')
   @Post('ingredients')
   createIngredient(@Body() dto: CreateIngredientDto) {
     return this.inventoryClient.send('create_ingredient', dto);
