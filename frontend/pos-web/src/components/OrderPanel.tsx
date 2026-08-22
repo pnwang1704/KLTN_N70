@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { formatCurrency, cn } from '../lib/utils';
-import { Trash2, Send, CreditCard } from 'lucide-react';
+import { Trash2, Send, CreditCard, LayoutGrid } from 'lucide-react';
 import api from '../lib/axios';
+import { TableMap } from './TableMap';
 
 interface OrderPanelProps {
   onOpenPayment: (orderId: string, totalAmount: number) => void;
@@ -12,6 +13,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
   const { cart, updateQuantity, removeFromCart, totalAmount, clearCart } = useCart();
   const [orderType, setOrderType] = useState<'AT_TABLE' | 'TAKE_AWAY'>('TAKE_AWAY');
   const [tableId, setTableId] = useState('');
+  const [showTableMap, setShowTableMap] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
 
@@ -105,15 +107,40 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
           </button>
         </div>
         {orderType === 'AT_TABLE' && (
-          <input 
-            type="text" 
-            placeholder="Nhập số bàn (VD: 12)" 
-            value={tableId}
-            onChange={e => setTableId(e.target.value)}
-            className="w-full px-4 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:border-orange-500"
-          />
+          <div className="flex items-center gap-2">
+            <input 
+              type="text" 
+              placeholder="Chọn bàn hoặc nhập..." 
+              value={tableId ? `Bàn ${tableId}` : ''}
+              readOnly
+              className="w-full px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-900 focus:outline-none focus:border-orange-500 cursor-pointer"
+              onClick={() => setShowTableMap(true)}
+            />
+            <button 
+              onClick={() => setShowTableMap(true)}
+              className="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
+              title="Mở sơ đồ bàn"
+            >
+              <LayoutGrid size={20} />
+            </button>
+          </div>
         )}
       </div>
+
+      {showTableMap && (
+        <TableMap 
+          branchId={JSON.parse(localStorage.getItem('pos_user') || '{}')?.branchId || '1'}
+          onSelectTable={(id) => {
+            setTableId(id);
+            setShowTableMap(false);
+          }}
+          onPayTable={(id, total) => {
+            onOpenPayment(id, total);
+            setShowTableMap(false);
+          }}
+          onClose={() => setShowTableMap(false)}
+        />
+      )}
 
       {/* Cart Items */}
       <div className="flex-1 overflow-y-auto p-4 bg-zinc-50/50">

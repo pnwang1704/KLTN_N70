@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Eye, X } from 'lucide-react';
+import { FileText, Eye, X, Printer } from 'lucide-react';
 import api from '../lib/axios';
 import { formatCurrency, formatDate } from '../lib/utils';
+import { Receipt } from './Receipt';
 
 export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
   const [orders, setOrders] = useState<any[]>([]);
@@ -83,8 +84,8 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
 
       {/* Order Detail Modal */}
       {selectedOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:bg-white print:static print:inset-auto print:p-0">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 print:hidden">
             <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-orange-50">
               <h3 className="font-bold text-lg text-orange-900">Chi tiết đơn: {selectedOrder.id.split('-')[0]}</h3>
               <button onClick={() => setSelectedOrder(null)} className="p-1 text-zinc-400 hover:text-zinc-900"><X size={20} /></button>
@@ -121,10 +122,20 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
             </div>
 
             <div className="p-6 bg-zinc-50 border-t border-zinc-200 flex justify-between items-center">
-              <span className="font-bold text-zinc-600">Tổng thanh toán:</span>
-              <span className="text-2xl font-bold text-orange-600">{formatCurrency(selectedOrder.finalAmount)}</span>
+              <div>
+                <span className="block font-bold text-zinc-600 text-sm mb-1">Tổng thanh toán:</span>
+                <span className="text-2xl font-bold text-orange-600">{formatCurrency(selectedOrder.finalAmount)}</span>
+              </div>
+              <button 
+                onClick={() => window.print()}
+                className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 transition-colors"
+              >
+                <Printer size={18} /> In Hóa Đơn
+              </button>
             </div>
           </div>
+
+          <Receipt order={selectedOrder} user={JSON.parse(localStorage.getItem('pos_user') || '{}')} />
         </div>
       )}
     </div>
