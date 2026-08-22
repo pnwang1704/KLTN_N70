@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
-import axios from 'axios';
+import api from '../lib/axios';
 import { useCart } from '../context/CartContext';
 
 interface PaymentModalProps {
@@ -33,12 +33,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
     
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('pos_token') || '';
-      await axios.post(`http://localhost:3000/orders/${orderId}/pay`, {
+      await api.post(`/orders/${orderId}/pay`, {
         paymentMethod,
         amountPaid
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
       
       setIsSuccess(true);

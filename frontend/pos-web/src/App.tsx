@@ -1,20 +1,45 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ProductList } from './components/ProductList';
 import { OrderPanel } from './components/OrderPanel';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { PaymentModal } from './components/PaymentModal';
+import { LoginScreen } from './components/LoginScreen';
 import { useSocket } from './hooks/useSocket';
 import type { Product } from './types';
 
 function App() {
-  const { isConnected, toastMessage, clearToast } = useSocket('1');
+  const [user, setUser] = useState<any>(null);
+  
+  useEffect(() => {
+    // Check if user is already logged in
+    const storedUser = localStorage.getItem('pos_user');
+    const token = localStorage.getItem('pos_token');
+    if (storedUser && token) {
+      setUser(JSON.parse(storedUser));
+    }
+
+    // Listen for unauthorized event from Axios interceptor
+    const handleUnauthorized = () => {
+      setUser(null);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
+  const branchId = user?.branchId || '1';
+  const { isConnected, toastMessage, clearToast } = useSocket(branchId);
+  
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<{orderId: string, amount: number} | null>(null);
 
+  if (!user) {
+    return <LoginScreen onLoginSuccess={(u) => setUser(u)} />;
+  }
+
   return (
     <div className="h-screen flex flex-col bg-zinc-100 overflow-hidden relative">
-      <Header isConnected={isConnected} />
+      <Header isConnected={isConnected} user={user} onLogout={() => setUser(null)} />
       
       {/* 2 Column Layout */}
       <div className="flex-1 flex overflow-hidden">

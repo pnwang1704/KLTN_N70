@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { formatCurrency, cn } from '../lib/utils';
 import { Trash2, Send, CreditCard } from 'lucide-react';
-import axios from 'axios';
+import api from '../lib/axios';
 
 interface OrderPanelProps {
   onOpenPayment: (orderId: string, totalAmount: number) => void;
@@ -27,10 +27,9 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
     
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('pos_token') || '';
-      
+      // Branch ID could be fetched from User context if needed, hardcode '1' for fallback
       const payload = {
-        branchId: '1', // Hardcode for MVP
+        branchId: '1',
         tableId: orderType === 'AT_TABLE' ? tableId : undefined,
         orderType,
         totalAmount,
@@ -51,9 +50,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
         }))
       };
 
-      const res = await axios.post('http://localhost:3000/orders', payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await api.post('/orders', payload);
       
       const newOrder = res.data;
       setCreatedOrderId(newOrder.id);

@@ -1,24 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Wifi, WifiOff, Settings, Bell } from 'lucide-react';
+import React from 'react';
+import { Wifi, WifiOff, LogOut, Bell } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 interface HeaderProps {
   isConnected: boolean;
+  user: any;
+  onLogout: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ isConnected }) => {
-  const [token, setToken] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
-
-  useEffect(() => {
-    const savedToken = localStorage.getItem('pos_token');
-    if (savedToken) setToken(savedToken);
-  }, []);
-
-  const handleSaveToken = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setToken(val);
-    localStorage.setItem('pos_token', val);
+export const Header: React.FC<HeaderProps> = ({ isConnected, user, onLogout }) => {
+  const handleLogout = () => {
+    localStorage.removeItem('pos_token');
+    localStorage.removeItem('pos_user');
+    onLogout();
   };
 
   return (
@@ -26,9 +20,9 @@ export const Header: React.FC<HeaderProps> = ({ isConnected }) => {
       <div className="flex items-center gap-6">
         <h1 className="text-2xl font-bold text-orange-600 tracking-tight">N70 POS</h1>
         <div className="flex items-center text-sm font-medium text-zinc-500 bg-zinc-100 px-3 py-1.5 rounded-full">
-          <span>Chi nhánh 1</span>
+          <span>Chi nhánh {user?.branchId || 1}</span>
           <span className="mx-2">•</span>
-          <span className="text-zinc-900">Thu ngân: Nhat Quang</span>
+          <span className="text-zinc-900 capitalize">Thu ngân: {user?.username}</span>
         </div>
       </div>
 
@@ -46,28 +40,13 @@ export const Header: React.FC<HeaderProps> = ({ isConnected }) => {
           <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-zinc-100"></span>
         </button>
 
-        <div className="relative">
-          <button 
-            onClick={() => setShowSettings(!showSettings)}
-            className="p-2 bg-zinc-100 rounded-full hover:bg-zinc-200 transition-colors text-zinc-600"
-          >
-            <Settings size={20} />
-          </button>
-          
-          {showSettings && (
-            <div className="absolute right-0 mt-2 w-72 bg-white border border-zinc-200 rounded-xl shadow-xl p-4 z-50">
-              <label className="block text-sm font-semibold text-zinc-900 mb-2">Cashier Token (JWT)</label>
-              <p className="text-xs text-zinc-500 mb-3">Dùng để xác thực API Thanh toán & Tạo đơn.</p>
-              <input 
-                type="text" 
-                value={token}
-                onChange={handleSaveToken}
-                placeholder="Paste token here..."
-                className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
-              />
-            </div>
-          )}
-        </div>
+        <button 
+          onClick={handleLogout}
+          className="p-2 bg-red-50 rounded-full hover:bg-red-100 transition-colors text-red-600"
+          title="Đăng xuất"
+        >
+          <LogOut size={20} />
+        </button>
       </div>
     </header>
   );
