@@ -1,84 +1,78 @@
-# Hệ thống Quản lý F&B Đa Chi nhánh (Microservices)
+# Hệ thống POS & KDS Bán Hàng F&B (Khóa Luận Tốt Nghiệp)
 
-Đây là mã nguồn hệ thống phần mềm quản lý chuỗi nhà hàng, quán cafe F&B được xây dựng theo kiến trúc **Microservices** hiện đại, kết nối thời gian thực (Realtime). Dự án phục vụ cho Đồ án/Khóa luận Tốt nghiệp (KLTN).
+Dự án Hệ thống Quản lý Bán hàng F&B (Food & Beverage) hiện đại, tích hợp KDS (Kitchen Display System), QR Order và POS (Point of Sale). Hệ thống được xây dựng theo kiến trúc Microservices với Node.js, React (Vite), PostgreSQL, RabbitMQ, và được đóng gói hoàn toàn bằng Docker.
 
-## 1. Bảng Tổng hợp Hạ tầng Hệ thống
+## 🚀 Tính năng nổi bật
+- **Customer QR Web:** Quét mã QR tại bàn để gọi món.
+- **KDS Web:** Màn hình hiển thị bếp Realtime (đồng bộ Socket.io).
+- **POS Web:** Màn hình thu ngân, quản lý sơ đồ bàn, kho hàng và in hóa đơn nhiệt.
+- **Microservices Architecture:** Tách biệt hoàn toàn Auth, Order, Inventory, v.v.
 
-| Thành phần | Công nghệ | Cổng (Port) | Cơ sở dữ liệu (DB) / Queue |
-| :--- | :--- | :--- | :--- |
-| **API Gateway** | NestJS | `3000` | N/A |
-| **Auth Service** | NestJS, TypeORM | - | PostgreSQL (`5432`, `auth_db`), RabbitMQ (`auth_queue`) |
-| **Order Service** | NestJS, Socket.IO | `3004` (HTTP/WS) | PostgreSQL (`5435`, `order_db`), RabbitMQ (`order_queue`) |
-| **Inventory Service** | NestJS, TypeORM | - | PostgreSQL (`5436`, `inventory_db`), RMQ (`inventory_queue`) |
-| **Message Broker** | RabbitMQ | `15672` (UI) / `5672` | Tài khoản Management UI: `guest` / `guest` |
-| **Frontend KDS** | React, Vite | `5173` | Giao diện Bếp (Kitchen Display System) |
-| **Frontend Customer**| React, Vite | `5174` | Web gọi món qua mã QR tại bàn |
-| **Frontend POS** | React, Vite | `5175` | Web Thu ngân (Point of Sale) |
+---
 
-*Tài khoản Đăng nhập Hệ thống mặc định (Super Admin):*
+## 🏗 Bảng Tổng hợp Hạ tầng (Infrastructure & Ports)
+Toàn bộ hệ thống chạy ngầm trong một mạng nội bộ (`app-network`). Dưới đây là danh sách các Port được mở ra môi trường Host (máy thật):
+
+| Thành phần | Công nghệ | Container Name | Port ngoài (Host) | Port trong |
+| :--- | :--- | :--- | :--- | :--- |
+| **RabbitMQ Management** | RabbitMQ | `fnb_rabbitmq` | `15672` (UI), `5672` | 15672, 5672 |
+| **API Gateway** | NestJS | `fnb_api_gateway` | **`3000`** | 3000 |
+| **Order Service (Socket)** | NestJS | `fnb_order_service` | **`3004`** | 3004 |
+| **Auth Database** | PostgreSQL | `fnb_postgres_auth` | `5432` | 5432 |
+| **Product Database** | PostgreSQL | `fnb_postgres_product`| `5434` | 5432 |
+| **Order Database** | PostgreSQL | `fnb_postgres_order` | `5435` | 5432 |
+| **Inventory Database** | PostgreSQL| `fnb_postgres_inventory`| `5436` | 5432 |
+| **Branch DB** *(Pending)* | PostgreSQL | `fnb_postgres_branch` | `5437` | 5432 |
+| **Reporting DB** *(Pending)*| PostgreSQL | `fnb_postgres_reporting`| `5438` | 5432 |
+| **KDS Web** | React + Nginx | `fnb_kds_web` | **`5173`** | 80 |
+| **Customer QR Web** | React + Nginx | `fnb_customer_web` | **`5174`** | 80 |
+| **POS Web** | React + Nginx | `fnb_pos_web` | **`5175`** | 80 |
+
+---
+
+## 🛠 Hướng dẫn Khởi chạy (Chỉ 1 câu lệnh)
+
+Bạn không cần cài đặt Node.js, không cần cấu hình Database. Chỉ cần có Docker và chạy duy nhất lệnh sau tại thư mục gốc:
+
+```bash
+docker compose up --build -d
+```
+
+*(Quá trình này có thể mất 1-3 phút để biên dịch toàn bộ Microservices và Frontend. Hệ thống có cơ chế **Healthcheck** tự động chờ Database & RabbitMQ lên sóng mới khởi động Backend).*
+
+---
+
+## 🧪 Hướng dẫn Test Luồng E2E
+Sau khi các Container `Started`, mở 3 tab trình duyệt để mô phỏng thực tế:
+
+1. **Khách hàng gọi món (Customer QR):** `http://localhost:5174`
+   - Bấm chọn món, thêm Topping, Ghi chú. Bấm "Thanh toán".
+2. **Nhà Bếp (KDS):** `http://localhost:5173`
+   - Đăng nhập (nếu yêu cầu). Đơn hàng vừa tạo sẽ **lập tức nảy lên (Realtime)** ở màn hình bếp. Bếp bấm "Bắt đầu làm" -> "Hoàn thành".
+3. **Thu ngân (POS):** `http://localhost:5175`
+   - Đăng nhập. Chuyển sang Tab "Sơ đồ bàn", bàn của khách sẽ đổi màu (Đang phục vụ).
+   - Nhấp vào bàn -> Bấm thanh toán.
+   - Hóa đơn nhiệt (80mm) sẽ tự động hiện lên để in.
+   - Chuyển sang Tab "Quản lý Kho", số lượng nguyên liệu tự động bị trừ ngầm qua hệ thống Message Broker.
+
+### 🔑 Tài khoản Mẫu (Super Admin)
 - **Tên đăng nhập:** `admin`
 - **Mật khẩu:** `admin123`
+*(Dùng để đăng nhập vào POS và KDS)*
 
 ---
 
-## 2. Hướng dẫn Khởi chạy Hệ thống từ đầu
-
-### Bước 2.1: Khởi động Hạ tầng Docker (Database & RabbitMQ)
-Chạy lệnh sau tại thư mục gốc của dự án để khởi động toàn bộ PostgreSQL và RabbitMQ:
-```bash
-docker-compose up -d
-```
-*(Nếu là lần đầu chạy, Auth Service sẽ tự động nạp sẵn tài khoản `admin` vào Database).*
-
-### Bước 2.2: Khởi động các Microservices (Backend)
-Mở nhiều tab Terminal, truy cập vào từng thư mục và chạy lệnh khởi động tương ứng:
-```bash
-# Terminal 1: API Gateway
-cd api-gateway && npm run start:dev
-
-# Terminal 2: Auth Service
-cd services/auth-service && npm run start:dev
-
-# Terminal 3: Inventory Service
-cd services/inventory-service && npm run start:dev
-
-# Terminal 4: Order Service
-cd services/order-service && npm run start:dev
-```
-
-### Bước 2.3: Khởi động các Ứng dụng Frontend
-Tương tự, mở thêm các tab Terminal mới:
-```bash
-# Terminal 5: Màn hình Bếp (KDS)
-cd frontend/kds-web && npm run dev
-
-# Terminal 6: Màn hình Khách tự gọi món (QR Customer)
-cd frontend/customer-web && npm run dev
-
-# Terminal 7: Màn hình Thu ngân (POS)
-cd frontend/pos-web && npm run dev
-```
+## ⚙️ Hướng dẫn cho Developer
+Hệ thống sử dụng cơ chế Multi-stage build cho Docker. 
+Trong tương lai, khi hoàn thiện code cho các module đang dở dang (`product-service`, `branch-service`, `reporting-service`), các bạn thao tác như sau:
+1. Mở file `docker-compose.yml`.
+2. Tìm đến tên service đó và **xóa dấu comment `#`** phía trước các dòng cấu hình của khối đó.
+3. Chạy lại lệnh `docker compose up --build -d`. Docker sẽ tự động nhận diện thay đổi và build image mới.
 
 ---
 
-## 3. Hướng dẫn Demo Nhanh Luồng E2E 3 Màn Hình
-
-1. **Chuẩn bị màn hình:** 
-   - Truy cập **POS** (`http://localhost:5175`), lấy JWT Token từ API Login và dán vào nút Cài đặt (Bánh răng góc phải).
-   - Truy cập **KDS** (`http://localhost:5173`), dán JWT Token tương tự vào phần Cài đặt của bếp. Đảm bảo đèn báo Socket.IO màu xanh (Connected).
-   - Truy cập **Customer Web** (`http://localhost:5174`). Giả lập kích thước màn hình Mobile.
-
-2. **Kịch bản Demo Tương tác:**
-   - Tại màn hình **Customer Web**, khách hàng tick chọn mua 2 ly Trà Sữa (thêm Trân châu, Size L) và bấm **Gọi Món**.
-   - Ngay lập tức, tại màn hình **KDS**, đơn hàng vừa đặt sẽ "nảy" lên màn hình bếp với tiếng chuông cảnh báo. Trạng thái món là "Pending".
-   - Nhân viên bếp (KDS) bấm nút **"Bắt đầu làm"**. Món ăn chuyển sang tab "Đang làm".
-   - Sau khi pha chế xong, bếp bấm **"Hoàn thành"**. Ngay tích tắc, màn hình **POS** của Thu ngân sẽ hiển thị một thông báo màu xanh (Toast): *"Món Trà Sữa - Bàn 12 đã sẵn sàng!"*.
-   - Thu ngân mang nước ra cho khách. Khách đến quầy thanh toán, Thu ngân nhấp vào nút **Thanh toán**, nhập số tiền khách đưa để hoàn tất đơn hàng. 
-
----
-
-## 4. Tài liệu Kỹ thuật Chi tiết
-Vui lòng xem các tài liệu chuyên sâu trong thư mục `docs/`:
-- [Kiến trúc Hệ thống & Bảo mật (ARCHITECTURE.md)](./docs/ARCHITECTURE.md)
-- [Chi tiết Luồng Nghiệp Vụ E2E (E2E_WORKFLOWS.md)](./docs/E2E_WORKFLOWS.md)
-- [Tài liệu API Endpoint (API_DOCUMENTATION.md)](./docs/API_DOCUMENTATION.md)
+## 📚 Tài liệu Kỹ thuật
+Vui lòng tham khảo thư mục `docs/` để biết thêm chi tiết về kiến trúc:
+- [Kiến trúc Hệ thống (ARCHITECTURE.md)](docs/ARCHITECTURE.md)
+- [Tài liệu API (API_DOCUMENTATION.md)](docs/API_DOCUMENTATION.md)
+- [Luồng Hoạt động E2E (E2E_WORKFLOWS.md)](docs/E2E_WORKFLOWS.md)
