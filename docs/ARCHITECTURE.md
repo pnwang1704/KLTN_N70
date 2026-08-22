@@ -1,32 +1,49 @@
-# Kiến trúc Hệ thống (Architecture)
+# Kiến Trúc Hệ Thống (System Architecture)
 
-Hệ thống được thiết kế theo tư tưởng **Microservices**, đảm bảo tính mở rộng cao, khả năng chịu lỗi (fault-tolerance), và khả năng tách biệt miền dữ liệu (domain-driven design).
+Hệ thống được thiết kế theo mô hình **Microservices Architecture** với mục tiêu phân tách rõ ràng trách nhiệm, tăng khả năng mở rộng (scalability) và dễ dàng bảo trì.
 
-## 1. Kiến trúc Database-per-Service
-Trong hệ thống F&B N70, mỗi Microservice hoàn toàn sở hữu và làm chủ một cơ sở dữ liệu riêng biệt.
-- Các Service KHÔNG được phép truy xuất trực tiếp vào DB của nhau.
-- **Lợi ích**: Giảm thiểu độ trễ truy xuất cục bộ, đảm bảo tính độc lập khi triển khai, dễ dàng nâng cấp hoặc thay đổi công nghệ cơ sở dữ liệu của một Service mà không ảnh hưởng tới toàn hệ thống.
-- **Cụ thể**: 
-  - `auth_db` (Quản lý User, Credential, Role).
-  - `order_db` (Quản lý Order, OrderItems, Payment).
-  - `inventory_db` (Quản lý Recipe, Ingredient, Stock).
+## 1. Sơ đồ Tổng quan
+```mermaid
+graph TD
+    %% Clients
+    C1[Customer QR Web] -->|HTTP/REST| GW(API Gateway)
+    C2[POS Web] -->|HTTP/REST| GW
+    C3[KDS Web] -->|HTTP/REST| GW
+    C3 -.->|WebSocket| OS[Order Service]
+    C2 -.->|WebSocket| OS
+    C1 -.->|WebSocket| OS
+    
+    %% API Gateway
+    GW -->|TCP/RMQ| AS[Auth Service]
+    GW -->|TCP/RMQ| OS
+    GW -->|TCP/RMQ| IS[Inventory Service]
+    
+    %% Message Broker
+    RMQ((RabbitMQ Broker))
+    AS -.->|Event Pub/Sub| RMQ
+    OS -.->|Event Pub/Sub| RMQ
+    IS -.->|Event Pub/Sub| RMQ
+    
+    %% Databases
+    AS --> DB1[(Auth DB)]
+    OS --> DB2[(Order DB)]
+    IS --> DB3[(Inventory DB)]
+```
 
-## 2. Giao tiếp Đồng bộ (Synchronous Communication)
-- **API Gateway tới Microservices**: Sử dụng **TCP Microservices** thông qua NestJS `ClientProxy`. Pattern được sử dụng là **Request-Response** (`MessagePattern`).
-- Lợi ích: API Gateway chỉ đóng vai trò là cửa ngõ định tuyến, gọi RPC tới các Service tương ứng, chờ kết quả rồi trả về cho Frontend. Nó làm giảm sự phụ thuộc HTTP chồng chéo giữa các nội bộ.
+## 2. Database-per-Service Pattern
+Để đảm bảo tính độc lập (loose coupling), mỗi Microservice sở hữu một Database PostgreSQL riêng biệt. Dữ liệu không bao giờ được truy cập chéo trực tiếp qua Database, mà phải thông qua việc gọi nội bộ (Message Pattern) hoặc bắt sự kiện (Event Pattern).
 
-### Realtime qua WebSocket (Socket.IO)
-- `order-service` triển khai `EventsGateway` ở Port `3004`.
-- Frontend (KDS, POS) kết nối trực tiếp với Port này, tham gia vào Room theo `branchId`.
-- Sử dụng mô hình **Pub/Sub Room-based**: Bất cứ khi nào Order Service ghi nhận có thay đổi (Tạo đơn, Đổi trạng thái món), nó sẽ broadcast sự kiện tới toàn bộ Client trong room đó ngay lập tức (độ trễ < 50ms).
+- **Auth DB (`5432`):** Lưu trữ thông tin người dùng, mật khẩu đã mã hóa (Bcrypt) và quyền hạn (Roles).
+- **Order DB (`5435`):** Lưu trữ chi tiết đơn hàng, món ăn, topping, phương thức thanh toán.
+- **Inventory DB (`5436`):** Lưu trữ định mức nguyên vật liệu và lịch sử xuất nhập kho.
 
-## 3. Giao tiếp Bất đồng bộ (Asynchronous Communication)
-Được triển khai qua **RabbitMQ** bằng pattern **Event-Driven** (`EventPattern`).
-- **Use case chính**: Xử lý logic nghiệp vụ tốn thời gian hoặc chạy nền, đảm bảo tính Consistency mà không làm nghẽn luồng Request-Response.
-- **Ví dụ**: Khi thanh toán đơn hàng thành công, `order-service` sẽ Publish (phát) một event `order.completed`. Ngay lập tức API trả về kết quả thành công cho người dùng. Phía sau, `inventory-service` đóng vai trò là Consumer, lắng nghe event này, bóc tách dữ liệu và từ từ thực hiện thuật toán đệ quy trừ kho theo công thức (Recipe) tương ứng.
+## 3. Cơ chế Bảo mật (Stateless JWT & RBAC)
+**API Gateway** đóng vai trò là chốt chặn an ninh duy nhất của hệ thống:
+1. **Authentication:** Khi client gọi `/auth/login`, Gateway ủy quyền qua RabbitMQ cho `auth-service` xác thực. Nếu đúng, `auth-service` trả về JWT Token.
+2. **Authorization (RBAC Guard):** Mọi request tiếp theo phải mang Header `Authorization: Bearer <token>`. Tại Gateway, một Global Guard sẽ giải mã Token này:
+   - Các API công khai được đánh dấu `@Public` sẽ được bỏ qua.
+   - Các API nghiệp vụ sẽ yêu cầu Roles cụ thể (ví dụ `@Roles('ADMIN', 'MANAGER')`). Nếu Token không chứa Role hợp lệ, Gateway trả về `403 Forbidden` ngay lập tức, không làm phiền đến các Microservice bên dưới.
 
-## 4. Cơ chế Bảo mật Stateless JWT & RBAC
-- **Authentication**: JWT được sinh ra tại `auth-service` và trả về qua API Gateway sau khi Login. JWT được thiết kế theo chuẩn **Stateless**, chứa sẵn Payload về thông tin định danh và Danh sách quyền (Roles).
-- **Authorization (RBAC)**: Tại API Gateway, hệ thống áp dụng `JwtAuthGuard` để bảo vệ Global (bảo vệ tất cả các route mặc định). Các Route công khai như Đăng nhập, Tạo đơn qua QR sẽ được dán mác `@Public()`.
-- Việc giải mã (decode) và xác thực chữ ký JWT được thực hiện **trực tiếp tại API Gateway** (Zero-latency) nhờ chia sẻ chung `JWT_SECRET`, thay vì phải gửi request qua `auth-service` mỗi lần xác thực, giúp loại bỏ nút thắt cổ chai hiệu năng.
-- Các Route được bảo vệ chi tiết bằng `@Roles('ADMIN', 'MANAGER')`, nếu Role trong Payload của JWT không khớp, API Gateway tự động từ chối (403 Forbidden) ngay vòng gửi xe.
+## 4. Cơ chế Event-Driven & Realtime
+- **Bất đồng bộ (RabbitMQ):** Khi đơn hàng được thanh toán thành công tại `order-service`, nó không gọi trực tiếp sang `inventory-service`. Thay vào đó, nó "phát thanh" (emit) một sự kiện `order_completed` lên RabbitMQ. `inventory-service` lắng nghe sự kiện này và âm thầm trừ kho ở background.
+- **Realtime (Socket.IO):** `order-service` tự tổ chức một Socket Server (Port 3004). Mỗi khi trạng thái đơn đổi (Tạo mới -> Bếp đang làm -> Bếp làm xong), nó sẽ Emit sự kiện trực tiếp xuống tất cả các thiết bị KDS, POS và Customer Web để cập nhật giao diện ngay lập tức mà không cần F5.

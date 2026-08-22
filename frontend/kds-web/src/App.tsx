@@ -1,30 +1,42 @@
-import { useState } from 'react';
-import axios from 'axios';
+import { useState, useEffect } from 'react';
+import api from './lib/axios';
 import { Header } from './components/Header';
 import { OrderGrid } from './components/OrderGrid';
+import { LoginScreen } from './components/LoginScreen';
 import { useSocket } from './hooks/useSocket';
 
 function App() {
-  const [branchId, setBranchId] = useState('1');
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const storedUser = localStorage.getItem('kds_user');
+    const token = localStorage.getItem('kds_token');
+    if (storedUser && token) {
+      setUser(JSON.parse(storedUser));
+    }
+
+    // Listen for unauthorized event from Axios interceptor
+    const handleUnauthorized = () => {
+      setUser(null);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
+  const branchId = user?.branchId || '1';
   const [filter, setFilter] = useState('ALL');
   const { isConnected, orders, updateItemStatusState } = useSocket(branchId);
 
   const handleUpdateItemStatus = async (orderId: string, itemId: string, status: string) => {
     try {
-      const token = localStorage.getItem('kds_token');
-      
       // Update local state immediately for fast feedback
       updateItemStatusState(orderId, itemId, status);
 
-      // Call API Gateway
-      await axios.patch(
-        'http://localhost:3000/orders/item-status',
-        { orderItemId: itemId, itemStatus: status },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
+      // Call API Gateway using Axios Interceptor
+      await api.patch(
+        '/orders/item-status',
+        { orderItemId: itemId, itemStatus: status }
       );
     } catch (error) {
       console.error('Failed to update status', error);
@@ -32,11 +44,15 @@ function App() {
     }
   };
 
+  if (!user) {
+    return <LoginScreen onLoginSuccess={(u) => setUser(u)} />;
+  }
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header 
-        branchId={branchId}
-        setBranchId={setBranchId}
+        user={user}
+        onLogout={() => setUser(null)}
         isConnected={isConnected}
         filter={filter}
         setFilter={setFilter}

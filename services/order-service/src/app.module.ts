@@ -12,11 +12,7 @@ import { Payment } from './order/entities/payment.entity';
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5435,
-      username: 'user',
-      password: 'password',
-      database: 'order_db',
+      url: process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/db',
       entities: [Order, OrderItem, OrderItemTopping, Payment],
       synchronize: true, // dev only
     }),
@@ -26,3 +22,4 @@ import { Payment } from './order/entities/payment.entity';
   providers: [AppService],
 })
 export class AppModule {}
+

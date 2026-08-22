@@ -1,97 +1,63 @@
-# Tài liệu Kỹ thuật API (API Documentation)
+# Tài liệu API (API Documentation)
 
-Đây là danh sách các Endpoint đang mở thông qua **API Gateway (Port 3000)** để Frontend giao tiếp.
+Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và route xuống các Microservices bên dưới qua RabbitMQ.
 
-## 1. Auth & Accounts
+## 1. REST APIs (Dành cho Frontend)
 
-### 1.1. Đăng nhập (Login)
-- **Route:** `POST /auth/login`
-- **Security:** `@Public()` (Không cần Token)
-- **Body:**
+| Method | Endpoint | Microservice | Roles / Auth | Mô tả |
+| :--- | :--- | :--- | :--- | :--- |
+| `POST` | `/auth/login` | `auth-service` | `@Public` | Xác thực người dùng, trả về JWT Token. |
+| `GET`  | `/orders` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách lịch sử đơn hàng (Lọc theo branchId). |
+| `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang chế biến / phục vụ. |
+| `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ QR (hoặc POS). |
+| `PATCH`| `/orders/:id/status` | `order-service` | `ADMIN`, `CASHIER`, `KITCHEN`| Cập nhật trạng thái tổng thể đơn (PENDING -> COMPLETED). |
+| `PATCH`| `/orders/:id/items/:itemId`| `order-service` | `KITCHEN` | Cập nhật trạng thái từng món ăn (KDS). |
+| `GET`  | `/inventory` | `inventory-service`| `ADMIN`, `MANAGER` | Lấy danh sách tồn kho nguyên liệu. |
+| `POST` | `/inventory/stock-in`| `inventory-service`| `ADMIN`, `MANAGER` | Nhập hàng vào kho. |
+
+### Payload Mẫu (Tạo đơn hàng - POST `/orders`)
 ```json
 {
-  "username": "admin",
-  "password": "password"
-}
-```
-- **Response (201 Created):**
-```json
-{
-  "accessToken": "eyJhbGciOiJIUz...",
-  "user": {
-    "id": "uuid",
-    "username": "admin",
-    "role": "ADMIN",
-    "branchId": "1"
-  }
-}
-```
-
-## 2. Orders & Sales (Bán hàng)
-
-### 2.1. Tạo Đơn hàng Mới (Create Order)
-- **Route:** `POST /orders`
-- **Security:** `@Public()` (Hỗ trợ QR Order Web không cần Token)
-- **Body:**
-```json
-{
-  "branchId": "1",
-  "tableId": "12",
+  "branchId": 1,
   "orderType": "AT_TABLE",
-  "totalAmount": 45000,
-  "finalAmount": 45000,
+  "tableId": "12",
   "items": [
     {
       "productId": "P1",
-      "productName": "Trà Sữa",
-      "size": "L",
-      "quantity": 1,
-      "unitPrice": 45000,
+      "productName": "Trà Sữa Trân Châu KLTN",
+      "quantity": 2,
+      "unitPrice": 35000,
+      "size": "M",
       "toppings": [
-        { "toppingId": "T1", "toppingName": "Trân châu", "price": 10000, "quantity": 1 }
+        { "toppingId": "T1", "toppingName": "Trân châu trắng", "quantity": 1, "price": 10000 }
       ]
     }
-  ]
-}
-```
-- **Response (201 Created):** Object Đơn hàng kèm mảng Items đã lưu database.
-
-### 2.2. Thanh toán Hóa Đơn (Process Payment)
-- **Route:** `POST /orders/:id/pay`
-- **Security:** `@Roles('ADMIN', 'MANAGER', 'CASHIER')` (Bắt buộc Header: `Authorization: Bearer <token>`)
-- **Body:**
-```json
-{
-  "paymentMethod": "CASH",
-  "amountPaid": 50000
-}
-```
-
-### 2.3. Đổi Trạng Thái Món KDS (Update Item Status)
-- **Route:** `PATCH /orders/item-status`
-- **Security:** `@Roles('ADMIN', 'MANAGER', 'KITCHEN')` (Bắt buộc Token của Bếp)
-- **Body:**
-```json
-{
-  "orderItemId": "uuid",
-  "itemStatus": "IN_PROGRESS" // hoặc COMPLETED
+  ],
+  "totalAmount": 90000
 }
 ```
 
 ---
 
-## 3. Kiến trúc Message/Event Nội bộ (RabbitMQ)
+## 2. Message Pattern (Giao tiếp nội bộ qua RabbitMQ)
 
-Các pattern này **KHÔNG MỞ** ra cho Frontend HTTP. Chúng chỉ giao tiếp qua luồng Transport TCP/RabbitMQ nội bộ giữa Gateway và các Services.
+Gateway sử dụng `ClientProxy.send()` (Message Pattern) để yêu cầu Microservice xử lý và trả về kết quả (Req-Res).
 
-### 3.1. Message Patterns (Request-Response Sync)
-*Gateway gọi -> Đợi Service xử lý -> Trả Data về Gateway*
-- `login`: Gọi tới Auth Service để sinh token.
-- `create_order`: Gọi tới Order Service để ghi database.
-- `update_item_status`: Gọi tới Order Service.
-- `process_payment`: Gọi tới Order Service xử lý tiền.
-- `create_ingredient`, `create_recipe`, `stock_in`: Gọi tới Inventory Service.
+| Pattern (CMD) | Gửi từ | Nhận tại | Mục đích |
+| :--- | :--- | :--- | :--- |
+| `{ cmd: 'login' }` | API Gateway | `auth-service` | Validate user & generate JWT. |
+| `{ cmd: 'validate_token' }` | API Gateway | `auth-service` | Giái mã Token cho Global AuthGuard. |
+| `{ cmd: 'create_order' }` | API Gateway | `order-service` | Lưu đơn hàng mới. |
+| `{ cmd: 'get_orders' }` | API Gateway | `order-service` | Lấy danh sách đơn hàng. |
+| `{ cmd: 'get_inventory' }` | API Gateway | `inventory-service`| Lấy danh sách tồn kho. |
+| `{ cmd: 'stock_in' }` | API Gateway | `inventory-service`| Lưu thông tin nhập kho. |
 
-### 3.2. Event Patterns (Fire-and-Forget Async)
-*Service phát sự kiện (Broadcast) -> RabbitMQ Queue -> Consumer Services tự bắt tự chạy nền.*
-- **`order.completed`**: Emit bởi Order Service khi Payment thành công. Payload chứa danh sách món (Snapshot Items). Được listen bởi Inventory Service để chạy hàm đệ quy trừ kho tự động.
+---
+
+## 3. Event Pattern (Bất đồng bộ qua RabbitMQ)
+
+Sử dụng `ClientProxy.emit()` (Event Pattern) để phát thanh sự kiện, không cần đợi kết quả phản hồi (Fire-and-forget).
+
+| Event Name | Gửi từ | Nhận tại | Mục đích / Xử lý ngầm |
+| :--- | :--- | :--- | :--- |
+| `order_completed` | `order-service` | `inventory-service`| Trừ nguyên liệu tương ứng trong kho sau khi thanh toán thành công (SAGA Pattern / Transaction Log). |

@@ -1,52 +1,41 @@
-# Đặc tả Luồng Nghiệp Vụ Chuyên Sâu (End-to-End Workflows)
+# Luồng Hoạt động E2E (End-to-End Workflows)
 
-Dưới đây là sơ đồ luồng dữ liệu tuần tự mô phỏng một vòng đời hoàn chỉnh của nghiệp vụ cốt lõi: Bán hàng -> Điều phối bếp -> Thanh toán -> Trừ tồn kho nguyên liệu.
+Tài liệu này mô tả 2 luồng nghiệp vụ cốt lõi nhất của toàn bộ hệ thống POS & KDS.
 
-## Luồng Giao Dịch Chuyên Sâu (Order to Inventory)
+## 1. Luồng Đặt món qua QR Code & Chế biến KDS
 
-### Bước 1: Khởi tạo Đơn hàng (Create Order)
-- **Actor:** Khách hàng (quét QR) hoặc Thu ngân (POS).
-- **Hành động:** Chọn món, điều chỉnh size/topping, điền ghi chú. Bấm "Tạo đơn".
-- **Hệ thống xử lý:**
-  1. Frontend gửi HTTP POST tới `API Gateway (/orders)`.
-  2. API Gateway nhận diện đây là route `@Public()` -> Bỏ qua check JWT -> Forward (TCP) tới `order-service`.
-  3. `order-service` tính toán giá trị `totalAmount`, `finalAmount`.
-  4. Lưu cấu trúc Đơn hàng và Snapshot từng Món ăn (bao gồm giá cả, tên topping tại thời điểm bán) vào PostgreSQL (`order_db`). Đảm bảo dữ liệu hóa đơn không bị ảnh hưởng nếu sau này Product thay đổi giá.
-  5. Đổi trạng thái toàn bộ món ăn thành `PENDING`.
+Đây là luồng "không chạm", nơi khách hàng tự phục vụ và đầu bếp nhận thông tin tức thì.
 
-### Bước 2: Báo Đơn Thời Gian Thực (KDS Realtime Notification)
-- **Hệ thống xử lý:**
-  1. Sau khi `order_db` commit thành công, `order-service` kích hoạt `EventsGateway`.
-  2. Phương thức `emitNewOrder(branchId, orderData)` được gọi.
-  3. Qua Socket.IO, một sự kiện `NEW_ORDER_CREATED` được Broadcast tới toàn bộ các Client đang join chung `room: branchId`.
-- **Actor:** Màn hình KDS của bếp ngay lập tức nhận sự kiện, re-render giao diện, đổ tiếng chuông cảnh báo và chèn thẻ món ăn mới vào cột "Đang chờ".
+1. **Khách hàng quét mã QR (Customer Web):**
+   - Khách quét mã tại bàn, truy cập web, chọn món, size, topping và nhập ghi chú.
+   - Khi bấm "Thanh toán", web gọi `POST /orders` qua API Gateway.
+2. **Xử lý Đơn hàng (Order Service):**
+   - Gateway forward sang `order-service`. 
+   - `order-service` lưu vào DB (Trạng thái đơn: `PENDING`, Trạng thái các món: `PENDING`).
+   - `order-service` phát sự kiện Socket `newOrder` lên kênh realtime.
+3. **Hiển thị Bếp (KDS Web):**
+   - Ứng dụng KDS tại bếp nhận sự kiện `newOrder` qua Socket.IO và render ngay đơn hàng mới lên màn hình kèm bộ đếm thời gian.
+4. **Bếp chế biến:**
+   - Đầu bếp bấm nút **"Bắt đầu làm"**. KDS gọi `PATCH /orders/:id/items/:itemId` (Trạng thái món: `IN_PROGRESS`).
+   - Đầu bếp bấm **"Hoàn thành"**. Món chuyển sang `COMPLETED`.
+   - Nếu tất cả các món trong đơn đều `COMPLETED`, toàn bộ đơn được đánh dấu hoàn thành chế biến, KDS tự động ẩn thẻ đơn đó.
 
-### Bước 3: Điều Phối Pha Chế & Báo Món Sẵn Sàng (Item Ready)
-- **Actor:** Nhân viên pha chế tại bếp.
-- **Hành động:** Bấm "Bắt đầu làm" -> Trạng thái món thành `IN_PROGRESS`. Sau đó pha xong, bấm "Hoàn thành" -> Trạng thái món thành `COMPLETED`.
-- **Hệ thống xử lý:**
-  1. Frontend KDS gọi `PATCH /orders/item-status`.
-  2. `order-service` cập nhật trạng thái trong `order_db`.
-  3. Nếu trạng thái là `COMPLETED`, hệ thống tiếp tục gọi `EventsGateway.emitItemReady()`.
-  4. Sự kiện `ITEM_READY` bay tới Frontend POS của Thu ngân. POS hiển thị Toast notification xanh lá nhắc nhở bưng đồ.
+---
 
-### Bước 4: Thanh toán & Chốt Hóa Đơn (Payment - UC02)
-- **Actor:** Thu ngân tại quầy POS.
-- **Hành động:** Khách hàng ra quầy, đưa tiền. Thu ngân bấm "Thanh toán", nhập số tiền.
-- **Hệ thống xử lý:**
-  1. POS gọi `POST /orders/:id/pay` mang theo JWT Token của thu ngân.
-  2. API Gateway verify JWT (hợp lệ) -> Kiểm tra Role (CASHIER/MANAGER hợp lệ) -> Forward tới `order-service`.
-  3. `order-service` ghi nhận `Payment` vào cơ sở dữ liệu.
-  4. Nếu thanh toán đủ tiền, `order-service` đổi trạng thái Order thành `COMPLETED`.
-  5. **QUAN TRỌNG:** Ngay lúc này, `order-service` dùng RabbitMQ Client để emit một Event: `@EventPattern('order.completed')`, kèm theo toàn bộ Snapshot của các món đã bán.
+## 2. Luồng Thanh toán tại Quầy & Trừ Kho Bất đồng bộ
 
-### Bước 5: Tiêu Hao Tồn Kho Bất Đồng Bộ (Inventory Deduction)
-- **Hệ thống xử lý:**
-  1. Event `order.completed` đang nằm trong RabbitMQ Exchange.
-  2. `inventory-service` đóng vai trò Consumer, lắng nghe và bóc tách gói Event này.
-  3. Với mỗi Món ăn bán ra (Ví dụ: Trà sữa Trân châu), Service sẽ tra cứu DB bảng `Recipe` (Công thức).
-  4. Lấy ra định mức (Ví dụ: Cần 50gr Trà đen, 20ml Sữa đặc, 30gr Trân châu).
-  5. Thực hiện phép toán trừ trực tiếp vào Bảng `Stock` (Tồn kho) theo logic Transaction: Nếu Inventory giảm qua ngưỡng an toàn, sinh log cảnh báo.
-  6. Mọi thao tác trừ kho này chạy ngầm (Background), hoàn toàn không làm chậm trễ quá trình in hóa đơn hay trả response cho Thu ngân ở Bước 4.
+Đây là luồng tác nghiệp của Thu ngân và sự kết hợp ngầm của các Microservices.
 
-Đây chính là chuẩn mực của kiến trúc Event-Driven Microservices.
+1. **Quản lý Sơ đồ Bàn (POS Web):**
+   - Khi có đơn hàng `PENDING` tạo từ mã QR của Bàn 12, Sơ đồ bàn trên màn hình POS lập tức nháy đỏ/cam báo hiệu Bàn 12 đang có khách và cần thanh toán.
+2. **Thanh toán & In Hóa Đơn:**
+   - Thu ngân bấm vào Bàn 12. Modal thanh toán (PaymentModal) hiện lên.
+   - Nhập số tiền khách đưa, tính tiền thối. Bấm **"Hoàn tất thanh toán"**.
+   - Trình duyệt tự động mở cửa sổ Print chuẩn khổ giấy 80mm bằng CSS `@media print` + React Portal.
+3. **Cập nhật Trạng thái (Order Service):**
+   - POS gọi `PATCH /orders/:id/status` với trạng thái `COMPLETED` và lưu thông tin `payment`.
+4. **Trừ Kho Ngầm (RabbitMQ & Inventory Service):**
+   - Sau khi cập nhật DB thành công, `order-service` không gọi trực tiếp sang module Kho để tránh nghẽn cổ chai (Bottleneck).
+   - Nó phát một Event: `client.emit('order_completed', orderData)`.
+   - `inventory-service` liên tục lắng nghe Event này. Khi nhận được, nó bóc tách dữ liệu `items`, tra cứu định lượng nguyên vật liệu và thực hiện phép trừ (-) số lượng tồn kho trong `inventory_db`.
+   - Luồng này đảm bảo Thu ngân được trả kết quả "Thanh toán thành công" trong nháy mắt, còn việc trừ kho nặng nhọc cứ để Message Broker lo liệu dưới nền!

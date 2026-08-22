@@ -47,4 +47,10 @@ export class OrderController {
   async handleProcessPayment(@Payload() payload: { orderId: string; processPaymentDto: ProcessPaymentDto }) {
     return this.orderService.processPayment(payload.orderId, payload.processPaymentDto);
   }
+
+  // Message Pattern for getting orders
+  @MessagePattern('get_orders')
+  async handleGetOrders(@Payload() branchId: string) {
+    return this.orderService.getOrders(branchId);
+  }
 }

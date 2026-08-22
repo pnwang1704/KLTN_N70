@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle2 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
-import axios from 'axios';
+import api from '../lib/axios';
 import { useCart } from '../context/CartContext';
+import { Receipt } from './Receipt';
 
 interface PaymentModalProps {
   orderId: string;
@@ -16,6 +17,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   const [amountPaidStr, setAmountPaidStr] = useState(totalAmount.toString());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [completedOrder, setCompletedOrder] = useState<any>(null);
   const { clearCart } = useCart();
 
   const amountPaid = parseInt(amountPaidStr.replace(/\D/g, '') || '0', 10);
@@ -33,14 +35,22 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
     
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('pos_token') || '';
-      await axios.post(`http://localhost:3000/orders/${orderId}/pay`, {
+      await api.post(`/orders/${orderId}/pay`, {
         paymentMethod,
         amountPaid
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
       });
       
+      // Fetch the order to get full details for the receipt
+      try {
+        const userStr = localStorage.getItem('pos_user');
+        const user = userStr ? JSON.parse(userStr) : null;
+        const res = await api.get(`/orders?branchId=${user?.branchId || 1}`);
+        const foundOrder = res.data.find((o: any) => o.id === orderId);
+        if (foundOrder) setCompletedOrder({ ...foundOrder, payment: { paymentMethod, amount: amountPaid } });
+      } catch (e) {
+        console.error("Could not fetch order for receipt", e);
+      }
+
       setIsSuccess(true);
       clearCart();
     } catch (error) {
@@ -52,19 +62,37 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   };
 
   if (isSuccess) {
+    const user = JSON.parse(localStorage.getItem('pos_user') || '{}');
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl w-full max-w-sm p-8 flex flex-col items-center shadow-2xl">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm print:bg-white print:static print:inset-auto">
+        <div className="bg-white rounded-2xl w-full max-w-sm p-8 flex flex-col items-center shadow-2xl print:hidden">
           <CheckCircle2 size={64} className="text-emerald-500 mb-4" strokeWidth={1.5} />
           <h2 className="text-2xl font-bold text-zinc-900 mb-2">Thanh toán thành công!</h2>
           <p className="text-zinc-500 mb-6 text-center">Hóa đơn đã được ghi nhận vào hệ thống.</p>
-          <button 
-            onClick={onSuccess}
-            className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl active:scale-95 transition-transform"
-          >
-            Đóng & Bắt đầu đơn mới
-          </button>
+          <div className="flex flex-col gap-3 w-full">
+            <button 
+              onClick={() => {
+                if (completedOrder) {
+                  setTimeout(() => window.print(), 150);
+                } else {
+                  alert('Đang tải dữ liệu hóa đơn, vui lòng thử lại sau giây lát!');
+                }
+              }}
+              className="w-full py-3 bg-zinc-100 text-zinc-700 font-bold rounded-xl active:scale-95 transition-transform hover:bg-zinc-200 disabled:opacity-50"
+            >
+              In Hóa Đơn
+            </button>
+            <button 
+              onClick={onSuccess}
+              className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl active:scale-95 transition-transform hover:bg-orange-700"
+            >
+              Đóng & Bắt đầu đơn mới
+            </button>
+          </div>
         </div>
+
+        {/* Hidden printable receipt */}
+        {completedOrder && <Receipt order={completedOrder} user={user} />}
       </div>
     );
   }

@@ -15,3 +15,22 @@
     scrollbar-width: none;
   }
 }
+@media print {
+  #root {
+    display: none !important;
+  }
+  #print-root {
+    display: block !important;
+  }
+  #printable-receipt {
+    width: 80mm;
+    margin: 0 auto;
+    padding: 0;
+    font-family: monospace;
+    font-size: 12px;
+  }
+  @page {
+    size: auto;
+    margin: 10mm;
+  }
+}
