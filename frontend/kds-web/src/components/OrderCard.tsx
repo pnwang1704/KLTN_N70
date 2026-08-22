@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import type { Order, OrderItem } from '../types';
+import type { Order } from '../types';
 import { cn } from '../lib/utils';
 import { Clock, ChefHat, CheckCircle2 } from 'lucide-react';
 

@@ -7,11 +7,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5437,
-      username: 'user',
-      password: 'password',
-      database: 'reporting_db',
+      url: process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/db',
       entities: [],
       synchronize: true,
     }),
@@ -20,3 +16,4 @@ import { TypeOrmModule } from '@nestjs/typeorm';
   providers: [AppService],
 })
 export class AppModule {}
+

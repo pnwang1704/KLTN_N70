@@ -12,11 +12,7 @@ import { Stock } from './inventory/entities/stock.entity';
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5436,
-      username: 'user',
-      password: 'password',
-      database: 'inventory_db',
+      url: process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/db',
       entities: [Ingredient, Recipe, RecipeItem, Stock],
       synchronize: true, // dev only
     }),
@@ -26,3 +22,4 @@ import { Stock } from './inventory/entities/stock.entity';
   providers: [AppService],
 })
 export class AppModule {}
+

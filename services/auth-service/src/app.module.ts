@@ -9,11 +9,7 @@ import { User } from './auth/entities/user.entity';
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'user',
-      password: 'password',
-      database: 'auth_db',
+      url: process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/db',
       entities: [User],
       synchronize: true, // dev only
     }),
@@ -23,3 +19,4 @@ import { User } from './auth/entities/user.entity';
   providers: [AppService],
 })
 export class AppModule {}
+

@@ -102,7 +102,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
               </h3>
               <div className="flex flex-col gap-2">
                 {product.sizes.map(size => (
-                  <label key={size.id} className="flex items-center justify-between p-3 border rounded-xl border-zinc-200 cursor-pointer hover:bg-zinc-50">
+                  <label 
+                    key={size.id} 
+                    onClick={() => setSelectedSize(size.id)}
+                    className="flex items-center justify-between p-3 border rounded-xl border-zinc-200 cursor-pointer hover:bg-zinc-50"
+                  >
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
@@ -127,7 +131,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
               <h3 className="font-semibold text-zinc-900 mb-3">Topping (Tùy chọn)</h3>
               <div className="flex flex-col gap-2">
                 {product.availableToppings.map(topping => (
-                  <label key={topping.id} className="flex items-center justify-between p-3 border rounded-xl border-zinc-200 cursor-pointer hover:bg-zinc-50">
+                  <label 
+                    key={topping.id} 
+                    onClick={() => handleToppingToggle(topping.id)}
+                    className="flex items-center justify-between p-3 border rounded-xl border-zinc-200 cursor-pointer hover:bg-zinc-50"
+                  >
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
