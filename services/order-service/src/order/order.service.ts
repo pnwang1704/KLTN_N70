@@ -141,4 +141,17 @@ export class OrderService {
 
     return savedOrder;
   }
+
+  async getOrders(branchId: string): Promise<Order[]> {
+    return this.orderRepository.find({
+      where: { branchId },
+      relations: {
+        items: { toppings: true },
+        payment: true,
+      },
+      order: {
+        createdAt: 'DESC',
+      },
+    });
+  }
 }

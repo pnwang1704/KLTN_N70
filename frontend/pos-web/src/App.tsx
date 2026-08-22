@@ -5,11 +5,14 @@ import { OrderPanel } from './components/OrderPanel';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { PaymentModal } from './components/PaymentModal';
 import { LoginScreen } from './components/LoginScreen';
+import { OrderHistory } from './components/OrderHistory';
+import { InventoryManagement } from './components/InventoryManagement';
 import { useSocket } from './hooks/useSocket';
 import type { Product } from './types';
 
 function App() {
   const [user, setUser] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'POS' | 'HISTORY' | 'INVENTORY'>('POS');
   
   useEffect(() => {
     // Check if user is already logged in
@@ -39,18 +42,33 @@ function App() {
 
   return (
     <div className="h-screen flex flex-col bg-zinc-100 overflow-hidden relative">
-      <Header isConnected={isConnected} user={user} onLogout={() => setUser(null)} />
+      <Header 
+        isConnected={isConnected} 
+        user={user} 
+        onLogout={() => setUser(null)} 
+        activeTab={activeTab}
+        setActiveTab={(t) => setActiveTab(t as any)}
+      />
       
-      {/* 2 Column Layout */}
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-[60%] h-full">
-          <ProductList onSelectProduct={setSelectedProduct} />
+      {activeTab === 'POS' && (
+        <div className="flex-1 flex overflow-hidden">
+          <div className="w-[60%] h-full">
+            <ProductList onSelectProduct={setSelectedProduct} />
+          </div>
+          
+          <div className="w-[40%] h-full border-l border-zinc-200">
+            <OrderPanel onOpenPayment={(orderId, amount) => setPaymentInfo({ orderId, amount })} />
+          </div>
         </div>
-        
-        <div className="w-[40%] h-full border-l border-zinc-200">
-          <OrderPanel onOpenPayment={(orderId, amount) => setPaymentInfo({ orderId, amount })} />
-        </div>
-      </div>
+      )}
+
+      {activeTab === 'HISTORY' && (
+        <OrderHistory branchId={branchId} />
+      )}
+
+      {activeTab === 'INVENTORY' && (
+        <InventoryManagement branchId={branchId} />
+      )}
 
       {/* Modals */}
       {selectedProduct && (

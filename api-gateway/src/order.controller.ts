@@ -1,4 +1,4 @@
-import { Controller, Post, Patch, Body, Param, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Query, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Roles } from './common/decorators/roles.decorator';
 import { Public } from './common/decorators/public.decorator';
@@ -25,5 +25,11 @@ export class OrderController {
   @Patch('item-status')
   updateItemStatus(@Body() dto: UpdateItemStatusDto) {
     return this.orderClient.send('update_item_status', dto);
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Get()
+  getOrders(@Query('branchId') branchId: string) {
+    return this.orderClient.send('get_orders', branchId || '1');
   }
 }

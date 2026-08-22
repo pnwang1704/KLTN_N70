@@ -6,9 +6,11 @@ interface HeaderProps {
   isConnected: boolean;
   user: any;
   onLogout: () => void;
+  activeTab: string;
+  setActiveTab: (tab: string) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ isConnected, user, onLogout }) => {
+export const Header: React.FC<HeaderProps> = ({ isConnected, user, onLogout, activeTab, setActiveTab }) => {
   const handleLogout = () => {
     localStorage.removeItem('pos_token');
     localStorage.removeItem('pos_user');
@@ -17,12 +19,37 @@ export const Header: React.FC<HeaderProps> = ({ isConnected, user, onLogout }) =
 
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-zinc-200">
-      <div className="flex items-center gap-6">
-        <h1 className="text-2xl font-bold text-orange-600 tracking-tight">N70 POS</h1>
-        <div className="flex items-center text-sm font-medium text-zinc-500 bg-zinc-100 px-3 py-1.5 rounded-full">
-          <span>Chi nhánh {user?.branchId || 1}</span>
-          <span className="mx-2">•</span>
-          <span className="text-zinc-900 capitalize">Thu ngân: {user?.username}</span>
+      <div className="flex items-center gap-10">
+        <div className="flex items-center gap-6">
+          <h1 className="text-2xl font-bold text-orange-600 tracking-tight">N70 POS</h1>
+          <div className="flex items-center text-sm font-medium text-zinc-500 bg-zinc-100 px-3 py-1.5 rounded-full">
+            <span>Chi nhánh {user?.branchId || 1}</span>
+            <span className="mx-2">•</span>
+            <span className="text-zinc-900 capitalize">Thu ngân: {user?.username}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('POS')}
+            className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors", activeTab === 'POS' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
+          >
+            Bán hàng
+          </button>
+          <button
+            onClick={() => setActiveTab('HISTORY')}
+            className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors", activeTab === 'HISTORY' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
+          >
+            Lịch sử đơn
+          </button>
+          {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+            <button
+              onClick={() => setActiveTab('INVENTORY')}
+              className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors", activeTab === 'INVENTORY' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
+            >
+              Quản lý kho
+            </button>
+          )}
         </div>
       </div>
 
