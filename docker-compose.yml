@@ -1,6 +1,13 @@
 version: '3.8'
 
+networks:
+  app-network:
+    driver: bridge
+
 services:
+  # ==========================================
+  # INFRASTRUCTURE
+  # ==========================================
   rabbitmq:
     image: rabbitmq:3-management
     container_name: fnb_rabbitmq
@@ -11,7 +18,12 @@ services:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
     networks:
-      - fnb_network
+      - app-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-auth:
     image: postgres:15
@@ -19,23 +31,16 @@ services:
     ports:
       - '5432:5432'
     environment:
-      POSTGRES_USER: user
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: auth_db
     networks:
-      - fnb_network
-
-  postgres-branch:
-    image: postgres:15
-    container_name: fnb_postgres_branch
-    ports:
-      - '5433:5432'
-    environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: branch_db
-    networks:
-      - fnb_network
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-product:
     image: postgres:15
@@ -43,11 +48,16 @@ services:
     ports:
       - '5434:5432'
     environment:
-      POSTGRES_USER: user
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: product_db
     networks:
-      - fnb_network
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d product_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-order:
     image: postgres:15
@@ -55,11 +65,16 @@ services:
     ports:
       - '5435:5432'
     environment:
-      POSTGRES_USER: user
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: order_db
     networks:
-      - fnb_network
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d order_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-inventory:
     image: postgres:15
@@ -67,24 +82,205 @@ services:
     ports:
       - '5436:5432'
     environment:
-      POSTGRES_USER: user
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: inventory_db
     networks:
-      - fnb_network
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inventory_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-branch:
+    image: postgres:15
+    container_name: fnb_postgres_branch
+    ports:
+      - '5437:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: branch_db
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d branch_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres-reporting:
     image: postgres:15
     container_name: fnb_postgres_reporting
     ports:
-      - '5437:5432'
+      - '5438:5432'
     environment:
-      POSTGRES_USER: user
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: reporting_db
     networks:
-      - fnb_network
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d reporting_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-networks:
-  fnb_network:
-    driver: bridge
+  # ==========================================
+  # BACKEND SERVICES
+  # ==========================================
+  api-gateway:
+    build:
+      context: ./api-gateway
+    container_name: fnb_api_gateway
+    ports:
+      - '3000:3000'
+    environment:
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+    container_name: fnb_auth_service
+    environment:
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - DATABASE_URL=postgres://postgres:password@postgres-auth:5432/auth_db
+      - JWT_SECRET=super-secret-key
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-auth:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  order-service:
+    build:
+      context: ./services/order-service
+    container_name: fnb_order_service
+    ports:
+      - '3004:3004' # Socket.IO port
+    environment:
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - DATABASE_URL=postgres://postgres:password@postgres-order:5432/order_db
+      - FRONTEND_URL=http://localhost:5173,http://localhost:5174,http://localhost:5175
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-order:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  inventory-service:
+    build:
+      context: ./services/inventory-service
+    container_name: fnb_inventory_service
+    environment:
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - DATABASE_URL=postgres://postgres:password@postgres-inventory:5432/inventory_db
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres-inventory:
+        condition: service_healthy
+    networks:
+      - app-network
+
+  # Uncomment when service implementation is ready
+  # product-service:
+  #   build:
+  #     context: ./services/product-service
+  #   container_name: fnb_product_service
+  #   environment:
+  #     - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+  #     - DATABASE_URL=postgres://postgres:password@postgres-product:5432/product_db
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #     postgres-product:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+
+  # Uncomment when service implementation is ready
+  # branch-service:
+  #   build:
+  #     context: ./services/branch-service
+  #   container_name: fnb_branch_service
+  #   environment:
+  #     - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+  #     - DATABASE_URL=postgres://postgres:password@postgres-branch:5432/branch_db
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+
+  # Uncomment when service implementation is ready
+  # reporting-service:
+  #   build:
+  #     context: ./services/reporting-service
+  #   container_name: fnb_reporting_service
+  #   environment:
+  #     - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+  #     - DATABASE_URL=postgres://postgres:password@postgres-reporting:5432/reporting_db
+  #   depends_on:
+  #     rabbitmq:
+  #       condition: service_healthy
+  #   networks:
+  #     - app-network
+
+  # ==========================================
+  # FRONTEND APPS
+  # ==========================================
+  kds-web:
+    build:
+      context: ./frontend/kds-web
+      args:
+        - VITE_API_URL=http://localhost:3000
+        - VITE_SOCKET_URL=http://localhost:3004
+    container_name: fnb_kds_web
+    ports:
+      - '5173:80'
+    depends_on:
+      - api-gateway
+      - order-service
+    networks:
+      - app-network
+
+  customer-web:
+    build:
+      context: ./frontend/customer-web
+      args:
+        - VITE_API_URL=http://localhost:3000
+        - VITE_SOCKET_URL=http://localhost:3004
+    container_name: fnb_customer_web
+    ports:
+      - '5174:80'
+    depends_on:
+      - api-gateway
+      - order-service
+    networks:
+      - app-network
+
+  pos-web:
+    build:
+      context: ./frontend/pos-web
+      args:
+        - VITE_API_URL=http://localhost:3000
+        - VITE_SOCKET_URL=http://localhost:3004
+    container_name: fnb_pos_web
+    ports:
+      - '5175:80'
+    depends_on:
+      - api-gateway
+      - order-service
+    networks:
+      - app-network
