@@ -20,6 +20,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
   const [payOsQr, setPayOsQr] = useState<string>('');
+  const [orderCode, setOrderCode] = useState<number | null>(null);
   const { clearCart } = useCart();
 
   const amountPaid = parseInt(amountPaidStr.replace(/\D/g, '') || '0', 10);
@@ -69,6 +70,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
           const foundOrder = resOrder.data.find((o: any) => o.id === orderId);
           
           if (foundOrder && foundOrder.orderCode) {
+            setOrderCode(foundOrder.orderCode);
             const res = await api.post('/payments/payos/create', {
               orderId,
               orderCode: foundOrder.orderCode,
@@ -86,6 +88,30 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
       initPayOs();
     }
   }, [paymentMethod, totalAmount, orderId]);
+
+  // Fallback Polling for PayOS
+  useEffect(() => {
+    if (paymentMethod === 'BANK_TRANSFER' && orderCode && !isSuccess) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await api.post('/payments/payos/status', { orderCode });
+          if (res.data && res.data.paid) {
+            const userStr = localStorage.getItem('pos_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const branchId = user?.branchId || 1;
+            const resOrder = await api.get(`/orders?branchId=${branchId}`);
+            const foundOrder = resOrder.data.find((o: any) => o.id === orderId);
+            if (foundOrder) setCompletedOrder({ ...foundOrder, payment: { paymentMethod: 'BANK_TRANSFER', amount: totalAmount } });
+            setIsSuccess(true);
+            clearCart();
+          }
+        } catch (e) {
+          console.error('Polling payment status failed', e);
+        }
+      }, 3000); // Check every 3 seconds
+      return () => clearInterval(interval);
+    }
+  }, [paymentMethod, orderCode, isSuccess, orderId, totalAmount, clearCart]);
 
   const handlePayment = async () => {
     if (amountPaid < totalAmount) return alert('Khách đưa chưa đủ tiền!');

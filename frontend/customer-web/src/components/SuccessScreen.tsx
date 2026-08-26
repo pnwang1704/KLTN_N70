@@ -56,6 +56,23 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ order, onBackToMen
     }
   }, [order, isPaid]);
 
+  // Fallback Polling
+  useEffect(() => {
+    if (!isPaid && order && order.orderCode) {
+      const interval = setInterval(async () => {
+        try {
+          const res = await axios.post('http://localhost:3000/payments/payos/status', { orderCode: order.orderCode });
+          if (res.data && res.data.paid) {
+            setIsPaid(true);
+          }
+        } catch (e) {
+          console.error('Polling status failed', e);
+        }
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [isPaid, order]);
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-white p-6 animate-in fade-in duration-500">
       <div className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mb-6">

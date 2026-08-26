@@ -12,6 +12,14 @@ export class PaymentController {
   ) {
     return this.paymentService.createPaymentLink(body);
   }
+
+  @Public()
+  @Post('payos/status')
+  async checkPayOSStatus(
+    @Body() body: { orderCode: number }
+  ) {
+    return this.paymentService.checkPaymentStatus(body.orderCode);
+  }
 }
 
 @Controller('webhooks')

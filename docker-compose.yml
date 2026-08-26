@@ -17,6 +17,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_ERLANG_COOKIE: "secret_cookie_fnb_kltn"
     networks:
       - app-network
     healthcheck:

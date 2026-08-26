@@ -1,10 +1,10 @@
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
-const PayOS = require('@payos/node');
+import { PayOS } from '@payos/node';
 
 @Injectable()
 export class PaymentService {
-  private payOS: any;
+  private payOS: PayOS;
 
   constructor(
     @Inject('ORDER_SERVICE') private orderClient: ClientProxy,
@@ -12,7 +12,11 @@ export class PaymentService {
     const clientId = process.env.PAYOS_CLIENT_ID || 'CLIENT_ID';
     const apiKey = process.env.PAYOS_API_KEY || 'API_KEY';
     const checksumKey = process.env.PAYOS_CHECKSUM_KEY || 'CHECKSUM_KEY';
-    this.payOS = new PayOS(clientId, apiKey, checksumKey);
+    this.payOS = new PayOS({
+      clientId,
+      apiKey,
+      checksumKey
+    });
   }
 
   async createPaymentLink(body: { orderId: string; orderCode: number; totalAmount: number; returnUrl?: string; cancelUrl?: string }) {
@@ -27,7 +31,7 @@ export class PaymentService {
         returnUrl: returnUrl || 'http://localhost:5174/success',
       };
 
-      const paymentLinkRes = await this.payOS.createPaymentLink(requestData);
+      const paymentLinkRes = await this.payOS.paymentRequests.create(requestData);
       return paymentLinkRes;
     } catch (error) {
       console.error('Error creating PayOS payment link:', error);
@@ -38,7 +42,7 @@ export class PaymentService {
   async handleWebhook(webhookBody: any) {
     try {
       // Verify signature
-      const data = this.payOS.verifyPaymentWebhookData(webhookBody);
+      const data = await this.payOS.webhooks.verify(webhookBody);
       
       if (data.code === '00' || data.desc === 'success') {
         const orderCode = data.orderCode;
@@ -53,6 +57,24 @@ export class PaymentService {
     } catch (error) {
       console.error('Webhook verification failed:', error);
       throw new BadRequestException('Invalid webhook signature');
+    }
+  }
+
+  async checkPaymentStatus(orderCode: number) {
+    try {
+      const paymentLink = await this.payOS.paymentRequests.get(orderCode);
+      if (paymentLink.status === 'PAID') {
+        // Trigger the same logic as webhook if paid
+        this.orderClient.emit('process_payos_webhook', { 
+          orderCode, 
+          amount: paymentLink.amount 
+        });
+        return { paid: true };
+      }
+      return { paid: false, status: paymentLink.status };
+    } catch (error) {
+      console.error('Error checking payment status:', error);
+      return { paid: false };
     }
   }
 }
