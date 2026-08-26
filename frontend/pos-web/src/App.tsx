@@ -31,7 +31,7 @@ function App() {
   }, []);
 
   const branchId = user?.branchId || '1';
-  const { isConnected, toastMessage, clearToast } = useSocket(branchId);
+  const { isConnected, toastMessage, clearToast, notifications, markAsRead } = useSocket(branchId);
   
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<{orderId: string, amount: number} | null>(null);
@@ -48,6 +48,8 @@ function App() {
         onLogout={() => setUser(null)} 
         activeTab={activeTab}
         setActiveTab={(t) => setActiveTab(t as any)}
+        notifications={notifications}
+        onMarkAsRead={markAsRead}
       />
       
       {activeTab === 'POS' && (

@@ -74,6 +74,7 @@ classDiagram
 
     class Order {
         +UUID id PK
+        +BigInt orderCode
         +UUID branchId FK
         +UUID cashierId FK
         +String tableId

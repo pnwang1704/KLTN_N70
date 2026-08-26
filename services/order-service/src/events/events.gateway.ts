@@ -29,4 +29,8 @@ export class EventsGateway {
   emitItemReady(branchId: string, itemData: any) {
     this.server.to(branchId).emit('ITEM_READY', itemData);
   }
+
+  emitOrderPaid(branchId: string, payload: any) {
+    this.server.to(branchId).emit('order:paid', payload);
+  }
 }

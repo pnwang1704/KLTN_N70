@@ -6,6 +6,8 @@ import { RolesGuard } from './common/guards/roles.guard';
 import { AuthController } from './auth.controller';
 import { InventoryController } from './inventory.controller';
 import { OrderController } from './order.controller';
+import { PaymentController, WebhookController } from './payment.controller';
+import { PaymentService } from './payment.service';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
@@ -85,9 +87,10 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
       }
     ]),
   ],
-  controllers: [AppController, AuthController, InventoryController, OrderController],
+  controllers: [AppController, AuthController, InventoryController, OrderController, PaymentController, WebhookController],
   providers: [
     AppService,
+    PaymentService,
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,

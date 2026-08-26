@@ -16,7 +16,7 @@ function MainApp() {
   const [activeCategoryId, setActiveCategoryId] = useState(mockCategories[0].id);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [successOrder, setSuccessOrder] = useState<any>(null);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
@@ -127,15 +127,18 @@ function MainApp() {
           branchId={branchId}
           tableId={tableId}
           onClose={() => setIsCartOpen(false)}
-          onSuccess={() => {
+          onSuccess={(order) => {
             setIsCartOpen(false);
-            setIsSuccess(true);
+            setSuccessOrder(order);
           }}
         />
       )}
 
-      {isSuccess && (
-        <SuccessScreen onBackToMenu={() => setIsSuccess(false)} />
+      {successOrder && (
+        <SuccessScreen 
+          order={successOrder} 
+          onBackToMenu={() => setSuccessOrder(null)} 
+        />
       )}
     </div>
   );

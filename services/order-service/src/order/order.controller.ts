@@ -48,6 +48,12 @@ export class OrderController {
     return this.orderService.processPayment(payload.orderId, payload.processPaymentDto);
   }
 
+  // Message Pattern for processing payos webhook
+  @MessagePattern('process_payos_webhook')
+  async handleProcessPayOSWebhook(@Payload() payload: { orderCode: number; amount: number }) {
+    return this.orderService.processPaymentByOrderCode(payload.orderCode, payload.amount);
+  }
+
   // Message Pattern for getting orders
   @MessagePattern('get_orders')
   async handleGetOrders(@Payload() branchId: string) {

@@ -8,7 +8,7 @@ interface CartModalProps {
   branchId: string;
   tableId: string;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (order: any) => void;
 }
 
 export const CartModal: React.FC<CartModalProps> = ({ branchId, tableId, onClose, onSuccess }) => {
@@ -41,9 +41,9 @@ export const CartModal: React.FC<CartModalProps> = ({ branchId, tableId, onClose
         }))
       };
 
-      await axios.post('http://localhost:3000/orders', payload);
+      const res = await axios.post('http://localhost:3000/orders', payload);
       clearCart();
-      onSuccess();
+      onSuccess(res.data);
     } catch (error) {
       console.error(error);
       alert('Có lỗi xảy ra khi đặt món. Vui lòng thử lại!');

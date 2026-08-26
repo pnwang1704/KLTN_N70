@@ -17,6 +17,7 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
+      RABBITMQ_ERLANG_COOKIE: "secret_cookie_fnb_kltn"
     networks:
       - app-network
     healthcheck:
@@ -137,7 +138,11 @@ services:
     ports:
       - '3000:3000'
     environment:
+      - PORT=3000
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - PAYOS_CLIENT_ID=${PAYOS_CLIENT_ID}
+      - PAYOS_API_KEY=${PAYOS_API_KEY}
+      - PAYOS_CHECKSUM_KEY=${PAYOS_CHECKSUM_KEY}
     depends_on:
       rabbitmq:
         condition: service_healthy

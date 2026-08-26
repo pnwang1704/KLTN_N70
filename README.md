@@ -6,6 +6,7 @@ Dự án Hệ thống Quản lý Bán hàng F&B (Food & Beverage) hiện đại,
 - **Customer QR Web:** Quét mã QR tại bàn để gọi món.
 - **KDS Web:** Màn hình hiển thị bếp Realtime (đồng bộ Socket.io).
 - **POS Web:** Màn hình thu ngân, quản lý sơ đồ bàn, kho hàng và in hóa đơn nhiệt.
+- **Thanh toán Tự động PayOS:** Tích hợp sinh mã VietQR động, Webhook/Polling xác nhận tiền vào tài khoản tự động đóng đơn.
 - **Microservices Architecture:** Tách biệt hoàn toàn Auth, Order, Inventory, v.v.
 
 ---
@@ -39,6 +40,8 @@ docker compose up --build -d
 ```
 
 *(Quá trình này có thể mất 1-3 phút để biên dịch toàn bộ Microservices và Frontend. Hệ thống có cơ chế **Healthcheck** tự động chờ Database & RabbitMQ lên sóng mới khởi động Backend).*
+
+**Lưu ý biến môi trường PayOS:** Để luồng thanh toán tự động hoạt động, cần cung cấp đủ 3 biến môi trường `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY` trong file `.env` ở thư mục gốc hoặc API Gateway.
 
 ---
 
