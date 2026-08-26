@@ -27,6 +27,7 @@ export class OrderService {
 
     const order = this.orderRepository.create({
       ...orderData,
+      orderCode: Date.now(), // Generate PayOS orderCode
       items: items.map(item => {
         const orderItem = new OrderItem();
         orderItem.productId = item.productId;
@@ -139,7 +140,28 @@ export class OrderService {
     
     this.inventoryClient.emit('order.completed', payload);
 
+    // Emit event to frontend via Socket.IO
+    this.eventsGateway.emitOrderPaid(savedOrder.branchId, {
+      orderId: savedOrder.id,
+      status: OrderStatus.COMPLETED
+    });
+
     return savedOrder;
+  }
+
+  async processPaymentByOrderCode(orderCode: number, amountPaid: number): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { orderCode: Number(orderCode) },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order with orderCode ${orderCode} not found`);
+    }
+
+    return this.processPayment(order.id, {
+      paymentMethod: 'BANK_TRANSFER' as any,
+      amountPaid
+    });
   }
 
   async getOrders(branchId: string): Promise<Order[]> {

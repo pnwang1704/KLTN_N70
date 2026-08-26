@@ -4,6 +4,7 @@ import { formatCurrency, cn } from '../lib/utils';
 import api from '../lib/axios';
 import { useCart } from '../context/CartContext';
 import { Receipt } from './Receipt';
+import { io } from 'socket.io-client';
 
 interface PaymentModalProps {
   orderId: string;
@@ -18,17 +19,73 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
+  const [payOsQr, setPayOsQr] = useState<string>('');
   const { clearCart } = useCart();
 
   const amountPaid = parseInt(amountPaidStr.replace(/\D/g, '') || '0', 10);
   const changeAmount = amountPaid - totalAmount;
 
+  useEffect(() => {
+    const userStr = localStorage.getItem('pos_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const branchId = user?.branchId || 1;
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3004';
+    const socket = io(socketUrl);
+
+    socket.on('connect', () => {
+      socket.emit('joinBranchRoom', branchId.toString());
+    });
+
+    socket.on('order:paid', async (data: any) => {
+      if (data.orderId === orderId && data.status === 'COMPLETED') {
+        try {
+          const res = await api.get(`/orders?branchId=${branchId}`);
+          const foundOrder = res.data.find((o: any) => o.id === orderId);
+          if (foundOrder) setCompletedOrder({ ...foundOrder, payment: { paymentMethod: 'BANK_TRANSFER', amount: totalAmount } });
+        } catch (e) {
+          console.error("Could not fetch order for receipt", e);
+        }
+        setIsSuccess(true);
+        clearCart();
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [orderId, totalAmount, clearCart]);
+
   // Auto set amount paid to total if bank transfer
   useEffect(() => {
     if (paymentMethod === 'BANK_TRANSFER') {
       setAmountPaidStr(totalAmount.toString());
+      
+      // Initialize PayOS link
+      const initPayOs = async () => {
+        try {
+          const userStr = localStorage.getItem('pos_user');
+          const user = userStr ? JSON.parse(userStr) : null;
+          const resOrder = await api.get(`/orders?branchId=${user?.branchId || 1}`);
+          const foundOrder = resOrder.data.find((o: any) => o.id === orderId);
+          
+          if (foundOrder && foundOrder.orderCode) {
+            const res = await api.post('/payments/payos/create', {
+              orderId,
+              orderCode: foundOrder.orderCode,
+              totalAmount
+            });
+            const data = res.data;
+            // Generate VietQR image from PayOS response
+            const qrUrl = `https://img.vietqr.io/image/${data.bin}-${data.accountNumber}-compact2.png?amount=${data.amount}&addInfo=${data.description}&accountName=${encodeURIComponent(data.accountName)}`;
+            setPayOsQr(qrUrl);
+          }
+        } catch (e) {
+          console.error('Failed to init PayOS', e);
+        }
+      };
+      initPayOs();
     }
-  }, [paymentMethod, totalAmount]);
+  }, [paymentMethod, totalAmount, orderId]);
 
   const handlePayment = async () => {
     if (amountPaid < totalAmount) return alert('Khách đưa chưa đủ tiền!');
@@ -143,15 +200,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
             </div>
           ) : (
             <div className="mb-6 flex flex-col items-center">
-              <div className="p-3 bg-white border-2 border-orange-100 rounded-2xl shadow-sm mb-3">
-                <img 
-                  src={`https://img.vietqr.io/image/VCB-1028824850-compact2.png?amount=${totalAmount}&addInfo=${orderId}&accountName=PHAN NHAT QUANG`}
-                  alt="VietQR"
-                  className="w-48 h-48 object-contain"
-                />
+              <div className="p-3 bg-white border-2 border-orange-100 rounded-2xl shadow-sm mb-3 min-h-[192px] flex items-center justify-center">
+                {payOsQr ? (
+                  <img 
+                    src={payOsQr}
+                    alt="VietQR"
+                    className="w-48 h-48 object-contain"
+                  />
+                ) : (
+                  <div className="text-sm text-zinc-500 animate-pulse">Đang tạo mã thanh toán...</div>
+                )}
               </div>
               <p className="text-sm font-medium text-zinc-600 text-center px-4">
-                Quét mã qua App Ngân hàng hoặc Zalo để thanh toán nhanh.
+                Quét mã để thanh toán. Hệ thống sẽ tự động chốt đơn khi nhận được tiền.
               </p>
             </div>
           )}

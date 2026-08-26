@@ -25,6 +25,9 @@ export class Order {
   @Column({ nullable: true })
   tableId: string;
 
+  @Column({ type: 'bigint', nullable: true })
+  orderCode: number;
+
   @Column({
     type: 'enum',
     enum: OrderType,
