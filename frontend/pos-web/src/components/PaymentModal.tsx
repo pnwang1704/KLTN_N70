@@ -131,16 +131,30 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
             </div>
           </div>
 
-          <div className="mb-4">
-            <label className="block text-sm font-semibold text-zinc-900 mb-2">Tiền khách đưa</label>
-            <input 
-              type="text" 
-              value={amountPaidStr}
-              onChange={(e) => setAmountPaidStr(e.target.value)}
-              disabled={paymentMethod === 'BANK_TRANSFER'}
-              className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-lg font-bold text-zinc-900 focus:outline-none focus:border-orange-500 focus:bg-white"
-            />
-          </div>
+          {paymentMethod === 'CASH' ? (
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-zinc-900 mb-2">Tiền khách đưa</label>
+              <input 
+                type="text" 
+                value={amountPaidStr}
+                onChange={(e) => setAmountPaidStr(e.target.value)}
+                className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-lg font-bold text-zinc-900 focus:outline-none focus:border-orange-500 focus:bg-white"
+              />
+            </div>
+          ) : (
+            <div className="mb-6 flex flex-col items-center">
+              <div className="p-3 bg-white border-2 border-orange-100 rounded-2xl shadow-sm mb-3">
+                <img 
+                  src={`https://img.vietqr.io/image/VCB-1028824850-compact2.png?amount=${totalAmount}&addInfo=${orderId}&accountName=PHAN NHAT QUANG`}
+                  alt="VietQR"
+                  className="w-48 h-48 object-contain"
+                />
+              </div>
+              <p className="text-sm font-medium text-zinc-600 text-center px-4">
+                Quét mã qua App Ngân hàng hoặc Zalo để thanh toán nhanh.
+              </p>
+            </div>
+          )}
 
           <div className="flex justify-between items-center mb-8 px-1">
             <span className="text-sm font-medium text-zinc-500">Tiền thối lại</span>
@@ -154,7 +168,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
             disabled={isSubmitting || changeAmount < 0}
             className="w-full py-4 bg-orange-600 text-white font-bold text-lg rounded-xl flex items-center justify-center disabled:opacity-50 active:scale-95 transition-transform"
           >
-            {isSubmitting ? 'Đang xử lý...' : 'Xác nhận Thanh toán'}
+            {isSubmitting ? 'Đang xử lý...' : (paymentMethod === 'BANK_TRANSFER' ? 'Xác nhận đã nhận tiền' : 'Xác nhận Thanh toán')}
           </button>
         </div>
       </div>
