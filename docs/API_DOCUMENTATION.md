@@ -7,6 +7,9 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và route 
 | Method | Endpoint | Microservice | Roles / Auth | Mô tả |
 | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/auth/login` | `auth-service` | `@Public` | Xác thực người dùng, trả về JWT Token. |
+| `POST` | `/auth/users` | `api-gateway` -> `auth` | `ADMIN`, `MANAGER` | Tạo tài khoản nhân viên mới (có Role & BranchId). |
+| `GET`  | `/auth/users` | `api-gateway` -> `auth` | `ADMIN`, `MANAGER` | Lấy danh sách nhân viên (Lọc theo branchId). |
+| `PATCH`| `/auth/users/:id/status` | `api-gateway` -> `auth` | `ADMIN`, `MANAGER` | Khóa/Mở khóa tài khoản nhân viên (isActive). |
 | `GET`  | `/orders` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách lịch sử đơn hàng (Lọc theo branchId). |
 | `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang chế biến / phục vụ. |
 | `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ QR (hoặc POS). |
@@ -49,6 +52,9 @@ Gateway sử dụng `ClientProxy.send()` (Message Pattern) để yêu cầu Micr
 | Pattern (CMD) | Gửi từ | Nhận tại | Mục đích |
 | :--- | :--- | :--- | :--- |
 | `{ cmd: 'login' }` | API Gateway | `auth-service` | Validate user & generate JWT. |
+| `{ cmd: 'create_user' }` | API Gateway | `auth-service` | Lưu tài khoản nhân viên mới (Băm mật khẩu). |
+| `{ cmd: 'get_users' }` | API Gateway | `auth-service` | Lấy danh sách tài khoản (Trừ password). |
+| `{ cmd: 'toggle_user_status' }`| API Gateway | `auth-service` | Đổi trạng thái kích hoạt tài khoản. |
 | `{ cmd: 'validate_token' }` | API Gateway | `auth-service` | Giái mã Token cho Global AuthGuard. |
 | `{ cmd: 'create_order' }` | API Gateway | `order-service` | Lưu đơn hàng mới. |
 | `{ cmd: 'get_orders' }` | API Gateway | `order-service` | Lấy danh sách đơn hàng. |

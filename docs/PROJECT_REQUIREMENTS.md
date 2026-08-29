@@ -60,3 +60,29 @@
    - Các container PostgreSQL cho từng service.
    - Container RabbitMQ (gồm Management UI).
 3. Cấu hình kết nối cơ sở dữ liệu và RabbitMQ cho các service bằng TypeORM / Prisma (NestJS).
+
+---
+
+## 6. TIẾN ĐỘ HIỆN TẠI (CẬP NHẬT GẦN NHẤT)
+
+### 6.1. Backend (Microservices)
+- **API Gateway:** Đã triển khai và định tuyến các module chính (Auth, Order, Inventory).
+- **Auth Service:** Hoàn thiện luồng đăng nhập JWT, quản lý tài khoản nhân viên (RBAC: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `WAITER`), chức năng khóa/mở khóa tài khoản (toggle status).
+- **Order Service:** Hoàn thiện luồng tạo đơn POS, tạo link VietQR động qua PayOS, đồng bộ KDS qua Socket.IO.
+- **Inventory Service:** Hoàn thiện công thức nguyên liệu, trừ kho tự động qua Saga Pattern.
+- **Database:** Đã setup PostgreSQL riêng cho từng Service.
+
+### 6.2. Frontend
+- **POS Web (`/frontend/pos-web`):**
+  - Giao diện bán hàng (Cart, Danh sách sản phẩm).
+  - Tích hợp QR Code PayOS hiển thị trực tiếp.
+  - Chức năng quản lý nhân sự (Staff Management) với tính năng lọc chi nhánh theo role `MANAGER`.
+  - Bộ UI Modals tùy chỉnh chuyên nghiệp (Success, Error, Confirm) thay thế window.alert mặc định.
+- **KDS Web (`/frontend/kds-web`):**
+  - Màn hình bếp hiển thị vé nấu ăn realtime.
+  - Đồng bộ "Báo hoàn thành món" trả thông báo về POS.
+- **Customer Web (`/frontend/customer-web`):**
+  - Màn hình quét QR tại bàn để xem menu và thanh toán.
+
+### 6.3. Infrastructure
+- Toàn bộ source code được dockerize với `docker-compose.yml`. Các network nội bộ chạy ổn định và RabbitMQ được cấu hình đầy đủ.
