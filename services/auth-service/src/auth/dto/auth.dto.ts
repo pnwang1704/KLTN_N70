@@ -44,3 +44,12 @@ export class LoginDto {
   @IsNotEmpty()
   password: string;
 }
+
+export class ToggleUserStatusDto {
+  @IsString()
+  @IsNotEmpty()
+  userId: string;
+
+  @IsBoolean()
+  isActive: boolean;
+}

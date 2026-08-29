@@ -49,12 +49,20 @@ export const Header: React.FC<HeaderProps> = ({ isConnected, user, onLogout, act
             Lịch sử đơn
           </button>
           {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
-            <button
-              onClick={() => setActiveTab('INVENTORY')}
-              className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors", activeTab === 'INVENTORY' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
-            >
-              Quản lý kho
-            </button>
+            <>
+              <button
+                onClick={() => setActiveTab('INVENTORY')}
+                className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors", activeTab === 'INVENTORY' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
+              >
+                Quản lý kho
+              </button>
+              <button
+                onClick={() => setActiveTab('STAFF')}
+                className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors", activeTab === 'STAFF' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
+              >
+                Nhân sự
+              </button>
+            </>
           )}
         </div>
       </div>

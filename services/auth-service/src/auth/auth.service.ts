@@ -3,8 +3,9 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
+import { RpcException } from '@nestjs/microservices';
 import { User, UserRole } from './entities/user.entity';
-import { CreateUserDto, LoginDto } from './dto/auth.dto';
+import { CreateUserDto, LoginDto, ToggleUserStatusDto } from './dto/auth.dto';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -41,7 +42,7 @@ export class AuthService implements OnModuleInit {
     
     const existing = await this.userRepository.findOne({ where: { username } });
     if (existing) {
-      throw new ConflictException('Username already exists');
+      throw new RpcException({ statusCode: 400, message: 'Username already exists' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -51,6 +52,30 @@ export class AuthService implements OnModuleInit {
       ...rest,
     });
     
+    const savedUser = await this.userRepository.save(user);
+    delete (savedUser as any).password;
+    return savedUser;
+  }
+
+  async getUsers(branchId?: string) {
+    const query = this.userRepository.createQueryBuilder('user')
+      .select(['user.id', 'user.username', 'user.fullName', 'user.role', 'user.branchId', 'user.isActive', 'user.createdAt']);
+    
+    if (branchId) {
+      query.where('user.branchId = :branchId', { branchId });
+    }
+    
+    query.orderBy('user.createdAt', 'DESC');
+    return query.getMany();
+  }
+
+  async toggleUserStatus(dto: ToggleUserStatusDto) {
+    const user = await this.userRepository.findOne({ where: { id: dto.userId } });
+    if (!user) {
+      throw new RpcException({ statusCode: 404, message: 'User not found' });
+    }
+    
+    user.isActive = dto.isActive;
     const savedUser = await this.userRepository.save(user);
     delete (savedUser as any).password;
     return savedUser;

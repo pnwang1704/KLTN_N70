@@ -1,7 +1,7 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { AuthService } from './auth.service';
-import { CreateUserDto, LoginDto } from './dto/auth.dto';
+import { CreateUserDto, LoginDto, ToggleUserStatusDto } from './dto/auth.dto';
 
 @Controller()
 export class AuthController {
@@ -20,5 +20,15 @@ export class AuthController {
   @MessagePattern('validate_token')
   validateToken(@Payload() token: string) {
     return this.authService.validateToken(token);
+  }
+
+  @MessagePattern('get_users')
+  getUsers(@Payload() branchId?: string) {
+    return this.authService.getUsers(branchId);
+  }
+
+  @MessagePattern('toggle_user_status')
+  toggleUserStatus(@Payload() dto: ToggleUserStatusDto) {
+    return this.authService.toggleUserStatus(dto);
   }
 }

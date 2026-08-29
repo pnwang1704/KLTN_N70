@@ -7,12 +7,13 @@ import { PaymentModal } from './components/PaymentModal';
 import { LoginScreen } from './components/LoginScreen';
 import { OrderHistory } from './components/OrderHistory';
 import { InventoryManagement } from './components/InventoryManagement';
+import { StaffManagement } from './components/StaffManagement';
 import { useSocket } from './hooks/useSocket';
 import type { Product } from './types';
 
 function App() {
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'POS' | 'HISTORY' | 'INVENTORY'>('POS');
+  const [activeTab, setActiveTab] = useState<'POS' | 'HISTORY' | 'INVENTORY' | 'STAFF'>('POS');
   
   useEffect(() => {
     // Check if user is already logged in
@@ -37,7 +38,10 @@ function App() {
   const [paymentInfo, setPaymentInfo] = useState<{orderId: string, amount: number} | null>(null);
 
   if (!user) {
-    return <LoginScreen onLoginSuccess={(u) => setUser(u)} />;
+    return <LoginScreen onLoginSuccess={(u) => {
+      setUser(u);
+      setActiveTab('POS');
+    }} />;
   }
 
   return (
@@ -45,7 +49,10 @@ function App() {
       <Header 
         isConnected={isConnected} 
         user={user} 
-        onLogout={() => setUser(null)} 
+        onLogout={() => {
+          setUser(null);
+          setActiveTab('POS');
+        }} 
         activeTab={activeTab}
         setActiveTab={(t) => setActiveTab(t as any)}
         notifications={notifications}
@@ -70,6 +77,10 @@ function App() {
 
       {activeTab === 'INVENTORY' && (
         <InventoryManagement branchId={branchId} />
+      )}
+
+      {activeTab === 'STAFF' && (
+        <StaffManagement loggedInUser={user} />
       )}
 
       {/* Modals */}
