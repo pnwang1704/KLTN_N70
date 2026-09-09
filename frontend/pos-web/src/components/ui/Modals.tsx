@@ -38,11 +38,12 @@ const BaseModal: React.FC<BaseModalProps> = ({ isOpen, onClose, title, children 
 export const SuccessModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
+  title?: string;
   message: string;
   subMessage?: string;
-}> = ({ isOpen, onClose, message, subMessage }) => {
+}> = ({ isOpen, onClose, title = "Thành công", message, subMessage }) => {
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} title="Thành công">
+    <BaseModal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="flex flex-col items-center text-center">
         <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mb-4">
           <CheckCircle size={32} />
@@ -63,20 +64,45 @@ export const SuccessModal: React.FC<{
 export const ErrorModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
+  title?: string;
   error: string;
-}> = ({ isOpen, onClose, error }) => {
+}> = ({ isOpen, onClose, title = "Đã có lỗi xảy ra", error }) => {
   return (
-    <BaseModal isOpen={isOpen} onClose={onClose} title="Đã có lỗi xảy ra">
+    <BaseModal isOpen={isOpen} onClose={onClose} title={title}>
       <div className="flex flex-col items-center text-center">
         <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4 animate-in slide-in-from-bottom-2">
           <AlertTriangle size={32} />
         </div>
-        <p className="text-red-600 font-medium">{error}</p>
+        <p className="text-zinc-800 font-medium">{error}</p>
         <button
           onClick={onClose}
           className="mt-6 w-full py-2.5 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors"
         >
           Đóng
+        </button>
+      </div>
+    </BaseModal>
+  );
+};
+
+export const WarningModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  title?: string;
+  message: string;
+}> = ({ isOpen, onClose, title = "Thông báo", message }) => {
+  return (
+    <BaseModal isOpen={isOpen} onClose={onClose} title={title}>
+      <div className="flex flex-col items-center text-center">
+        <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mb-4 animate-in slide-in-from-bottom-2">
+          <AlertCircle size={32} />
+        </div>
+        <p className="text-zinc-800 font-medium">{message}</p>
+        <button
+          onClick={onClose}
+          className="mt-6 w-full py-2.5 bg-amber-500 text-white rounded-xl font-semibold hover:bg-amber-600 transition-colors"
+        >
+          Đồng ý
         </button>
       </div>
     </BaseModal>

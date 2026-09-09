@@ -15,10 +15,10 @@ async function bootstrap() {
   const stockRepo = app.get(getRepositoryToken(Stock));
 
   console.log('Clearing old data...');
-  await stockRepo.delete({});
-  await recipeItemRepo.delete({});
-  await recipeRepo.delete({});
-  await ingredientRepo.delete({});
+  await stockRepo.clear();
+  await recipeItemRepo.clear();
+  await recipeRepo.clear();
+  await ingredientRepo.clear();
 
   console.log('Seeding ingredients...');
   const coffee = await ingredientRepo.save({ name: 'Cà phê hạt', unit: 'g', minStockThreshold: 1000 });

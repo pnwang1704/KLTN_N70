@@ -4,6 +4,7 @@ import { formatCurrency, cn } from '../lib/utils';
 import { Trash2, Send, CreditCard, LayoutGrid } from 'lucide-react';
 import api from '../lib/axios';
 import { TableMap } from './TableMap';
+import { SuccessModal, ErrorModal, WarningModal } from './ui/Modals';
 
 interface OrderPanelProps {
   onOpenPayment: (orderId: string, totalAmount: number) => void;
@@ -16,6 +17,9 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
   const [showTableMap, setShowTableMap] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<{ title?: string; message: string; subMessage?: string } | null>(null);
+  const [warningMsg, setWarningMsg] = useState<{ title?: string; message: string } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<{ title?: string; error: string } | null>(null);
 
   useEffect(() => {
     if (cart.length === 0) {
@@ -24,8 +28,14 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
   }, [cart.length]);
 
   const handleCreateOrder = async (autoPay: boolean = false) => {
-    if (cart.length === 0) return alert('Giỏ hàng trống!');
-    if (orderType === 'AT_TABLE' && !tableId) return alert('Vui lòng nhập số bàn!');
+    if (cart.length === 0) {
+      setWarningMsg({ title: 'Giỏ hàng trống', message: 'Vui lòng chọn món trước khi gửi đơn!' });
+      return;
+    }
+    if (orderType === 'AT_TABLE' && !tableId) {
+      setWarningMsg({ title: 'Chưa chọn bàn', message: 'Vui lòng nhập hoặc chọn số bàn phục vụ!' });
+      return;
+    }
     
     setIsSubmitting(true);
     try {
@@ -58,9 +68,11 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
       setCreatedOrderId(newOrder.id);
       
       if (!autoPay) {
-        alert('Đã gửi đơn cho bếp thành công!');
-        // Keep the items in cart so cashier can see, or clear it if they want to serve next customer.
-        // For typical POS, we might clear it or keep it until paid.
+        setSuccessMsg({
+          title: 'Đã gửi đơn cho bếp',
+          message: 'Đơn hàng đã được chuyển tới bếp thành công!',
+          subMessage: 'Nhân viên bếp sẽ nhận được thông báo ngay lập tức.'
+        });
         clearCart();
         setCreatedOrderId(null);
         setTableId('');
@@ -70,14 +82,20 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
       }
     } catch (error) {
       console.error(error);
-      alert('Có lỗi xảy ra khi tạo đơn!');
+      setErrorMsg({
+        title: 'Lỗi tạo đơn',
+        error: 'Có lỗi xảy ra khi tạo đơn hàng. Vui lòng thử lại!'
+      });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handlePaymentClick = () => {
-    if (cart.length === 0 && !createdOrderId) return alert('Giỏ hàng trống!');
+    if (cart.length === 0 && !createdOrderId) {
+      setWarningMsg({ title: 'Giỏ hàng trống', message: 'Vui lòng chọn món trước khi thanh toán!' });
+      return;
+    }
     
     if (createdOrderId) {
       // Already created, just pay
@@ -210,6 +228,28 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
           </button>
         </div>
       </div>
+
+      <SuccessModal
+        isOpen={!!successMsg}
+        onClose={() => setSuccessMsg(null)}
+        title={successMsg?.title}
+        message={successMsg?.message || ''}
+        subMessage={successMsg?.subMessage}
+      />
+
+      <WarningModal
+        isOpen={!!warningMsg}
+        onClose={() => setWarningMsg(null)}
+        title={warningMsg?.title}
+        message={warningMsg?.message || ''}
+      />
+
+      <ErrorModal
+        isOpen={!!errorMsg}
+        onClose={() => setErrorMsg(null)}
+        title={errorMsg?.title}
+        error={errorMsg?.error || ''}
+      />
     </div>
   );
 };
