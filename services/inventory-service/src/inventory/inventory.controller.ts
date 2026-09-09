@@ -31,6 +31,12 @@ export class InventoryController {
     return this.inventoryService.updateIngredient(payload.id, payload.dto);
   }
 
+  @MessagePattern('delete_ingredient')
+  deleteIngredient(@Payload() payload: any) {
+    const id = typeof payload === 'object' && payload !== null && 'id' in payload ? payload.id : payload;
+    return this.inventoryService.deleteIngredient(id);
+  }
+
   @MessagePattern('create_recipe')
   createRecipe(@Payload() dto: CreateRecipeDto) {
     return this.inventoryService.createRecipe(dto);
@@ -52,12 +58,18 @@ export class InventoryController {
   }
 
   @MessagePattern('get_stock')
-  getStockByBranch(@Payload('branchId') branchId: string) {
+  getStockByBranch(@Payload() payload: any) {
+    const branchId = typeof payload === 'object' && payload !== null && 'branchId' in payload
+      ? payload.branchId
+      : payload;
     return this.inventoryService.getStockByBranch(branchId);
   }
 
   @MessagePattern('get_low_stock')
-  getLowStockAlerts(@Payload('branchId') branchId: string) {
+  getLowStockAlerts(@Payload() payload: any) {
+    const branchId = typeof payload === 'object' && payload !== null && 'branchId' in payload
+      ? payload.branchId
+      : payload;
     return this.inventoryService.getLowStockAlerts(branchId);
   }
 }

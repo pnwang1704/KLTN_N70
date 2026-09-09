@@ -5,6 +5,7 @@ import api from '../lib/axios';
 import { useCart } from '../context/CartContext';
 import { Receipt } from './Receipt';
 import { io } from 'socket.io-client';
+import { ErrorModal, WarningModal } from './ui/Modals';
 
 interface PaymentModalProps {
   orderId: string;
@@ -21,6 +22,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   const [completedOrder, setCompletedOrder] = useState<any>(null);
   const [payOsQr, setPayOsQr] = useState<string>('');
   const [orderCode, setOrderCode] = useState<number | null>(null);
+  const [warningMsg, setWarningMsg] = useState<{ title?: string; message: string } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<{ title?: string; error: string } | null>(null);
   const { clearCart } = useCart();
 
   const amountPaid = parseInt(amountPaidStr.replace(/\D/g, '') || '0', 10);
@@ -114,7 +117,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   }, [paymentMethod, orderCode, isSuccess, orderId, totalAmount, clearCart]);
 
   const handlePayment = async () => {
-    if (amountPaid < totalAmount) return alert('Khách đưa chưa đủ tiền!');
+    if (amountPaid < totalAmount) {
+      setWarningMsg({
+        title: 'Chưa đủ tiền',
+        message: 'Số tiền khách đưa chưa đủ so với tổng giá trị đơn hàng!'
+      });
+      return;
+    }
     
     setIsSubmitting(true);
     try {
@@ -138,7 +147,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
       clearCart();
     } catch (error) {
       console.error(error);
-      alert('Thanh toán thất bại! Vui lòng kiểm tra lại JWT Token Thu ngân hoặc Server.');
+      setErrorMsg({
+        title: 'Thanh toán thất bại',
+        error: 'Thanh toán thất bại! Vui lòng kiểm tra lại quyền thu ngân hoặc kết nối máy chủ.'
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -158,7 +170,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
                 if (completedOrder) {
                   setTimeout(() => window.print(), 150);
                 } else {
-                  alert('Đang tải dữ liệu hóa đơn, vui lòng thử lại sau giây lát!');
+                  setWarningMsg({
+                    title: 'Đang tải hóa đơn',
+                    message: 'Đang tải dữ liệu hóa đơn, vui lòng thử lại sau giây lát!'
+                  });
                 }
               }}
               className="w-full py-3 bg-zinc-100 text-zinc-700 font-bold rounded-xl active:scale-95 transition-transform hover:bg-zinc-200 disabled:opacity-50"
@@ -259,6 +274,20 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
           </button>
         </div>
       </div>
+
+      <WarningModal
+        isOpen={!!warningMsg}
+        onClose={() => setWarningMsg(null)}
+        title={warningMsg?.title}
+        message={warningMsg?.message || ''}
+      />
+
+      <ErrorModal
+        isOpen={!!errorMsg}
+        onClose={() => setErrorMsg(null)}
+        title={errorMsg?.title}
+        error={errorMsg?.error || ''}
+      />
     </div>
   );
 };

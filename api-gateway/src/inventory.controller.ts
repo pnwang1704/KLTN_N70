@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Put, Body, Param, Inject } from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, Param, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Roles } from './common/decorators/roles.decorator';
 import { CreateIngredientDto, UpdateIngredientDto, CreateRecipeDto, UpdateRecipeDto, StockInDto } from './dto/inventory.dto';
@@ -26,6 +26,12 @@ export class InventoryController {
     return this.inventoryClient.send('update_ingredient', { id, dto });
   }
 
+  @Roles('ADMIN', 'MANAGER')
+  @Delete('ingredients/:id')
+  deleteIngredient(@Param('id') id: string) {
+    return this.inventoryClient.send('delete_ingredient', { id });
+  }
+
   // --- RECIPES ---
   @Post('recipes')
   createRecipe(@Body() dto: CreateRecipeDto) {
@@ -50,11 +56,11 @@ export class InventoryController {
 
   @Get('stocks/:branchId')
   getStockByBranch(@Param('branchId') branchId: string) {
-    return this.inventoryClient.send('get_stock', branchId);
+    return this.inventoryClient.send('get_stock', { branchId });
   }
 
   @Get('stocks/:branchId/low')
   getLowStockAlerts(@Param('branchId') branchId: string) {
-    return this.inventoryClient.send('get_low_stock', branchId);
+    return this.inventoryClient.send('get_low_stock', { branchId });
   }
 }

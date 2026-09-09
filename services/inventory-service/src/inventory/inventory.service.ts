@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { RpcException } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, LessThanOrEqual } from 'typeorm';
 import { Stock } from './entities/stock.entity';
@@ -12,7 +13,7 @@ import { UpdateRecipeDto } from './dto/update-recipe.dto';
 import { StockInDto } from './dto/stock-in.dto';
 
 @Injectable()
-export class InventoryService {
+export class InventoryService implements OnModuleInit {
   private readonly logger = new Logger(InventoryService.name);
 
   constructor(
@@ -26,6 +27,51 @@ export class InventoryService {
     private recipeItemRepository: Repository<RecipeItem>,
     private dataSource: DataSource,
   ) {}
+
+  async onModuleInit() {
+    await this.seedInitialData();
+  }
+
+  private async seedInitialData() {
+    try {
+      const count = await this.ingredientRepository.count();
+      if (count === 0) {
+        this.logger.log('Seeding initial inventory data...');
+        const coffee = await this.ingredientRepository.save({ name: 'Cà phê hạt', unit: 'g', minStockThreshold: 1000 });
+        const milk = await this.ingredientRepository.save({ name: 'Sữa đặc', unit: 'ml', minStockThreshold: 500 });
+        const sugar = await this.ingredientRepository.save({ name: 'Đường', unit: 'g', minStockThreshold: 500 });
+        const freshMilk = await this.ingredientRepository.save({ name: 'Sữa tươi', unit: 'ml', minStockThreshold: 1000 });
+        const tea = await this.ingredientRepository.save({ name: 'Trà đen', unit: 'g', minStockThreshold: 500 });
+
+        await this.stockRepository.save([
+          { branchId: '1', ingredientId: coffee.id, currentQuantity: 5000 },
+          { branchId: '1', ingredientId: milk.id, currentQuantity: 2000 },
+          { branchId: '1', ingredientId: sugar.id, currentQuantity: 2000 },
+          { branchId: '1', ingredientId: freshMilk.id, currentQuantity: 3000 },
+          { branchId: '1', ingredientId: tea.id, currentQuantity: 1500 },
+        ]);
+
+        const recipe = new Recipe();
+        recipe.productId = '1';
+        recipe.size = 'M';
+
+        const item1 = new RecipeItem();
+        item1.ingredientId = coffee.id;
+        item1.quantityNeeded = 25;
+
+        const item2 = new RecipeItem();
+        item2.ingredientId = milk.id;
+        item2.quantityNeeded = 40;
+
+        recipe.items = [item1, item2];
+        await this.recipeRepository.save(recipe);
+
+        this.logger.log('Initial inventory data seeded successfully!');
+      }
+    } catch (err: any) {
+      this.logger.error('Failed to seed initial inventory data', err?.stack || err);
+    }
+  }
 
   // --- INGREDIENT CRUD ---
   async createIngredient(dto: CreateIngredientDto): Promise<Ingredient> {
@@ -42,6 +88,30 @@ export class InventoryService {
     const updated = await this.ingredientRepository.findOne({ where: { id } });
     if (!updated) throw new NotFoundException('Ingredient not found');
     return updated;
+  }
+
+  async deleteIngredient(id: string): Promise<{ success: boolean; message: string }> {
+    const ingredient = await this.ingredientRepository.findOne({ where: { id } });
+    if (!ingredient) {
+      throw new RpcException({ statusCode: 404, message: 'Nguyên liệu không tồn tại' });
+    }
+
+    // Check if ingredient is used in any recipes
+    const usedInRecipe = await this.recipeItemRepository.findOne({ where: { ingredientId: id } });
+    if (usedInRecipe) {
+      throw new RpcException({
+        statusCode: 400,
+        message: `Không thể xóa: Nguyên liệu "${ingredient.name}" đang được sử dụng trong công thức món ăn!`
+      });
+    }
+
+    // Remove stock records for this ingredient
+    await this.stockRepository.delete({ ingredientId: id });
+
+    // Remove ingredient
+    await this.ingredientRepository.delete(id);
+
+    return { success: true, message: `Đã xóa nguyên liệu "${ingredient.name}" thành công.` };
   }
 
   // --- RECIPE CRUD ---
@@ -87,7 +157,7 @@ export class InventoryService {
         currentQuantity: dto.quantity,
       });
     } else {
-      stock.currentQuantity = Number(stock.currentQuantity) + dto.quantity;
+      stock.currentQuantity = Number(stock.currentQuantity) + Number(dto.quantity);
     }
 
     return this.stockRepository.save(stock);
@@ -104,11 +174,11 @@ export class InventoryService {
 
     for (const stock of stocks) {
       const ingredient = ingredients.find(i => i.id === stock.ingredientId);
-      if (ingredient && stock.currentQuantity <= ingredient.minStockThreshold) {
+      if (ingredient && Number(stock.currentQuantity) <= Number(ingredient.minStockThreshold)) {
         alerts.push({
           ingredientName: ingredient.name,
-          currentQuantity: stock.currentQuantity,
-          threshold: ingredient.minStockThreshold,
+          currentQuantity: Number(stock.currentQuantity),
+          threshold: Number(ingredient.minStockThreshold),
         });
       }
     }
