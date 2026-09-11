@@ -66,7 +66,7 @@ function App() {
           </div>
           
           <div className="w-[40%] h-full border-l border-zinc-200">
-            <OrderPanel onOpenPayment={(orderId, amount) => setPaymentInfo({ orderId, amount })} />
+            <OrderPanel onOpenPayment={(orderId, amount) => setPaymentInfo({ orderId, amount: Math.round(Number(amount || 0)) })} />
           </div>
         </div>
       )}

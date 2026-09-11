@@ -15,8 +15,9 @@ interface PaymentModalProps {
 }
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount, onClose, onSuccess }) => {
+  const normalizedTotal = Math.round(Number(totalAmount) || 0);
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER'>('CASH');
-  const [amountPaidStr, setAmountPaidStr] = useState(totalAmount.toString());
+  const [amountPaidStr, setAmountPaidStr] = useState(normalizedTotal.toString());
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
@@ -26,8 +27,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   const [errorMsg, setErrorMsg] = useState<{ title?: string; error: string } | null>(null);
   const { clearCart } = useCart();
 
+  useEffect(() => {
+    setAmountPaidStr(normalizedTotal.toString());
+  }, [normalizedTotal]);
+
   const amountPaid = parseInt(amountPaidStr.replace(/\D/g, '') || '0', 10);
-  const changeAmount = amountPaid - totalAmount;
+  const changeAmount = amountPaid - normalizedTotal;
 
   useEffect(() => {
     const userStr = localStorage.getItem('pos_user');
@@ -62,7 +67,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   // Auto set amount paid to total if bank transfer
   useEffect(() => {
     if (paymentMethod === 'BANK_TRANSFER') {
-      setAmountPaidStr(totalAmount.toString());
+      setAmountPaidStr(normalizedTotal.toString());
       
       // Initialize PayOS link
       const initPayOs = async () => {
@@ -77,7 +82,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
             const res = await api.post('/payments/payos/create', {
               orderId,
               orderCode: foundOrder.orderCode,
-              totalAmount
+              totalAmount: normalizedTotal
             });
             const data = res.data;
             // Generate VietQR image from PayOS response
@@ -90,7 +95,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
       };
       initPayOs();
     }
-  }, [paymentMethod, totalAmount, orderId]);
+  }, [paymentMethod, normalizedTotal, orderId]);
 
   // Fallback Polling for PayOS
   useEffect(() => {
@@ -104,7 +109,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
             const branchId = user?.branchId || 1;
             const resOrder = await api.get(`/orders?branchId=${branchId}`);
             const foundOrder = resOrder.data.find((o: any) => o.id === orderId);
-            if (foundOrder) setCompletedOrder({ ...foundOrder, payment: { paymentMethod: 'BANK_TRANSFER', amount: totalAmount } });
+            if (foundOrder) setCompletedOrder({ ...foundOrder, payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal } });
             setIsSuccess(true);
             clearCart();
           }
@@ -114,10 +119,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
       }, 3000); // Check every 3 seconds
       return () => clearInterval(interval);
     }
-  }, [paymentMethod, orderCode, isSuccess, orderId, totalAmount, clearCart]);
+  }, [paymentMethod, orderCode, isSuccess, orderId, normalizedTotal, clearCart]);
 
   const handlePayment = async () => {
-    if (amountPaid < totalAmount) {
+    if (amountPaid < normalizedTotal) {
       setWarningMsg({
         title: 'Chưa đủ tiền',
         message: 'Số tiền khách đưa chưa đủ so với tổng giá trị đơn hàng!'
@@ -208,7 +213,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
         <div className="p-6">
           <div className="mb-6 flex justify-between items-center bg-orange-50 p-4 rounded-xl border border-orange-100">
             <span className="font-semibold text-orange-900">Tổng Cần Thu</span>
-            <span className="text-2xl font-bold text-orange-600">{formatCurrency(totalAmount)}</span>
+            <span className="text-2xl font-bold text-orange-600">{formatCurrency(normalizedTotal)}</span>
           </div>
 
           <div className="mb-6">
@@ -235,9 +240,35 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
               <input 
                 type="text" 
                 value={amountPaidStr}
-                onChange={(e) => setAmountPaidStr(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '');
+                  setAmountPaidStr(val);
+                }}
                 className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-lg font-bold text-zinc-900 focus:outline-none focus:border-orange-500 focus:bg-white"
+                placeholder="0"
               />
+              <div className="flex flex-wrap gap-2 mt-2.5">
+                <button
+                  type="button"
+                  onClick={() => setAmountPaidStr(normalizedTotal.toString())}
+                  className="px-3 py-1.5 text-xs font-semibold bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg transition-colors cursor-pointer"
+                >
+                  Đúng số tiền ({formatCurrency(normalizedTotal)})
+                </button>
+                {[50000, 100000, 200000, 500000]
+                  .filter(val => val > normalizedTotal)
+                  .slice(0, 3)
+                  .map(val => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setAmountPaidStr(val.toString())}
+                      className="px-3 py-1.5 text-xs font-semibold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg transition-colors cursor-pointer"
+                    >
+                      {formatCurrency(val)}
+                    </button>
+                  ))}
+              </div>
             </div>
           ) : (
             <div className="mb-6 flex flex-col items-center">
