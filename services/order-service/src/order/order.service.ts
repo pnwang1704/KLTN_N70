@@ -105,12 +105,15 @@ export class OrderService {
       throw new BadRequestException('Order is already completed or cancelled');
     }
 
-    if (discountPercent !== undefined && discountPercent >= 0) {
+    if (finalAmount !== undefined) {
+      order.finalAmount = Math.round(Number(finalAmount));
+      if (discountPercent !== undefined && discountPercent >= 0) {
+        order.discountPercent = discountPercent;
+      }
+    } else if (discountPercent !== undefined && discountPercent >= 0) {
       order.discountPercent = discountPercent;
       const discount = Math.round((order.totalAmount * discountPercent) / 100);
       order.finalAmount = Math.max(0, order.totalAmount - discount);
-    } else if (finalAmount !== undefined) {
-      order.finalAmount = Math.round(Number(finalAmount));
     }
 
     const payable = order.finalAmount !== undefined && order.finalAmount !== null ? order.finalAmount : order.totalAmount;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle2, Percent } from 'lucide-react';
+import { X, CheckCircle2 } from 'lucide-react';
 import { formatCurrency, cn } from '../lib/utils';
 import api from '../lib/axios';
 import { useCart } from '../context/CartContext';
@@ -17,10 +17,6 @@ interface PaymentModalProps {
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, totalAmount, onClose, onSuccess }) => {
   const normalizedTotal = Math.round(Number(totalAmount) || 0);
-  const [discountPercent, setDiscountPercent] = useState<number>(0);
-
-  const discountAmount = Math.round((normalizedTotal * (discountPercent || 0)) / 100);
-  const finalTotal = Math.max(0, normalizedTotal - discountAmount);
 
   const formatAmountInput = (val: number | string): string => {
     const digits = val.toString().replace(/\D/g, '');
@@ -29,7 +25,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
   };
 
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER'>('CASH');
-  const [amountPaidStr, setAmountPaidStr] = useState(formatAmountInput(finalTotal));
+  const [amountPaidStr, setAmountPaidStr] = useState(formatAmountInput(normalizedTotal));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
@@ -48,11 +44,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
   }, [orderId]);
 
   useEffect(() => {
-    setAmountPaidStr(formatAmountInput(finalTotal));
-  }, [finalTotal]);
+    setAmountPaidStr(formatAmountInput(normalizedTotal));
+  }, [normalizedTotal]);
 
   const amountPaid = parseInt(amountPaidStr.replace(/\D/g, '') || '0', 10);
-  const changeAmount = amountPaid - finalTotal;
+  const changeAmount = amountPaid - normalizedTotal;
 
   const handleClose = async () => {
     if (tempQrCreatedId) {
@@ -83,7 +79,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
         try {
           const res = await api.get(`/orders?branchId=${branchId}`);
           const foundOrder = res.data.find((o: any) => o.id === targetId);
-          if (foundOrder) setCompletedOrder({ ...foundOrder, discountPercent, finalAmount: finalTotal, payment: { paymentMethod: 'BANK_TRANSFER', amount: finalTotal } });
+          if (foundOrder) {
+            setCompletedOrder({ 
+              ...foundOrder, 
+              discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0, 
+              finalAmount: normalizedTotal, 
+              payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal } 
+            });
+          }
         } catch (e) {
           console.error("Could not fetch order for receipt", e);
         }
@@ -95,12 +98,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
     return () => {
       socket.disconnect();
     };
-  }, [orderId, activeOrderId, totalAmount, clearCart, discountPercent, finalTotal]);
+  }, [orderId, activeOrderId, normalizedTotal, clearCart, orderData]);
 
   // Auto set amount paid to total if bank transfer & generate PayOS QR
   useEffect(() => {
     if (paymentMethod === 'BANK_TRANSFER') {
-      setAmountPaidStr(formatAmountInput(finalTotal));
+      setAmountPaidStr(formatAmountInput(normalizedTotal));
       
       const initPayOs = async () => {
         try {
@@ -116,9 +119,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             const res = await api.post('/orders', {
               ...orderData,
               branchId,
-              totalAmount: normalizedTotal,
-              finalAmount: finalTotal,
-              discountPercent,
+              totalAmount: orderData.totalAmount || normalizedTotal,
+              finalAmount: normalizedTotal,
+              discountPercent: orderData.discountPercent || 0,
               paymentMethod: 'BANK_TRANSFER'
             });
             const newOrder = res.data;
@@ -144,7 +147,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             const res = await api.post('/payments/payos/create', {
               orderId: targetOrderId,
               orderCode: targetOrderCode,
-              totalAmount: finalTotal
+              totalAmount: normalizedTotal
             });
             const data = res.data;
             // Generate VietQR image from PayOS response
@@ -157,7 +160,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
       };
       initPayOs();
     }
-  }, [paymentMethod, finalTotal, orderId, activeOrderId, orderData, orderCode, normalizedTotal, discountPercent]);
+  }, [paymentMethod, normalizedTotal, orderId, activeOrderId, orderData, orderCode]);
 
   // Fallback Polling for PayOS
   useEffect(() => {
@@ -173,7 +176,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             const resOrder = await api.get(`/orders?branchId=${branchId}`);
             const targetId = activeOrderId || orderId;
             const foundOrder = resOrder.data.find((o: any) => o.id === targetId);
-            if (foundOrder) setCompletedOrder({ ...foundOrder, discountPercent, finalAmount: finalTotal, payment: { paymentMethod: 'BANK_TRANSFER', amount: finalTotal } });
+            if (foundOrder) {
+              setCompletedOrder({ 
+                ...foundOrder, 
+                discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0, 
+                finalAmount: normalizedTotal, 
+                payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal } 
+              });
+            }
             setIsSuccess(true);
             clearCart();
           }
@@ -183,13 +193,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
       }, 3000); // Check every 3 seconds
       return () => clearInterval(interval);
     }
-  }, [paymentMethod, orderCode, isSuccess, orderId, activeOrderId, finalTotal, clearCart, discountPercent]);
+  }, [paymentMethod, orderCode, isSuccess, orderId, activeOrderId, normalizedTotal, clearCart, orderData]);
 
   const handlePayment = async () => {
-    if (amountPaid < finalTotal) {
+    if (amountPaid < normalizedTotal) {
       setWarningMsg({
         title: 'Chưa đủ tiền',
-        message: 'Số tiền khách đưa chưa đủ so với tổng giá trị đơn hàng sau chiết khấu!'
+        message: 'Số tiền khách đưa chưa đủ so với tổng giá trị đơn hàng!'
       });
       return;
     }
@@ -208,9 +218,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
         const createRes = await api.post('/orders', {
           ...orderData,
           branchId,
-          totalAmount: normalizedTotal,
-          finalAmount: finalTotal,
-          discountPercent,
+          totalAmount: orderData.totalAmount || normalizedTotal,
+          finalAmount: normalizedTotal,
+          discountPercent: orderData.discountPercent || 0,
           paymentMethod
         });
         orderToComplete = createRes.data;
@@ -222,8 +232,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
         await api.post(`/orders/${targetOrderId}/pay`, {
           paymentMethod,
           amountPaid,
-          discountPercent,
-          finalAmount: finalTotal
+          discountPercent: orderData?.discountPercent || 0,
+          finalAmount: normalizedTotal
         });
 
         // Clear tempQrCreatedId so handleClose won't delete the completed order
@@ -238,15 +248,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
           if (foundOrder) {
             setCompletedOrder({
               ...foundOrder,
-              discountPercent,
-              finalAmount: finalTotal,
+              discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0,
+              finalAmount: normalizedTotal,
               payment: { paymentMethod, amount: amountPaid }
             });
           } else if (orderToComplete) {
             setCompletedOrder({
               ...orderToComplete,
-              discountPercent,
-              finalAmount: finalTotal,
+              discountPercent: orderData?.discountPercent || 0,
+              finalAmount: normalizedTotal,
               payment: { paymentMethod, amount: amountPaid }
             });
           }
@@ -255,8 +265,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
           if (orderToComplete) {
             setCompletedOrder({
               ...orderToComplete,
-              discountPercent,
-              finalAmount: finalTotal,
+              discountPercent: orderData?.discountPercent || 0,
+              finalAmount: normalizedTotal,
               payment: { paymentMethod, amount: amountPaid }
             });
           }
@@ -326,75 +336,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
         </div>
 
         <div className="p-6 overflow-y-auto flex-1 space-y-5">
-          {/* Summary Card with Discount */}
-          <div className="bg-orange-50/70 p-4 rounded-2xl border border-orange-100 space-y-3">
-            <div className="flex justify-between items-center text-sm text-zinc-600">
-              <span className="font-medium">Tạm tính:</span>
-              <span className="font-semibold text-zinc-800">{formatCurrency(normalizedTotal)}</span>
+          {/* Summary Card */}
+          <div className="bg-orange-50/70 p-4 rounded-2xl border border-orange-100 flex justify-between items-center">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-orange-700 block mb-0.5">Tổng Cần Thu</span>
+              <span className="text-xs text-zinc-500">Số tiền khách cần thanh toán</span>
             </div>
-
-            {/* Discount input & quick chips */}
-            <div className="space-y-2 pt-1 border-t border-orange-100/80">
-              <div className="flex justify-between items-center">
-                <label className="text-xs font-bold text-zinc-700 flex items-center gap-1">
-                  <Percent size={14} className="text-orange-600" />
-                  Chiết khấu đơn hàng:
-                </label>
-                <div className="relative w-24">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={discountPercent === 0 ? '' : discountPercent}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      if (isNaN(val) || val < 0) {
-                        setDiscountPercent(0);
-                      } else {
-                        setDiscountPercent(Math.min(100, val));
-                      }
-                    }}
-                    placeholder="0"
-                    className="w-full pl-3 pr-7 py-1 text-right text-sm font-bold bg-white border border-orange-200 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-zinc-900"
-                  />
-                  <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400 pointer-events-none">
-                    %
-                  </span>
-                </div>
-              </div>
-
-              {/* Quick % chips */}
-              <div className="flex items-center gap-1.5 overflow-x-auto py-0.5">
-                {[0, 5, 10, 15, 20, 50].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => setDiscountPercent(pct)}
-                    className={cn(
-                      "px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all cursor-pointer shrink-0",
-                      discountPercent === pct
-                        ? "bg-orange-500 border-orange-500 text-white shadow-xs font-bold"
-                        : "bg-white border-orange-200 text-zinc-600 hover:bg-orange-50 hover:text-orange-700"
-                    )}
-                  >
-                    {pct === 0 ? '0%' : `${pct}%`}
-                  </button>
-                ))}
-              </div>
-
-              {discountPercent > 0 && (
-                <div className="flex justify-between items-center text-xs text-emerald-600 font-semibold pt-1">
-                  <span>Giảm giá ({discountPercent}%):</span>
-                  <span>-{formatCurrency(discountAmount)}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Final Total */}
-            <div className="pt-2 border-t border-orange-200 flex justify-between items-center">
-              <span className="font-bold text-orange-950">Tổng Cần Thu</span>
-              <span className="text-2xl font-extrabold text-orange-600">{formatCurrency(finalTotal)}</span>
-            </div>
+            <span className="text-2xl font-extrabold text-orange-600">{formatCurrency(normalizedTotal)}</span>
           </div>
 
           <div>
@@ -421,15 +369,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
                 <label className="block text-sm font-semibold text-zinc-900">Tiền khách đưa</label>
                 <button
                   type="button"
-                  onClick={() => setAmountPaidStr(formatAmountInput(finalTotal))}
+                  onClick={() => setAmountPaidStr(formatAmountInput(normalizedTotal))}
                   className={cn(
                     "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
-                    amountPaid === finalTotal
+                    amountPaid === normalizedTotal
                       ? "bg-orange-600 text-white shadow-sm"
                       : "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
                   )}
                 >
-                  Đúng số tiền ({formatCurrency(finalTotal)})
+                  Đúng số tiền ({formatCurrency(normalizedTotal)})
                 </button>
               </div>
               <input 
