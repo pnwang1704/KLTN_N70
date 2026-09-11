@@ -16,8 +16,15 @@ interface PaymentModalProps {
 
 export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount, onClose, onSuccess }) => {
   const normalizedTotal = Math.round(Number(totalAmount) || 0);
+
+  const formatAmountInput = (val: number | string): string => {
+    const digits = val.toString().replace(/\D/g, '');
+    if (!digits) return '';
+    return Number(digits).toLocaleString('vi-VN') + ' đ';
+  };
+
   const [paymentMethod, setPaymentMethod] = useState<'CASH' | 'BANK_TRANSFER'>('CASH');
-  const [amountPaidStr, setAmountPaidStr] = useState(normalizedTotal.toString());
+  const [amountPaidStr, setAmountPaidStr] = useState(formatAmountInput(normalizedTotal));
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
@@ -28,7 +35,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   const { clearCart } = useCart();
 
   useEffect(() => {
-    setAmountPaidStr(normalizedTotal.toString());
+    setAmountPaidStr(formatAmountInput(normalizedTotal));
   }, [normalizedTotal]);
 
   const amountPaid = parseInt(amountPaidStr.replace(/\D/g, '') || '0', 10);
@@ -67,7 +74,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   // Auto set amount paid to total if bank transfer
   useEffect(() => {
     if (paymentMethod === 'BANK_TRANSFER') {
-      setAmountPaidStr(normalizedTotal.toString());
+      setAmountPaidStr(formatAmountInput(normalizedTotal));
       
       // Initialize PayOS link
       const initPayOs = async () => {
@@ -240,7 +247,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
                 <label className="block text-sm font-semibold text-zinc-900">Tiền khách đưa</label>
                 <button
                   type="button"
-                  onClick={() => setAmountPaidStr(normalizedTotal.toString())}
+                  onClick={() => setAmountPaidStr(formatAmountInput(normalizedTotal))}
                   className={cn(
                     "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
                     amountPaid === normalizedTotal
@@ -255,11 +262,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
                 type="text" 
                 value={amountPaidStr}
                 onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, '');
-                  setAmountPaidStr(val);
+                  const inputVal = e.target.value;
+                  let digits = inputVal.replace(/\D/g, '');
+                  if (inputVal.length < amountPaidStr.length && digits === amountPaidStr.replace(/\D/g, '')) {
+                    digits = digits.slice(0, -1);
+                  }
+                  if (!digits) {
+                    setAmountPaidStr('');
+                  } else {
+                    setAmountPaidStr(formatAmountInput(digits));
+                  }
                 }}
                 className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-lg font-bold text-zinc-900 focus:outline-none focus:border-orange-500 focus:bg-white"
-                placeholder="0"
+                placeholder="0 đ"
               />
               <div className="mt-3">
                 <p className="text-xs font-semibold text-zinc-500 mb-2">Chọn nhanh mệnh giá tiền mặt:</p>
@@ -268,7 +283,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
                     <button
                       key={val}
                       type="button"
-                      onClick={() => setAmountPaidStr(val.toString())}
+                      onClick={() => setAmountPaidStr(formatAmountInput(val))}
                       className={cn(
                         "py-2.5 px-2 text-xs font-bold rounded-xl border transition-all text-center cursor-pointer active:scale-95",
                         amountPaid === val
