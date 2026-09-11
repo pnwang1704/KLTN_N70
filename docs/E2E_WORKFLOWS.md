@@ -1,44 +1,190 @@
-# Luồng Hoạt động E2E (End-to-End Workflows)
+# Luồng Nghiệp Vụ Đầu-Cuối (End-to-End Workflows)
 
-Tài liệu này mô tả 2 luồng nghiệp vụ cốt lõi nhất của toàn bộ hệ thống POS & KDS.
-
-## 1. Luồng Đặt món qua QR Code & Chế biến KDS
-
-Đây là luồng "không chạm", nơi khách hàng tự phục vụ và đầu bếp nhận thông tin tức thì.
-
-1. **Khách hàng quét mã QR (Customer Web):**
-   - Khách quét mã tại bàn, truy cập web, chọn món, size, topping và nhập ghi chú.
-   - Khi bấm "Thanh toán", web gọi `POST /orders` qua API Gateway.
-2. **Xử lý Đơn hàng (Order Service):**
-   - Gateway forward sang `order-service`. 
-   - `order-service` lưu vào DB (Trạng thái đơn: `PENDING`, Trạng thái các món: `PENDING`).
-   - `order-service` phát sự kiện Socket `newOrder` lên kênh realtime.
-3. **Hiển thị Bếp (KDS Web):**
-   - Ứng dụng KDS tại bếp nhận sự kiện `newOrder` qua Socket.IO và render ngay đơn hàng mới lên màn hình kèm bộ đếm thời gian.
-4. **Bếp chế biến:**
-   - Đầu bếp bấm nút **"Bắt đầu làm"**. KDS gọi `PATCH /orders/:id/items/:itemId` (Trạng thái món: `IN_PROGRESS`).
-   - Đầu bếp bấm **"Hoàn thành"**. Món chuyển sang `COMPLETED`.
-   - Nếu tất cả các món trong đơn đều `COMPLETED`, toàn bộ đơn được đánh dấu hoàn thành chế biến, KDS tự động ẩn thẻ đơn đó.
+Tài liệu này cung cấp các sơ đồ tuần tự (Sequence Diagrams) chuẩn Mermaid và phân tích chi tiết các luồng nghiệp vụ cốt lõi trong hệ thống F&B Multi-branch.
 
 ---
 
-## 2. Luồng Thanh toán Tự động (PayOS) & Trừ Kho Bất đồng bộ
+## 1. Luồng Xác thực & Kiểm soát Phân quyền (Authentication & RBAC Guard)
 
-Đây là luồng tác nghiệp của Thu ngân và sự kết hợp ngầm của các Microservices cùng Cổng thanh toán.
+Đảm bảo an toàn thông tin với kiến trúc Stateless JWT kết hợp kiểm soát phân quyền dựa trên vai trò (Role-Based Access Control) tại API Gateway.
 
-1. **Quản lý Sơ đồ Bàn (POS Web):**
-   - Khi có đơn hàng `PENDING` tạo từ mã QR của Bàn 12, Sơ đồ bàn trên màn hình POS lập tức nháy đỏ/cam báo hiệu Bàn 12 đang có khách và cần thanh toán.
-2. **Thanh toán VietQR Tự động (PayOS):**
-   - Thu ngân bấm vào Bàn 12. Modal thanh toán hiện lên, hệ thống gọi `POST /payments/payos/create` lấy mã VietQR động (gắn sẵn số tiền và `orderCode`).
-   - Khách hàng dùng App Ngân hàng quét và chuyển khoản.
-   - **Cách 1 (Webhook):** PayOS chủ động gọi Webhook về `api-gateway`. Gateway bắn Message qua RabbitMQ báo `order-service` cập nhật đơn thành `COMPLETED` và phát sự kiện `order:paid` qua Socket.IO.
-   - **Cách 2 (Polling Backup):** POS Web ngầm gọi `POST /payments/payos/status` mỗi 3 giây. Khi báo `PAID`, POS tự kích hoạt đóng đơn.
-3. **In Hóa Đơn & Đóng Đơn:**
-   - Ngay khi nhận tín hiệu thanh toán thành công (qua Socket hoặc Polling), Modal tự đóng, trình duyệt tự động mở cửa sổ Print chuẩn khổ giấy 80mm bằng CSS `@media print` + React Portal.
-4. **Trừ Kho Ngầm (RabbitMQ & Inventory Service):**
-   - Cùng thời điểm đơn chuyển sang `COMPLETED`, `order-service` phát một Event: `client.emit('order_completed', orderData)`.
-   - `inventory-service` liên tục lắng nghe Event này. Khi nhận được, nó bóc tách dữ liệu `items`, tra cứu định lượng nguyên vật liệu và thực hiện phép trừ (-) số lượng tồn kho trong `inventory_db`.
-   - Luồng này đảm bảo khách hàng và Thu ngân trải nghiệm tốc độ phản hồi tính bằng mili-giây, còn việc trừ kho nặng nhọc cứ để Message Broker lo liệu dưới nền!
-5. **Thông báo Bếp (KDS) & POS:**
-   - Khi bếp hoàn thành món ăn, KDS gọi API cập nhật trạng thái.
-   - Server đẩy thông báo qua Socket.IO lên màn hình POS (chuông thông báo) báo cho Thu ngân món đã sẵn sàng phục vụ.
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Nhân viên / Quản lý
+    participant Client as POS / KDS Web
+    participant GW as API Gateway (Port 3000)
+    participant AS as Auth Service (Port 3001)
+    participant DB as Auth DB
+
+    %% Đăng nhập
+    Note over User, DB: Giai đoạn 1: Đăng nhập hệ thống
+    User->>Client: Nhập Username & Password
+    Client->>GW: POST /auth/login
+    GW->>AS: RabbitMQ RPC: { cmd: 'login' }
+    AS->>DB: Truy vấn User theo username
+    DB-->>AS: Trả về bản ghi User (Password hash)
+    AS->>AS: Xác minh mật khẩu (Bcrypt compare)
+    AS->>AS: Ký phát JWT Token (chứa userId, role, branchId)
+    AS-->>GW: Trả về Access Token & Profile
+    GW-->>Client: HTTP 200 OK (accessToken, user)
+    Client->>Client: Lưu Token vào LocalStorage
+
+    %% Thực thi Request có bảo vệ
+    Note over User, DB: Giai đoạn 2: Thực thi Request có phân quyền
+    User->>Client: Thao tác chức năng (vd: Quản lý nhân viên)
+    Client->>GW: GET /auth/users (Header: Bearer Token)
+    GW->>AS: RabbitMQ RPC: { cmd: 'validate_token' }
+    AS-->>GW: Trả về Token hợp lệ (role = 'MANAGER')
+    GW->>GW: RolesGuard kiểm tra: Role có trong @Roles('ADMIN', 'MANAGER')?
+    alt Role hợp lệ
+        GW->>AS: RabbitMQ RPC: { cmd: 'get_users' }
+        AS->>DB: Lấy danh sách nhân viên
+        DB-->>AS: Danh sách users
+        AS-->>GW: Users data
+        GW-->>Client: HTTP 200 OK (Danh sách nhân viên)
+    else Role không hợp lệ
+        GW-->>Client: HTTP 403 Forbidden (Không đủ thẩm quyền)
+    end
+```
+
+---
+
+## 2. Luồng Khách Đặt Món Tại Bàn (Dine-in Post-pay) & Bếp Tiếp Nhận Realtime
+
+Khách hàng quét mã QR tại bàn ăn để gọi món theo mô hình **Thanh toán sau tại quầy (Post-pay)**. Đơn hàng được chuyển thẳng tới Nhà bếp (KDS) ngay lập tức.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Customer as Khách hàng tại bàn
+    participant Mobile as Customer Web (QR)
+    participant GW as API Gateway
+    participant OS as Order Service (Port 3004)
+    participant KDS as KDS Web (Màn hình Bếp)
+    participant DB as Order DB
+
+    Customer->>Mobile: Quét mã QR tại bàn (vd: Bàn 05)
+    Mobile->>Mobile: Chọn món, chọn Size (M/L), Topping, Ghi chú
+    Customer->>Mobile: Bấm "Gửi đơn gọi món"
+    Mobile->>GW: POST /orders (orderType: 'AT_TABLE', tableId: '05', items, totalAmount)
+    GW->>OS: RabbitMQ RPC: { cmd: 'create_order' }
+    OS->>DB: Lưu đơn hàng (status = 'PENDING', items.itemStatus = 'PENDING')
+    DB-->>OS: Đơn hàng mới (id, orderCode)
+    OS->>KDS: Socket.IO Emit 'newOrder' tới room branch_1
+    OS-->>GW: Trả về thông tin Order
+    GW-->>Mobile: HTTP 201 Created (Order data)
+    
+    %% Trải nghiệm khách hàng và bếp
+    KDS->>KDS: Kích hoạt âm thanh ting ting & hiển thị thẻ đơn Bàn 05
+    Mobile->>Customer: Hiển thị màn hình "Đặt món thành công!":<br/>- Bàn số 05, Mã đơn #26031201<br/>- Danh sách món & Tạm tính<br/>- Thông báo: Quý khách vui lòng thanh toán tại quầy khi dùng bữa xong
+```
+
+---
+
+## 3. Luồng Chế Biến Tại Bếp & Thông Báo Món Hoàn Thành (KDS -> POS)
+
+Đầu bếp quản lý tiến độ thực đơn qua KDS. Khi món ăn hoàn thành, hệ thống gửi thông báo Realtime lên màn hình Thu ngân tại quầy POS.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Chef as Đầu bếp
+    participant KDS as KDS Web
+    participant GW as API Gateway
+    participant OS as Order Service
+    participant POS as POS Web (Quầy thu ngân)
+    participant DB as Order DB
+
+    Chef->>KDS: Bấm "Bắt đầu làm" trên từng món
+    KDS->>GW: PATCH /orders/:id/items/:itemId (itemStatus: 'IN_PROGRESS')
+    GW->>OS: Forward request
+    OS->>DB: Cập nhật itemStatus = 'IN_PROGRESS'
+    OS-->>KDS: HTTP 200 OK (Cập nhật giao diện thẻ vàng)
+
+    Chef->>KDS: Nấu xong, bấm "Hoàn thành"
+    KDS->>GW: PATCH /orders/:id/items/:itemId (itemStatus: 'COMPLETED')
+    GW->>OS: Forward request
+    OS->>DB: Cập nhật itemStatus = 'COMPLETED'
+    
+    %% Realtime notify POS
+    OS->>POS: Socket.IO Emit 'ITEM_READY' (branchId, itemInfo)
+    OS-->>KDS: HTTP 200 OK (Đổi màu thẻ xanh)
+    
+    POS->>POS: Hiển thị Toast thông báo nổi: "Món [Trà Sữa] của Bàn 05 đã sẵn sàng phục vụ!"
+    POS->>POS: Thêm thông báo vào Chuông thông báo (Notification Dropdown)
+    
+    opt Tất cả các món trong đơn hoàn thành
+        KDS->>KDS: Tự động ẩn thẻ đơn khỏi màn hình chế biến
+    end
+```
+
+---
+
+## 4. Luồng Chiết Khấu, Thanh Toán Tại Quầy POS & Trừ Kho Bất Đồng Bộ (SAGA)
+
+Thu ngân tiếp nhận yêu cầu thanh toán của khách, áp dụng chiết khấu tại giỏ hàng, thu tiền (Tiền mặt hoặc VietQR PayOS), in hóa đơn và kích hoạt trừ kho ngầm qua RabbitMQ.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Cashier as Thu ngân
+    participant POS as POS Web
+    participant GW as API Gateway
+    participant OS as Order Service
+    participant PayOS as Cổng PayOS (VietQR)
+    participant RMQ as RabbitMQ Broker
+    participant IS as Inventory Service
+    participant DB_O as Order DB
+    participant DB_I as Inventory DB
+
+    Cashier->>POS: Chọn Bàn 05 trên Sơ đồ bàn (hoặc tạo đơn mang về)
+    POS->>POS: Nhập Chiết khấu (% hoặc VNĐ) ngay tại chân OrderPanel
+    POS->>POS: Tự động tính: finalTotal = subtotal - discountAmount
+    Cashier->>POS: Bấm "Thanh toán" -> Mở PaymentModal (nhận đúng finalTotal)
+
+    alt Phương thức: TIỀN MẶT (CASH)
+        Cashier->>POS: Bấm chọn mệnh giá nhanh hoặc "Đúng số tiền"
+        POS->>POS: Hiển thị tiền thối lại (changeAmount = amountPaid - finalTotal)
+        Cashier->>POS: Bấm "Xác nhận Thanh toán"
+        POS->>GW: POST /orders/:id/pay (paymentMethod: 'CASH', amountPaid, finalAmount, discountPercent)
+        GW->>OS: RabbitMQ RPC: 'pay_order'
+        OS->>DB_O: Lưu Payment, cập nhật Order status = 'COMPLETED'
+        OS-->>GW: Order completed
+        GW-->>POS: HTTP 200 OK
+    else Phương thức: CHUYỂN KHOẢN (VIETQR - PAYOS)
+        Cashier->>POS: Chọn tab "Chuyển khoản (QR)"
+        POS->>GW: POST /payments/payos/create (orderId, orderCode, totalAmount: finalTotal)
+        GW->>PayOS: Gọi PayOS API tạo mã VietQR động
+        PayOS-->>GW: Trả về link VietQR (kèm Bin, Số tài khoản, Số tiền chính xác)
+        GW-->>POS: Trả về link mã VietQR
+        POS->>POS: Hiển thị hình ảnh mã VietQR trên màn hình
+        
+        actor Customer as Khách hàng
+        Customer->>PayOS: Quét mã VietQR và chuyển khoản bằng Mobile Banking
+        PayOS->>GW: Webhook POST /webhooks/payos (Báo thanh toán thành công)
+        GW->>OS: RabbitMQ Message: 'process_payos_webhook'
+        OS->>DB_O: Lưu Payment 'BANK_TRANSFER', cập nhật status = 'COMPLETED'
+        OS->>POS: Socket.IO Emit 'order:paid'
+        POS->>POS: Nhận tín hiệu, tự động đóng Modal thanh toán
+    end
+
+    %% In hóa đơn
+    POS->>POS: Kích hoạt in hóa đơn tự động (Receipt khổ 80mm):<br/>Tạm tính, Chiết khấu, TỔNG CỘNG, Tiền khách đưa, Tiền thối
+
+    %% Trừ kho bất đồng bộ SAGA
+    Note over OS, DB_I: Cơ chế Event-Driven Trừ kho ngầm (Background Task)
+    OS-)RMQ: Event Emit: 'order_completed' (orderId, branchId, items)
+    RMQ-)IS: Consumer nhận sự kiện 'order_completed'
+    IS->>DB_I: Mở TypeORM Transaction (QueryRunner)
+    loop Từng món và Topping trong đơn
+        IS->>DB_I: Tra cứu Recipe theo productId & size
+        IS->>DB_I: Kiểm tra tồn kho nguyên liệu trong BranchStock
+        alt Đủ nguyên liệu
+            IS->>DB_I: Trừ số lượng tồn kho & Lưu StockTransaction
+        else Thiếu nguyên liệu
+            IS->>IS: Rollback Transaction & Ghi log cảnh báo kho
+        end
+    end
+    IS->>DB_I: Commit Transaction hoàn tất trừ kho
+```

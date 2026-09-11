@@ -1,12 +1,12 @@
 # Sơ đồ Lớp Hệ thống (Class Diagrams)
 
-Tài liệu này cung cấp các sơ đồ lớp (Class Diagrams) chuẩn UML cho toàn bộ hệ thống Microservices Quản lý Bán hàng F&B. Các sơ đồ này thể hiện chi tiết cấu trúc thực thể, thuộc tính, và các mối quan hệ nhằm phục vụ cho Báo cáo Khóa luận Tốt nghiệp.
+Tài liệu này cung cấp các sơ đồ lớp (Class Diagrams) chuẩn UML cho toàn bộ hệ thống Microservices Quản lý Bán hàng F&B. Các sơ đồ này thể hiện chi tiết cấu trúc thực thể TypeORM, thuộc tính, kiểu dữ liệu, các quan hệ (1-n, 1-1, n-n) và bảng từ điển dữ liệu phục vụ Báo cáo Khóa luận Tốt nghiệp.
 
 ---
 
-## 1. Sơ đồ Tổng quan toàn hệ thống (Domain Model Overview)
+## 1. Sơ đồ Miền Tổng thể Hệ thống (Domain Model Overview)
 
-Sơ đồ dưới đây thể hiện bức tranh tổng quan về các thực thể cốt lõi trong hệ thống và mối quan hệ (ảo) giữa chúng xuyên suốt các Microservices. (Lưu ý: Trong thực tế Microservices, các tham chiếu chéo được lưu dưới dạng ID - Foreign Key mềm).
+Sơ đồ thể hiện bức tranh tổng quan về các thực thể cốt lõi và mối quan hệ nghiệp vụ giữa chúng xuyên suốt các Microservices (các tham chiếu chéo service được lưu dưới dạng Foreign Key mềm qua chuỗi UUID/ID).
 
 ```mermaid
 classDiagram
@@ -32,11 +32,11 @@ classDiagram
 
 ---
 
-## 2. Sơ đồ Chi tiết theo Phân hệ (Detailed Diagrams)
+## 2. Sơ đồ Chi tiết theo Từng Phân hệ Microservice
 
 ### 2.1. Phân hệ Xác thực & Phân quyền (Auth Service)
 
-Quản lý thông tin đăng nhập, nhân sự và phân quyền truy cập.
+Quản lý hồ sơ nhân viên, mật khẩu đã mã hóa và quyền hạn theo mô hình RBAC.
 
 ```mermaid
 classDiagram
@@ -49,6 +49,7 @@ classDiagram
         +String fullName
         +Role role
         +UUID branchId FK
+        +Boolean isActive
         +Date createdAt
         +Date updatedAt
     }
@@ -59,14 +60,17 @@ classDiagram
         MANAGER
         CASHIER
         KITCHEN
+        WAITER
     }
 
     User "*" --> "1" Role : has
 ```
 
+---
+
 ### 2.2. Phân hệ Bán hàng & Đơn hàng (Order Service)
 
-Quản lý luồng xử lý đơn hàng, chi tiết món ăn trong đơn và trạng thái thanh toán.
+Quản lý toàn bộ vòng đời đơn hàng, các món ăn kèm tuỳ chọn kích cỡ (Size), Topping, chiết khấu và giao dịch thanh toán.
 
 ```mermaid
 classDiagram
@@ -81,6 +85,8 @@ classDiagram
         +OrderType orderType
         +OrderStatus status
         +Float totalAmount
+        +Float finalAmount
+        +Integer discountPercent
         +Date createdAt
         +Date updatedAt
     }
@@ -94,7 +100,7 @@ classDiagram
         +Float unitPrice
         +String size
         +String note
-        +OrderItemStatus status
+        +OrderItemStatus itemStatus
     }
 
     class OrderItemTopping {
@@ -110,8 +116,7 @@ classDiagram
         +UUID id PK
         +UUID orderId FK
         +Float amount
-        +PaymentMethod method
-        +PaymentStatus status
+        +PaymentMethod paymentMethod
         +Date paidAt
     }
 
@@ -123,19 +128,18 @@ classDiagram
         CANCELLED
     }
 
+    class OrderItemStatus {
+        <<enumeration>>
+        PENDING
+        IN_PROGRESS
+        COMPLETED
+    }
+
     class OrderType {
         <<enumeration>>
         AT_TABLE
         TAKE_AWAY
         DELIVERY
-    }
-    
-    class PaymentStatus {
-        <<enumeration>>
-        PENDING
-        SUCCESS
-        FAILED
-        REFUNDED
     }
     
     class PaymentMethod {
@@ -150,13 +154,19 @@ classDiagram
     Order "1" *-- "0..1" Payment : settled by
     Order "*" --> "1" OrderStatus : is in
     Order "*" --> "1" OrderType : is of type
-    Payment "*" --> "1" PaymentStatus : is in
+    OrderItem "*" --> "1" OrderItemStatus : has status
     Payment "*" --> "1" PaymentMethod : uses
 ```
 
-### 2.3. Phân hệ Quản lý Kho & Công thức (Inventory Service)
+> [!NOTE]
+> **Chuẩn hóa Kiểu Dữ liệu Số (`columnNumericTransformer`):**
+> Các cột lưu trữ số tiền (như `totalAmount`, `finalAmount` trong `Order`, `unitPrice` trong `OrderItem`, `price` trong `OrderItemTopping`, `amount` trong `Payment`) được cấu hình TypeORM `decimal` kèm bộ chuyển đổi `columnNumericTransformer`. Bộ chuyển đổi này tự động parse chuỗi số thập phân từ PostgreSQL thành kiểu số thực JavaScript `number`, ngăn chặn lỗi hiển thị chuỗi dư `.00` (ví dụ: `"40000.00"` -> `40000`) khi truyền về Client.
 
-Quản lý định mức nguyên vật liệu, cấu hình công thức pha chế và biến động xuất nhập kho.
+---
+
+### 2.3. Phân hệ Quản lý Kho & Định mức Công thức (Inventory Service)
+
+Quản lý danh mục nguyên vật liệu thô, định mức tồn kho chi nhánh, công thức cấu thành sản phẩm và biến động xuất nhập tồn.
 
 ```mermaid
 classDiagram
@@ -220,9 +230,11 @@ classDiagram
     StockTransaction "*" --> "1" TransactionType : classified as
 ```
 
-### 2.4. Phân hệ Sản phẩm & Chi nhánh (Product & Branch Services)
+---
 
-Quản lý danh mục (Menu), tuỳ chọn Topping, Size và Cấu trúc cửa hàng.
+### 2.4. Phân hệ Sản phẩm & Sơ đồ Bàn (Product & Branch Services)
+
+Quản lý danh mục thực đơn, tuỳ biến kích cỡ, Topping, tính khả dụng theo từng chi nhánh và sơ đồ bàn ăn phục vụ khách tại quán.
 
 ```mermaid
 classDiagram
@@ -301,22 +313,21 @@ classDiagram
 
 ---
 
-## 3. Từ điển Dữ liệu và Giải nghĩa Thực thể (Data Dictionary)
-
-Bảng dưới đây giải thích ngắn gọn vai trò của các thực thể cốt lõi, phục vụ cho việc giải trình trong Báo cáo Khóa luận:
+## 3. Từ điển Dữ liệu & Ý nghĩa Thực thể (Data Dictionary)
 
 | Phân hệ | Thực thể (Class) | Ý nghĩa / Vai trò trong Hệ thống |
 | :--- | :--- | :--- |
-| **Auth** | `User` | Đại diện cho tài khoản nhân sự (Quản lý, Thu ngân, Đầu bếp) truy cập vào hệ thống POS/KDS. |
-| **Auth** | `Role` | Enum định nghĩa quyền hạn (RBAC). Xác định luồng dữ liệu người dùng được phép thao tác. |
-| **Order** | `Order` | Thực thể trung tâm lưu trữ thông tin về một phiên giao dịch (Đơn hàng) của khách hàng. |
-| **Order** | `OrderItem` | Chi tiết một sản phẩm cụ thể (kèm kích thước và ghi chú) nằm trong một `Order`. |
-| **Order** | `Payment` | Giao dịch thanh toán tài chính cho một Đơn hàng, lưu trữ số tiền và phương thức (Tiền mặt/Chuyển khoản). |
-| **Inventory**| `Ingredient` | Danh mục nguyên vật liệu thô (Trà, Sữa, Trân châu) dùng để pha chế. |
-| **Inventory**| `BranchStock` | Quản lý số lượng tồn kho thực tế của từng nguyên liệu tại một Chi nhánh cụ thể. |
-| **Inventory**| `Recipe` | Bộ công thức định lượng nguyên liệu cho một Sản phẩm (Ví dụ: Trà sữa Size L cần bao nhiêu ml sữa). |
-| **Inventory**| `StockTransaction`| Sổ kho (Log). Ghi nhận mọi giao dịch tăng/giảm kho (Nhập hàng, Trừ kho do bán, Hủy hàng). |
-| **Product** | `Product` | Hàng hóa/Thức uống được trưng bày lên Menu cho khách hàng lựa chọn (Customer QR, POS). |
-| **Product** | `BranchProductAvailability` | Bảng cấu hình cho phép một chi nhánh được quyền Bật/Tắt (Hết hàng/Còn hàng) một Sản phẩm cục bộ. |
-| **Branch** | `Branch` | Định nghĩa thông tin cơ sở hạ tầng của một Cửa hàng vật lý. |
-| **Branch** | `Table` | Định nghĩa sơ đồ bàn ăn tại cửa hàng phục vụ cho mô hình Dine-in (Dùng tại quán). |
+| **Auth** | `User` | Tài khoản nhân sự đăng nhập vào hệ thống POS / KDS. Thuộc về một chi nhánh và có một vai trò cụ thể. |
+| **Auth** | `Role` | Enum định nghĩa vai trò RBAC: `ADMIN` (Quản trị viên), `MANAGER` (Quản lý chi nhánh), `CASHIER` (Thu ngân), `KITCHEN` (Đầu bếp), `WAITER` (Nhân viên phục vụ bàn). |
+| **Order** | `Order` | Thực thể đơn hàng cốt lõi. Chứa thông tin tổng tiền tạm tính (`totalAmount`), số tiền thực thu sau chiết khấu (`finalAmount`), tỷ lệ chiết khấu (`discountPercent`), bàn số (`tableId`) và trạng thái đơn (`status`). |
+| **Order** | `OrderItem` | Chi tiết món ăn trong đơn, kích cỡ (Size), số lượng, đơn giá và ghi chú riêng của khách hàng. Có trạng thái chế biến riêng (`itemStatus`). |
+| **Order** | `OrderItemTopping` | Các món thêm (trân châu, thạch, phô mai...) gắn kèm với một món ăn cụ thể trong đơn. |
+| **Order** | `Payment` | Giao dịch tài chính gắn với đơn hàng. Lưu trữ phương thức thanh toán (`CASH`, `BANK_TRANSFER`), số tiền khách trả và thời điểm hoàn tất. |
+| **Inventory**| `Ingredient` | Danh mục nguyên vật liệu thô (Trà, sữa tươi, hạt cà phê, đường, bột kem béo...). |
+| **Inventory**| `BranchStock` | Quản lý khối lượng tồn kho thực tế của nguyên liệu tại từng chi nhánh cùng mức tồn kho an toàn (`minThreshold`). |
+| **Inventory**| `Recipe` | Bộ định lượng công thức pha chế cho từng món ăn tương ứng theo từng kích thước (Size). |
+| **Inventory**| `StockTransaction`| Sổ cái ghi log biến động kho (Nhập hàng, Tự động trừ kho khi đơn bán hoàn tất, Xuất kho hủy hỏng). |
+| **Product** | `Product` | Món ăn hoặc đồ uống trưng bày trên thực đơn điện tử (Menu). |
+| **Product** | `BranchProductAvailability` | Bảng cấu hình tính sẵn có của món ăn tại chi nhánh (cho phép chi nhánh tạm tắt món khi hết nguyên liệu). |
+| **Branch** | `Branch` | Định nghĩa chi nhánh cửa hàng vật lý trong chuỗi F&B. |
+| **Branch** | `Table` | Định nghĩa bàn ăn trong sơ đồ nhà hàng phục vụ mô hình dùng bữa tại bàn (Dine-in). |

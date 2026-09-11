@@ -1,88 +1,87 @@
-# PROJECT REQUIREMENTS & TECHNICAL SPECIFICATIONS
-## Đề tài: Hệ thống Quản lý Vận hành cho Chuỗi Quán Cà phê / Nhà hàng Đa chi nhánh (F&B Multi-branch System)
+# Yêu Cầu Dự Án & Đặc Tả Kỹ Thuật (Project Requirements & Technical Specifications)
+
+## Đề tài: Hệ thống Quản lý Vận hành cho Chuỗi Quán Cà phê / Nhà hàng Đa chi nhánh (F&B Multi-branch Management System)
 
 ---
 
-## 1. TỔNG QUAN DỰ ÁN
-* **Mô hình hệ thống:** Microservices Architecture (Database-per-Service)
-* **Mục tiêu:** Xây dựng hệ thống quản lý tập trung cho chuỗi F&B đa chi nhánh, hỗ trợ quản trị toàn chuỗi, vận hành tại chi nhánh, đặt món qua QR Code, hiển thị nhà bếp thời gian thực (KDS) và tự động hóa kho/báo cáo qua sự kiện bất đồng bộ.
+## 1. Tổng Quan Dự Án
+
+* **Mô hình kiến trúc:** Microservices Architecture kết hợp Event-Driven Architecture (Database-per-Service).
+* **Mục tiêu:** Xây dựng giải pháp công nghệ toàn diện cho chuỗi F&B đa chi nhánh, bao gồm:
+  - Quản lý tập trung toàn chuỗi (Thực đơn, công thức, tài khoản phân quyền RBAC).
+  - Bán hàng tại quầy (POS Web) với cơ chế chiết khấu linh hoạt (% và tiền mặt) và thanh toán đa phương thức (Tiền mặt, VietQR PayOS).
+  - Đặt món tự phục vụ tại bàn qua mã QR (Customer Web) theo mô hình **Thanh toán sau tại quầy (Post-pay)**.
+  - Điều phối nhà bếp thời gian thực (KDS Web) qua WebSocket Socket.IO.
+  - Tự động hóa trừ kho theo công thức định mức (Recipe) bằng SAGA Pattern qua RabbitMQ.
 
 ---
 
-## 2. CÔNG NGHỆ SỬ DỤNG (TECH STACK)
-* **Backend Framework:** NestJS (TypeScript) cho các Microservices và API Gateway.
-* **Database:** PostgreSQL (Mỗi service quản lý một database riêng biệt: `auth_db`, `branch_db`, `product_db`, `order_db`, `inventory_db`, `reporting_db`).
-* **Realtime Communication:** Socket.IO (cho màn hình KDS và POS Realtime).
-* **Message Broker:** RabbitMQ (Xử lý bất đồng bộ sự kiện `order.completed` để trừ kho và ghi nhận báo cáo).
-* **Infrastructure:** Docker & Docker Compose (Quản lý toàn bộ container dịch vụ và cơ sở dữ liệu).
-* **Frontend (Dự kiến):** ReactJS / Vite (cho POS Client, KDS Web App, Customer QR Ordering Web).
+## 2. Công Nghệ Sử Dụng (Tech Stack)
+
+* **Backend Framework:** NestJS (TypeScript), TypeORM cho các Microservices và API Gateway.
+* **Database:** PostgreSQL (Mỗi service quản lý một database độc lập: `auth_db`, `branch_db`, `product_db`, `order_db`, `inventory_db`, `reporting_db`).
+* **Message Broker:** RabbitMQ (Xử lý đồng bộ RPC qua Message Pattern và bất đồng bộ Pub/Sub Event `order_completed`).
+* **Realtime Communication:** Socket.IO Server (Port `3004`, phân tách Room theo từng `branchId`).
+* **Cổng thanh toán:** PayOS API (Sinh mã VietQR động theo chuẩn Napas 247).
+* **Frontend:** React 19, TypeScript, Tailwind CSS, Vite, Lucide Icons, Socket.IO Client.
+* **Hạ tầng & Devops:** Docker, Docker Compose với hệ thống **Named Persistent Volumes** cho toàn bộ cơ sở dữ liệu và message broker.
+* **Testing:** Jest Unit Testing cho RBAC Guards và Transactional Inventory Service.
 
 ---
 
-## 3. CẤU TRÚC 6 MICROSERVICES CHÍNH
-1. **API Gateway:** Điểm vào duy nhất cho Client, định tuyến request và xác thực JWT token.
-2. **Auth Service (`auth_db`):** Quản lý tài khoản người dùng, phân quyền (Admin, Quản lý, Thu ngân, Bếp) và cấp phát JWT.
-3. **Branch Service (`branch_db`):** Quản lý danh mục chi nhánh, sơ đồ bàn ăn, ca làm việc và bảng chấm công nhân viên.
-4. **Product Service (`product_db`):** Quản lý thực đơn tập trung, danh mục, món ăn (kèm biến thể Size/Topping) và trạng thái bật/tắt món theo từng chi nhánh (`branch_product_availabilities`).
-5. **Order Service (`order_db`):** Xử lý quy trình bán hàng tại quầy (POS), đặt món qua mã QR tại bàn, điều phối chế biến KDS Realtime qua WebSocket và xử lý thanh toán hóa đơn.
-6. **Inventory Service (`inventory_db`):** Quản lý nguyên liệu thô, định mức tồn kho tối thiểu, công thức chế biến (`Recipe`) và tiêu thụ nguyên liệu tự động thông qua Event Consumer lắng nghe từ RabbitMQ.
-7. **Reporting Service (`reporting_db`):** Tổng hợp và truy xuất báo cáo doanh thu đa chi nhánh, sản lượng món bán chạy và mức tiêu hao nguyên liệu.
+## 3. Cấu Trúc Các Dịch Vụ Microservices
+
+1. **API Gateway (Port 3000):** Cổng tiếp nhận duy nhất cho Client; đảm nhiệm xác thực Stateless JWT, phân quyền vai trò (RBAC `RolesGuard`), định tuyến request qua RabbitMQ RPC và tích hợp PayOS VietQR & Webhook.
+2. **Auth Service (`auth_db` - 5432):** Quản lý tài khoản nhân viên, mã hóa mật khẩu Bcrypt, cấp phát JWT và phân quyền theo 5 vai trò: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `WAITER`.
+3. **Branch Service (`branch_db` - 5433):** Quản lý danh mục chi nhánh, sơ đồ bàn ăn theo trạng thái (Bàn trống, Đang phục vụ).
+4. **Product Service (`product_db` - 5434):** Quản lý danh mục món ăn, giá bán cơ sở, biến thể kích thước (Size M, L), Topping và cấu hình bật/tắt món cục bộ tại từng chi nhánh (`branch_product_availabilities`).
+5. **Order Service (`order_db` - 5435):** Quản lý vòng đời đơn hàng, chiết khấu (% / tiền mặt), thanh toán hóa đơn, dọn dẹp đơn tạm (`DELETE /orders/:id`) và lưu trữ Socket.IO Realtime Gateway (Port 3004).
+6. **Inventory Service (`inventory_db` - 5436):** Quản lý danh mục nguyên liệu thô, định mức tồn kho an toàn, công thức chế biến (`Recipe`) và tự động trừ kho nguyên liệu bằng Database Transaction khi nhận sự kiện `order_completed`.
+7. **Reporting Service (`reporting_db` - 5437):** Tổng hợp và truy xuất báo cáo doanh thu, sản lượng món bán chạy và tỷ lệ tiêu hao nguyên liệu.
 
 ---
 
-## 4. DANH MỤC USE CASE CHÍNH CỦA HỆ THỐNG
-* **UC01:** Đăng nhập & Xác thực hệ thống.
-* **UC02:** Thanh toán đơn hàng (Kích hoạt Event RabbitMQ tới Inventory và Reporting).
-* **UC03:** Tạo đơn hàng tại quầy (POS).
-* **UC04 - UC08:** Quản lý tài khoản, thêm, sửa, khóa tài khoản & phân quyền.
-* **UC09 - UC12:** Quản lý và xem báo cáo doanh thu, món bán chạy, tiêu hao nguyên liệu.
-* **UC13 - UC17:** Quản lý kho nguyên liệu, thiết lập công thức định mức (Recipe) và kiểm kê kho.
-* **UC18 - UC22:** Quản lý danh mục chi nhánh (Thêm, sửa, đổi trạng thái).
-* **UC23 - UC27:** Quản lý sơ đồ bàn ăn theo chi nhánh.
-* **UC28 - UC33:** Quản lý danh mục, món ăn, biến thể và bật/tắt món theo chi nhánh.
-* **UC34 - UC37:** Chấm công nhân viên (Check-in/Check-out, duyệt bảng công).
-* **UC38 - UC41:** Quản lý ca làm việc và phân lịch trực.
-* **UC42:** Quét mã QR đặt món tại bàn (Mobile Web cho khách hàng).
-* **UC43:** Điều phối chế biến KDS Realtime (Nhận sự kiện qua Socket.IO, cập nhật trạng thái "Đang làm" / "Hoàn thành").
+## 4. Ma Trận Yêu Cầu & Tiến Độ Thực Hiện (Requirements Traceability Matrix)
+
+| Mã Use Case | Tên Chức Năng / Nghiệp Vụ | Phân Hệ | Trạng Thái | Ghi Chú Kỹ Thuật Hoàn Thành |
+| :--- | :--- | :--- | :--- | :--- |
+| **UC01** | Đăng nhập & Xác thực hệ thống | Auth / Gateway | **ĐÃ HOÀN THÀNH** | JWT Stateless Token, mật khẩu Bcrypt, Auto-redirect theo trạng thái đăng nhập. |
+| **UC02** | Phân quyền vai trò người dùng (RBAC) | Auth / Gateway | **ĐÃ HOÀN THÀNH** | Hỗ trợ 5 Roles: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `WAITER`. Có bộ Jest Unit Test cho `RolesGuard`. |
+| **UC03** | Quản lý nhân viên chi nhánh | Auth / POS Web | **ĐÃ HOÀN THÀNH** | Xem danh sách, tạo mới, khóa/mở khóa tài khoản; `MANAGER` chỉ quản lý nhân viên thuộc chi nhánh mình. |
+| **UC04** | Đặt món tại bàn qua QR Code (Dine-in) | Customer Web | **ĐÃ HOÀN THÀNH** | Mô hình **Post-pay (Thanh toán sau)**. Khách chọn món gửi bếp trực tiếp, màn hình thành công hiển thị số bàn và mã đơn. |
+| **UC05** | Tạo đơn hàng tại quầy (POS) | POS Web / Order | **ĐÃ HOÀN THÀNH** | Chọn món, chọn Size, Topping, ghi chú, đổi loại đơn (Tại bàn / Mang về). |
+| **UC06** | Chiết khấu đơn hàng tại giỏ hàng | POS Web / Order | **ĐÃ HOÀN THÀNH** | Tích hợp trực tiếp tại `OrderPanel.tsx`: hỗ trợ chọn chiết khấu theo `%` hoặc `VNĐ`, tính trừ tự động ra `finalTotal`. |
+| **UC07** | Thanh toán đơn hàng tại quầy POS | POS Web / Order | **ĐÃ HOÀN THÀNH** | `PaymentModal.tsx` tinh giản: Hỗ trợ Tiền mặt (mệnh giá nhanh, tính tiền thối lại) và VietQR PayOS động. |
+| **UC08** | In hóa đơn thanh toán (Receipt) | POS Web | **ĐÃ HOÀN THÀNH** | In nhiệt khổ 80mm qua React Portal + CSS `@media print`: Tạm tính, Chiết khấu, Tổng cộng, Tiền khách đưa, Tiền thối. |
+| **UC09** | Hủy đơn hàng tạm chưa thanh toán | POS Web / Order | **ĐÃ HOÀN THÀNH** | Endpoint `DELETE /orders/:id` dọn dẹp đơn tạm khi đóng modal, có điều kiện chặn không cho xóa đơn đã hoàn thành. |
+| **UC10** | Điều phối chế biến Bếp Realtime (KDS) | KDS Web / Order | **ĐÃ HOÀN THÀNH** | Đồng bộ Socket.IO sự kiện `newOrder`, cập nhật trạng thái món ("Bắt đầu làm", "Hoàn thành") kèm đồng hồ đếm giờ. |
+| **UC11** | Thông báo món sẵn sàng phục vụ | Order / POS Web | **ĐÃ HOÀN THÀNH** | KDS bấm hoàn thành món, server emit `ITEM_READY` tới POS Web hiển thị Toast thông báo và badge chuông thông báo. |
+| **UC12** | Quản lý sơ đồ bàn ăn chi nhánh | POS Web / Branch | **ĐÃ HOÀN THÀNH** | Hiển thị trực quan bàn trống / bàn đang phục vụ, bấm vào bàn phục vụ để xem chi tiết và mở thanh toán nhanh. |
+| **UC13** | Tự động trừ kho theo công thức (SAGA) | Inventory / Order| **ĐÃ HOÀN THÀNH** | Lắng nghe `order_completed` qua RabbitMQ, trừ kho bằng TypeORM Transaction, tự động rollback nếu thiếu nguyên liệu. Có Jest Unit Test. |
+| **UC14** | Quản lý nguyên vật liệu & Nhập kho | Inventory / POS | **ĐÃ HOÀN THÀNH** | Danh mục nguyên liệu, đơn vị tính, nhập kho cập nhật số lượng tồn tức thì. |
+| **UC15** | Chuẩn hóa kiểu dữ liệu số thực thể | Toàn hệ thống | **ĐÃ HOÀN THÀNH** | Cấu hình `columnNumericTransformer` loại bỏ hoàn toàn lỗi hiển thị số dư chuỗi `.00` từ database PostgreSQL decimal. |
+| **UC16** | Bền vững hóa dữ liệu Docker Compose | Hạ tầng Devops | **ĐÃ HOÀN THÀNH** | Cấu hình Named Persistent Volumes cho RabbitMQ và 6 Database PostgreSQL, chống mất dữ liệu khi restart/rebuild. |
 
 ---
 
-## 5. YÊU CẦU SETUP REPOSITORY (DÀNH CHO AI / ANTIGRAVITY)
-1. Khởi tạo cấu trúc Monorepo hoặc multi-folder gồm:
-   - `api-gateway/`
-   - `services/auth-service/`
-   - `services/branch-service/`
-   - `services/product-service/`
-   - `services/order-service/`
-   - `services/inventory-service/`
-   - `services/reporting-service/`
-2. Tạo file `docker-compose.yml` ở thư mục gốc để cấu hình chạy sẵn:
-   - Các container PostgreSQL cho từng service.
-   - Container RabbitMQ (gồm Management UI).
-3. Cấu hình kết nối cơ sở dữ liệu và RabbitMQ cho các service bằng TypeORM / Prisma (NestJS).
+## 5. Các Quyết Định Kỹ Thuật Quan Trọng (Key Architectural & Business Decisions)
 
----
+### Quyết định 1: Chuyển đổi sang mô hình Thanh toán sau (Post-pay) cho khách ăn tại bàn
+* **Bối cảnh:** Trước đây `customer-web` cho phép khách thanh toán trực tuyến PayOS ngay tại bàn khi đặt món.
+* **Vấn đề:** Không phù hợp với thói quen tiêu dùng F&B tại Việt Nam (khách thường gọi thêm món trong bữa ăn, dùng bữa xong mới thanh toán tại quầy thu ngân).
+* **Giải pháp:** Gỡ bỏ thanh toán trực tuyến tại `customer-web`. Khách gửi đơn trực tiếp đến bếp và thanh toán một lần duy nhất tại quầy thu ngân của POS khi ra về.
 
-## 6. TIẾN ĐỘ HIỆN TẠI (CẬP NHẬT GẦN NHẤT)
+### Quyết định 2: Đưa khối Chiết khấu (Discount) ra chân giỏ hàng `OrderPanel.tsx`
+* **Bối cảnh:** Chiết khấu trước đây nằm ẩn bên trong `PaymentModal.tsx`.
+* **Vấn đề:** Thu ngân khó xem trước số tiền giảm trước khi mở modal; không hỗ trợ giảm theo số tiền VNĐ cụ thể.
+* **Giải pháp:** Đưa ô nhập chiết khấu ra chân giỏ hàng nằm giữa "Tạm tính" và "Tổng thanh toán". Cho phép linh hoạt chọn giữa `%` và `VNĐ`. `PaymentModal` được tinh giản chỉ nhận số tiền cuối cùng cần thu.
 
-### 6.1. Backend (Microservices)
-- **API Gateway:** Đã triển khai và định tuyến các module chính (Auth, Order, Inventory).
-- **Auth Service:** Hoàn thiện luồng đăng nhập JWT, quản lý tài khoản nhân viên (RBAC: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `WAITER`), chức năng khóa/mở khóa tài khoản (toggle status).
-- **Order Service:** Hoàn thiện luồng tạo đơn POS, tạo link VietQR động qua PayOS, đồng bộ KDS qua Socket.IO.
-- **Inventory Service:** Hoàn thiện công thức nguyên liệu, trừ kho tự động qua Saga Pattern.
-- **Database:** Đã setup PostgreSQL riêng cho từng Service.
+### Quyết định 3: Khắc phục lỗi mất món khi thanh toán bằng cơ chế Lazy Creation & Delete Temp Order
+* **Bối cảnh:** Người dùng mở modal thanh toán, sau đó đóng lại rồi chọn thêm món mới vào giỏ.
+* **Vấn đề:** Modal trước đây đã tạo đơn non và lưu `orderId` cũ, dẫn đến việc đơn thanh toán chỉ chứa các món cũ, bỏ quên món mới chọn.
+* **Giải pháp:** Chỉ tạo đơn hoặc xác nhận thanh toán khi thu ngân thực sự nhấn "Xác nhận". Bổ sung endpoint `DELETE /orders/:id` để dọn dẹp đơn tạm nếu khách đóng modal QR mà chưa thanh toán.
 
-### 6.2. Frontend
-- **POS Web (`/frontend/pos-web`):**
-  - Giao diện bán hàng (Cart, Danh sách sản phẩm).
-  - Tích hợp QR Code PayOS hiển thị trực tiếp.
-  - Chức năng quản lý nhân sự (Staff Management) với tính năng lọc chi nhánh theo role `MANAGER`.
-  - Bộ UI Modals tùy chỉnh chuyên nghiệp (Success, Error, Confirm) thay thế window.alert mặc định.
-- **KDS Web (`/frontend/kds-web`):**
-  - Màn hình bếp hiển thị vé nấu ăn realtime.
-  - Đồng bộ "Báo hoàn thành món" trả thông báo về POS.
-- **Customer Web (`/frontend/customer-web`):**
-  - Màn hình quét QR tại bàn để xem menu và thanh toán.
-
-### 6.3. Infrastructure
-- Toàn bộ source code được dockerize với `docker-compose.yml`. Các network nội bộ chạy ổn định và RabbitMQ được cấu hình đầy đủ.
+### Quyết định 4: Sử dụng TypeORM `columnNumericTransformer`
+* **Bối cảnh:** PostgreSQL lưu số tiền dạng `decimal(10,2)` trả về JavaScript dưới dạng chuỗi (ví dụ: `"40000.00"`).
+* **Vấn đề:** Giao diện POS bị lỗi hiển thị số tiền có đuôi `.00` ở ô nhập tiền khách đưa.
+* **Giải pháp:** Áp dụng bộ chuyển đổi số học tự động convert chuỗi decimal thành số nguyên/thực trong JavaScript ở toàn bộ các Entity liên quan (`Order`, `OrderItem`, `OrderItemTopping`, `Payment`).
