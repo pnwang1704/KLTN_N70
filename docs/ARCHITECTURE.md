@@ -1,49 +1,138 @@
 # Kiến Trúc Hệ Thống (System Architecture)
 
-Hệ thống được thiết kế theo mô hình **Microservices Architecture** với mục tiêu phân tách rõ ràng trách nhiệm, tăng khả năng mở rộng (scalability) và dễ dàng bảo trì.
+Hệ thống được thiết kế theo mô hình **Microservices Architecture** kết hợp **Event-Driven Architecture (EDA)** nhằm đảm bảo tính độc lập, khả năng mở rộng quy mô linh hoạt (scalability) và độ chịu lỗi cao cho chuỗi F&B đa chi nhánh.
 
-## 1. Sơ đồ Tổng quan
+---
+
+## 1. Sơ đồ Kiến trúc Tổng thể (Overall System Architecture)
+
 ```mermaid
-graph TD
-    %% Clients
-    C1[Customer QR Web] -->|HTTP/REST| GW(API Gateway)
-    C2[POS Web] -->|HTTP/REST| GW
-    C3[KDS Web] -->|HTTP/REST| GW
-    C3 -.->|WebSocket| OS[Order Service]
-    C2 -.->|WebSocket| OS
-    C1 -.->|WebSocket| OS
-    
-    %% API Gateway
-    GW -->|TCP/RMQ| AS[Auth Service]
-    GW -->|TCP/RMQ| OS
-    GW -->|TCP/RMQ| IS[Inventory Service]
-    
+graph TB
+    %% Client Layer
+    subgraph Clients ["Lớp Ứng Dụng Người Dùng (Client Layer)"]
+        CW["Customer Web (Mobile QR)"]
+        POS["POS Web (Thu ngân / Quản lý)"]
+        KDS["KDS Web (Màn hình Bếp)"]
+    end
+
+    %% External Services
+    subgraph External ["Dịch Vụ Bên Ngoài (Third-party)"]
+        PayOS["Cổng Thanh Toán PayOS (VietQR)"]
+    end
+
+    %% API Gateway Layer
+    subgraph Gateway ["Cổng Điều Phối (API Gateway Layer)"]
+        GW["API Gateway (Port 3000)<br/>- Global JWT AuthGuard<br/>- RBAC RolesGuard<br/>- PayOS Controller & Webhooks"]
+    end
+
     %% Message Broker
-    RMQ((RabbitMQ Broker))
-    AS -.->|Event Pub/Sub| RMQ
-    OS -.->|Event Pub/Sub| RMQ
-    IS -.->|Event Pub/Sub| RMQ
-    
-    %% Databases
-    AS --> DB1[(Auth DB)]
-    OS --> DB2[(Order DB)]
-    IS --> DB3[(Inventory DB)]
+    subgraph Broker ["Hạ Tầng Tin Nhắn (Message Broker)"]
+        RMQ{{"RabbitMQ Broker<br/>(Exchanges & Queues)"}}
+    end
+
+    %% Microservices Layer
+    subgraph Services ["Lớp Dịch Vụ Nghiệp Vụ (Microservices Layer)"]
+        AS["Auth Service<br/>(Bcrypt, JWT, RBAC)"]
+        OS["Order Service (Port 3004)<br/>- Order Lifecycle<br/>- Socket.IO Realtime Gateway"]
+        IS["Inventory Service<br/>- Recipe Management<br/>- Transactional Deduct Stock"]
+        BS["Branch Service<br/>(Bàn ăn, Chi nhánh)"]
+        PS["Product Service<br/>(Menu, Size, Topping)"]
+        RS["Reporting Service<br/>(Doanh thu, Báo cáo)"]
+    end
+
+    %% Database Layer
+    subgraph Databases ["Lớp Dữ Liệu Bền Vững (Database-per-Service)"]
+        DB1[("Auth DB<br/>(PostgreSQL 5432)")]
+        DB2[("Order DB<br/>(PostgreSQL 5435)")]
+        DB3[("Inventory DB<br/>(PostgreSQL 5436)")]
+        DB4[("Branch DB<br/>(PostgreSQL 5433)")]
+        DB5[("Product DB<br/>(PostgreSQL 5434)")]
+        DB6[("Reporting DB<br/>(PostgreSQL 5437)")]
+    end
+
+    %% Client Interactions
+    CW -->|"HTTP REST (Dine-in Order)"| GW
+    POS -->|"HTTP REST (Order, Pay, Staff)"| GW
+    KDS -->|"HTTP REST (Update Item Status)"| GW
+
+    %% Realtime WebSocket
+    OS -.->|"Socket.IO (newOrder)"| KDS
+    OS -.->|"Socket.IO (ITEM_READY, order:paid)"| POS
+
+    %% External PayOS Integration
+    GW <-->|"Tạo VietQR & Nhận Webhook"| PayOS
+
+    %% Gateway to Microservices (RPC via RabbitMQ)
+    GW <-->|"RabbitMQ RPC (TCP)"| AS
+    GW <-->|"RabbitMQ RPC (TCP)"| OS
+    GW <-->|"RabbitMQ RPC (TCP)"| IS
+
+    %% Event Pub/Sub
+    OS -.->|"Event: order_completed"| RMQ
+    RMQ -.->|"Consume Event"| IS
+    RMQ -.->|"Consume Event"| RS
+
+    %% Database Connections
+    AS --> DB1
+    OS --> DB2
+    IS --> DB3
+    BS --> DB4
+    PS --> DB5
+    RS --> DB6
 ```
 
-## 2. Database-per-Service Pattern
-Để đảm bảo tính độc lập (loose coupling), mỗi Microservice sở hữu một Database PostgreSQL riêng biệt. Dữ liệu không bao giờ được truy cập chéo trực tiếp qua Database, mà phải thông qua việc gọi nội bộ (Message Pattern) hoặc bắt sự kiện (Event Pattern).
+---
 
-- **Auth DB (`5432`):** Lưu trữ thông tin người dùng, mật khẩu đã mã hóa (Bcrypt) và quyền hạn (Roles).
-- **Order DB (`5435`):** Lưu trữ chi tiết đơn hàng, món ăn, topping, phương thức thanh toán.
-- **Inventory DB (`5436`):** Lưu trữ định mức nguyên vật liệu và lịch sử xuất nhập kho.
+## 2. Database-per-Service Pattern & Persistent Storage
 
-## 3. Cơ chế Bảo mật (Stateless JWT & RBAC)
-**API Gateway** đóng vai trò là chốt chặn an ninh duy nhất của hệ thống:
-1. **Authentication:** Khi client gọi `/auth/login`, Gateway ủy quyền qua RabbitMQ cho `auth-service` xác thực. Nếu đúng, `auth-service` trả về JWT Token.
-2. **Authorization (RBAC Guard):** Mọi request tiếp theo phải mang Header `Authorization: Bearer <token>`. Tại Gateway, một Global Guard sẽ giải mã Token này:
-   - Các API công khai được đánh dấu `@Public` sẽ được bỏ qua.
-   - Các API nghiệp vụ sẽ yêu cầu Roles cụ thể (ví dụ `@Roles('ADMIN', 'MANAGER')`). Nếu Token không chứa Role hợp lệ, Gateway trả về `403 Forbidden` ngay lập tức, không làm phiền đến các Microservice bên dưới.
+Hệ thống áp dụng triệt để nguyên lý **Database-per-Service**: mỗi Microservice quản lý toàn quyền một cơ sở dữ liệu PostgreSQL độc lập, ngăn chặn hoàn toàn việc join bảng xuyên service hay vi phạm tính đóng gói.
 
-## 4. Cơ chế Event-Driven & Realtime
-- **Bất đồng bộ (RabbitMQ):** Khi đơn hàng được thanh toán thành công tại `order-service`, nó không gọi trực tiếp sang `inventory-service`. Thay vào đó, nó "phát thanh" (emit) một sự kiện `order_completed` lên RabbitMQ. `inventory-service` lắng nghe sự kiện này và âm thầm trừ kho ở background.
-- **Realtime (Socket.IO):** `order-service` tự tổ chức một Socket Server (Port 3004). Mỗi khi trạng thái đơn đổi (Tạo mới -> Bếp đang làm -> Bếp làm xong), nó sẽ Emit sự kiện trực tiếp xuống tất cả các thiết bị KDS, POS và Customer Web để cập nhật giao diện ngay lập tức mà không cần F5.
+### Cơ chế Named Persistent Volumes trong Docker
+Nhằm giải quyết triệt để rủi ro mất dữ liệu khi container bị dừng hoặc dựng lại (`docker compose down` / `docker compose up -d --build`), toàn bộ cơ sở dữ liệu và message broker được gắn với các **Named Volumes** bền vững tại `docker-compose.yml`:
+
+| Dịch vụ Container | Cổng Host | Named Volume | Đường dẫn Mount trong Container |
+| :--- | :--- | :--- | :--- |
+| `fnb_postgres_auth` | `5432` | `postgres_auth_data` | `/var/lib/postgresql/data` |
+| `fnb_postgres_branch` | `5433` | `postgres_branch_data` | `/var/lib/postgresql/data` |
+| `fnb_postgres_product`| `5434` | `postgres_product_data` | `/var/lib/postgresql/data` |
+| `fnb_postgres_order` | `5435` | `postgres_order_data` | `/var/lib/postgresql/data` |
+| `fnb_postgres_inventory`| `5436` | `postgres_inventory_data` | `/var/lib/postgresql/data` |
+| `fnb_postgres_reporting`| `5437` | `postgres_reporting_data` | `/var/lib/postgresql/data` |
+| `fnb_rabbitmq` | `5672`, `15672`| `rabbitmq_data` | `/var/lib/rabbitmq` |
+
+---
+
+## 3. Kiến Trúc Hướng Sự Kiện & Tính Toàn Vẹn (Event-Driven & SAGA)
+
+Nhằm tối ưu thời gian phản hồi cho các giao dịch tại quầy thu ngân (POS) và giảm độ trễ cho người dùng:
+1. **Giao tiếp Bất đồng bộ (Pub/Sub):** Khi một đơn hàng hoàn tất thanh toán (`status = COMPLETED`), `order-service` phát sự kiện `order_completed` lên RabbitMQ exchange rồi trả về kết quả ngay cho POS mà không cần chờ kho phản hồi.
+2. **Transaction Rollback tại Inventory Service:**
+   - `inventory-service` nhận sự kiện `order_completed` và mở một **TypeORM Database Transaction** thông qua `QueryRunner`.
+   - Với từng sản phẩm trong đơn, hệ thống tra cứu công thức định mức (`Recipe`) theo đúng `size` và `toppings`.
+   - Nếu số lượng nguyên liệu trong kho đủ đáp ứng, hệ thống ghi nhận trừ kho (`quantity - required`) và chốt giao dịch (`commitTransaction`).
+   - Nếu bất kỳ nguyên liệu nào không đủ tồn kho, toàn bộ giao dịch được hoàn tác tự động (`rollbackTransaction`) và phát cảnh báo kiểm kho, bảo vệ toàn vẹn dữ liệu. Cơ chế này đã được xác thực qua bộ Jest Unit Tests độc lập.
+
+---
+
+## 4. Socket.IO Realtime Gateway & Phân Tách Chi Nhánh (Room Isolation)
+
+Order Service tổ chức một WebSocket Server độc lập lắng nghe tại cổng `3004`:
+- **Room Isolation (`joinBranchRoom`):** Khi POS Web hoặc KDS Web khởi chạy, ứng dụng gửi sự kiện `joinBranchRoom(branchId)`. Socket Server sẽ đưa client vào room riêng biệt (ví dụ: `branch_1`, `branch_2`).
+- **Phân phối sự kiện đúng địa chỉ:**
+  - Đơn hàng mới từ QR bàn chi nhánh 1 chỉ kích hoạt thông báo trên màn hình KDS của chi nhánh 1 (`newOrder`).
+  - Món hoàn thành tại bếp chi nhánh 1 chỉ kích hoạt âm báo và Toast nổi trên POS của chi nhánh 1 (`ITEM_READY`).
+  - Đơn hàng thanh toán thành công qua PayOS chỉ gửi tín hiệu `order:paid` tới quầy thu ngân của chi nhánh đó.
+
+---
+
+## 5. Mô Hình Bảo Mật: Stateless JWT & Phân Quyền Vai Trò (RBAC)
+
+API Gateway đóng vai trò chốt chặn kiểm soát truy cập (Single Entry Guard):
+1. **Xác thực Stateless JWT:** Mọi request (trừ các endpoint `@Public`) đều phải gửi kèm Header `Authorization: Bearer <token>`. Gateway ủy quyền giải mã token sang `auth-service` qua RabbitMQ pattern `{ cmd: 'validate_token' }`.
+2. **Phân quyền dựa trên vai trò (RBAC RolesGuard):** Hệ thống phân định 5 nhóm vai trò cụ thể:
+   - `ADMIN`: Toàn quyền quản trị hệ thống, chuỗi chi nhánh và tài khoản.
+   - `MANAGER`: Quản lý kho, nhân sự và đơn hàng trong phạm vi chi nhánh phụ trách.
+   - `CASHIER`: Thu ngân tại quầy POS, xử lý tạo đơn, chiết khấu và hoàn tất thanh toán.
+   - `KITCHEN`: Nhân viên bếp thao tác cập nhật trạng thái món trên KDS Web.
+   - `WAITER`: Nhân viên phục vụ hỗ trợ gọi món và chăm sóc khách tại bàn.
+   - Nếu tài khoản không thuộc danh sách `@Roles(...)` được phép trên controller, Gateway trả về mã lỗi `403 Forbidden` ngay tức thì.
