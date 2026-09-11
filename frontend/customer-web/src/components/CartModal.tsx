@@ -19,23 +19,24 @@ export const CartModal: React.FC<CartModalProps> = ({ branchId, tableId, onClose
     if (cart.length === 0) return;
     setIsSubmitting(true);
     try {
+      const safeTotal = Math.round(Number(totalAmount) || 0);
       const payload = {
         branchId,
         tableId,
         orderType: 'AT_TABLE',
-        totalAmount,
-        finalAmount: totalAmount,
+        totalAmount: safeTotal,
+        finalAmount: safeTotal,
         items: cart.map(item => ({
           productId: item.productId,
           productName: item.productName,
           size: item.size || undefined,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          unitPrice: Math.round(Number(item.unitPrice) || 0),
           note: item.note || undefined,
           toppings: item.toppings.map(t => ({
             toppingId: t.toppingId,
             toppingName: t.toppingName,
-            price: t.price,
+            price: Math.round(Number(t.price) || 0),
             quantity: t.quantity
           }))
         }))

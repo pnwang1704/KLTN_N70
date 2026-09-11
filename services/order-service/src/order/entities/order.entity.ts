@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, OneToMany, OneToOne } from 'typeorm';
 import { OrderItem } from './order-item.entity';
 import { Payment } from './payment.entity';
+import { columnNumericTransformer } from '../../common/transformers/numeric.transformer';
 
 export enum OrderType {
   AT_TABLE = 'AT_TABLE',
@@ -42,10 +43,10 @@ export class Order {
   })
   status: OrderStatus;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: columnNumericTransformer })
   totalAmount: number;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: columnNumericTransformer })
   finalAmount: number;
 
   @OneToMany(() => OrderItem, item => item.order, { cascade: true })

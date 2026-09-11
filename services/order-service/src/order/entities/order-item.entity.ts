@@ -1,6 +1,7 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
 import { Order } from './order.entity';
 import { OrderItemTopping } from './order-item-topping.entity';
+import { columnNumericTransformer } from '../../common/transformers/numeric.transformer';
 
 export enum ItemStatus {
   PENDING = 'PENDING',
@@ -25,7 +26,7 @@ export class OrderItem {
   @Column()
   quantity: number;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: columnNumericTransformer })
   unitPrice: number;
 
   @Column({ nullable: true })
