@@ -8,13 +8,14 @@ import { io } from 'socket.io-client';
 import { ErrorModal, WarningModal } from './ui/Modals';
 
 interface PaymentModalProps {
-  orderId: string;
+  orderId?: string;
+  orderData?: any;
   totalAmount: number;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount, onClose, onSuccess }) => {
+export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, totalAmount, onClose, onSuccess }) => {
   const normalizedTotal = Math.round(Number(totalAmount) || 0);
   const [discountPercent, setDiscountPercent] = useState<number>(0);
 
@@ -34,9 +35,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
   const [completedOrder, setCompletedOrder] = useState<any>(null);
   const [payOsQr, setPayOsQr] = useState<string>('');
   const [orderCode, setOrderCode] = useState<number | null>(null);
+  const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId || null);
+  const [tempQrCreatedId, setTempQrCreatedId] = useState<string | null>(null);
   const [warningMsg, setWarningMsg] = useState<{ title?: string; message: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<{ title?: string; error: string } | null>(null);
   const { clearCart } = useCart();
+
+  useEffect(() => {
+    if (orderId) {
+      setActiveOrderId(orderId);
+    }
+  }, [orderId]);
 
   useEffect(() => {
     setAmountPaidStr(formatAmountInput(finalTotal));
@@ -44,6 +53,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
 
   const amountPaid = parseInt(amountPaidStr.replace(/\D/g, '') || '0', 10);
   const changeAmount = amountPaid - finalTotal;
+
+  const handleClose = async () => {
+    if (tempQrCreatedId) {
+      try {
+        await api.delete(`/orders/${tempQrCreatedId}`);
+      } catch (e) {
+        console.warn('Could not delete temporary QR order', e);
+      }
+    }
+    onClose();
+  };
 
   useEffect(() => {
     const userStr = localStorage.getItem('pos_user');
@@ -57,10 +77,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
     });
 
     socket.on('order:paid', async (data: any) => {
-      if (data.orderId === orderId && data.status === 'COMPLETED') {
+      const targetId = activeOrderId || orderId;
+      if (targetId && data.orderId === targetId && data.status === 'COMPLETED') {
+        setTempQrCreatedId(null);
         try {
           const res = await api.get(`/orders?branchId=${branchId}`);
-          const foundOrder = res.data.find((o: any) => o.id === orderId);
+          const foundOrder = res.data.find((o: any) => o.id === targetId);
           if (foundOrder) setCompletedOrder({ ...foundOrder, discountPercent, finalAmount: finalTotal, payment: { paymentMethod: 'BANK_TRANSFER', amount: finalTotal } });
         } catch (e) {
           console.error("Could not fetch order for receipt", e);
@@ -73,26 +95,55 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
     return () => {
       socket.disconnect();
     };
-  }, [orderId, totalAmount, clearCart, discountPercent, finalTotal]);
+  }, [orderId, activeOrderId, totalAmount, clearCart, discountPercent, finalTotal]);
 
-  // Auto set amount paid to total if bank transfer
+  // Auto set amount paid to total if bank transfer & generate PayOS QR
   useEffect(() => {
     if (paymentMethod === 'BANK_TRANSFER') {
       setAmountPaidStr(formatAmountInput(finalTotal));
       
-      // Initialize PayOS link
       const initPayOs = async () => {
         try {
-          const userStr = localStorage.getItem('pos_user');
-          const user = userStr ? JSON.parse(userStr) : null;
-          const resOrder = await api.get(`/orders?branchId=${user?.branchId || 1}`);
-          const foundOrder = resOrder.data.find((o: any) => o.id === orderId);
-          
-          if (foundOrder && foundOrder.orderCode) {
-            setOrderCode(foundOrder.orderCode);
+          let targetOrderId = activeOrderId || orderId;
+          let targetOrderCode = orderCode;
+
+          // If no order created yet and we have orderData, create it now for VietQR
+          if (!targetOrderId && orderData) {
+            const userStr = localStorage.getItem('pos_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const branchId = user?.branchId || orderData.branchId || '1';
+
+            const res = await api.post('/orders', {
+              ...orderData,
+              branchId,
+              totalAmount: normalizedTotal,
+              finalAmount: finalTotal,
+              discountPercent,
+              paymentMethod: 'BANK_TRANSFER'
+            });
+            const newOrder = res.data;
+            targetOrderId = newOrder.id;
+            targetOrderCode = newOrder.orderCode;
+            setActiveOrderId(newOrder.id);
+            setTempQrCreatedId(newOrder.id);
+            setOrderCode(newOrder.orderCode);
+          }
+
+          if (targetOrderId && !targetOrderCode) {
+            const userStr = localStorage.getItem('pos_user');
+            const user = userStr ? JSON.parse(userStr) : null;
+            const resOrder = await api.get(`/orders?branchId=${user?.branchId || 1}`);
+            const foundOrder = resOrder.data.find((o: any) => o.id === targetOrderId);
+            if (foundOrder && foundOrder.orderCode) {
+              targetOrderCode = foundOrder.orderCode;
+              setOrderCode(targetOrderCode);
+            }
+          }
+
+          if (targetOrderId && targetOrderCode) {
             const res = await api.post('/payments/payos/create', {
-              orderId,
-              orderCode: foundOrder.orderCode,
+              orderId: targetOrderId,
+              orderCode: targetOrderCode,
               totalAmount: finalTotal
             });
             const data = res.data;
@@ -106,7 +157,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
       };
       initPayOs();
     }
-  }, [paymentMethod, finalTotal, orderId]);
+  }, [paymentMethod, finalTotal, orderId, activeOrderId, orderData, orderCode, normalizedTotal, discountPercent]);
 
   // Fallback Polling for PayOS
   useEffect(() => {
@@ -115,11 +166,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
         try {
           const res = await api.post('/payments/payos/status', { orderCode });
           if (res.data && res.data.paid) {
+            setTempQrCreatedId(null);
             const userStr = localStorage.getItem('pos_user');
             const user = userStr ? JSON.parse(userStr) : null;
             const branchId = user?.branchId || 1;
             const resOrder = await api.get(`/orders?branchId=${branchId}`);
-            const foundOrder = resOrder.data.find((o: any) => o.id === orderId);
+            const targetId = activeOrderId || orderId;
+            const foundOrder = resOrder.data.find((o: any) => o.id === targetId);
             if (foundOrder) setCompletedOrder({ ...foundOrder, discountPercent, finalAmount: finalTotal, payment: { paymentMethod: 'BANK_TRANSFER', amount: finalTotal } });
             setIsSuccess(true);
             clearCart();
@@ -130,7 +183,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
       }, 3000); // Check every 3 seconds
       return () => clearInterval(interval);
     }
-  }, [paymentMethod, orderCode, isSuccess, orderId, finalTotal, clearCart, discountPercent]);
+  }, [paymentMethod, orderCode, isSuccess, orderId, activeOrderId, finalTotal, clearCart, discountPercent]);
 
   const handlePayment = async () => {
     if (amountPaid < finalTotal) {
@@ -143,33 +196,75 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
     
     setIsSubmitting(true);
     try {
-      await api.post(`/orders/${orderId}/pay`, {
-        paymentMethod,
-        amountPaid,
-        discountPercent,
-        finalAmount: finalTotal
-      });
-      
-      // Fetch the order to get full details for the receipt
-      try {
+      let targetOrderId = activeOrderId || orderId;
+      let orderToComplete: any = null;
+
+      // If new order from cart, create it now with current items
+      if (!targetOrderId && orderData) {
         const userStr = localStorage.getItem('pos_user');
         const user = userStr ? JSON.parse(userStr) : null;
-        const res = await api.get(`/orders?branchId=${user?.branchId || 1}`);
-        const foundOrder = res.data.find((o: any) => o.id === orderId);
-        if (foundOrder) {
-          setCompletedOrder({
-            ...foundOrder,
-            discountPercent,
-            finalAmount: finalTotal,
-            payment: { paymentMethod, amount: amountPaid }
-          });
-        }
-      } catch (e) {
-        console.error("Could not fetch order for receipt", e);
+        const branchId = user?.branchId || orderData.branchId || '1';
+
+        const createRes = await api.post('/orders', {
+          ...orderData,
+          branchId,
+          totalAmount: normalizedTotal,
+          finalAmount: finalTotal,
+          discountPercent,
+          paymentMethod
+        });
+        orderToComplete = createRes.data;
+        targetOrderId = orderToComplete.id;
+        setActiveOrderId(targetOrderId || null);
       }
 
-      setIsSuccess(true);
-      clearCart();
+      if (targetOrderId) {
+        await api.post(`/orders/${targetOrderId}/pay`, {
+          paymentMethod,
+          amountPaid,
+          discountPercent,
+          finalAmount: finalTotal
+        });
+
+        // Clear tempQrCreatedId so handleClose won't delete the completed order
+        setTempQrCreatedId(null);
+
+        // Fetch the order to get full details for the receipt
+        try {
+          const userStr = localStorage.getItem('pos_user');
+          const user = userStr ? JSON.parse(userStr) : null;
+          const res = await api.get(`/orders?branchId=${user?.branchId || 1}`);
+          const foundOrder = res.data.find((o: any) => o.id === targetOrderId);
+          if (foundOrder) {
+            setCompletedOrder({
+              ...foundOrder,
+              discountPercent,
+              finalAmount: finalTotal,
+              payment: { paymentMethod, amount: amountPaid }
+            });
+          } else if (orderToComplete) {
+            setCompletedOrder({
+              ...orderToComplete,
+              discountPercent,
+              finalAmount: finalTotal,
+              payment: { paymentMethod, amount: amountPaid }
+            });
+          }
+        } catch (e) {
+          console.error("Could not fetch order for receipt", e);
+          if (orderToComplete) {
+            setCompletedOrder({
+              ...orderToComplete,
+              discountPercent,
+              finalAmount: finalTotal,
+              payment: { paymentMethod, amount: amountPaid }
+            });
+          }
+        }
+
+        setIsSuccess(true);
+        clearCart();
+      }
     } catch (error) {
       console.error(error);
       setErrorMsg({
@@ -225,7 +320,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
       <div className="bg-white rounded-2xl w-full max-w-md max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="px-6 py-4 border-b border-zinc-200 flex items-center justify-between shrink-0">
           <h2 className="text-lg font-bold text-zinc-900">Thanh Toán Đơn Hàng</h2>
-          <button onClick={onClose} className="p-1 text-zinc-400 hover:text-zinc-900">
+          <button onClick={handleClose} className="p-1 text-zinc-400 hover:text-zinc-900">
             <X size={20} />
           </button>
         </div>

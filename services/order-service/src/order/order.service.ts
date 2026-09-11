@@ -186,4 +186,25 @@ export class OrderService {
       },
     });
   }
+
+  async deleteOrder(orderId: string): Promise<{ success: boolean; message: string }> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: {
+        items: { toppings: true },
+        payment: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException('Chỉ được phép xóa đơn hàng đang ở trạng thái PENDING');
+    }
+
+    await this.orderRepository.remove(order);
+    return { success: true, message: 'Đã xóa đơn hàng thành công' };
+  }
 }

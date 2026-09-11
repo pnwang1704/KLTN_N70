@@ -6,8 +6,14 @@ import api from '../lib/axios';
 import { TableMap } from './TableMap';
 import { SuccessModal, ErrorModal, WarningModal } from './ui/Modals';
 
+export interface OpenPaymentParams {
+  orderId?: string;
+  orderData?: any;
+  totalAmount: number;
+}
+
 interface OrderPanelProps {
-  onOpenPayment: (orderId: string, totalAmount: number) => void;
+  onOpenPayment: (params: OpenPaymentParams) => void;
 }
 
 export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
@@ -16,18 +22,17 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
   const [tableId, setTableId] = useState('');
   const [showTableMap, setShowTableMap] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<{ title?: string; message: string; subMessage?: string } | null>(null);
   const [warningMsg, setWarningMsg] = useState<{ title?: string; message: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<{ title?: string; error: string } | null>(null);
 
   useEffect(() => {
     if (cart.length === 0) {
-      setCreatedOrderId(null);
+      setTableId('');
     }
   }, [cart.length]);
 
-  const handleCreateOrder = async (autoPay: boolean = false) => {
+  const handleSendToKitchen = async () => {
     if (cart.length === 0) {
       setWarningMsg({ title: 'Giỏ hàng trống', message: 'Vui lòng chọn món trước khi gửi đơn!' });
       return;
@@ -39,9 +44,11 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
     
     setIsSubmitting(true);
     try {
-      // Branch ID could be fetched from User context if needed, hardcode '1' for fallback
+      const userStr = localStorage.getItem('pos_user');
+      const user = userStr ? JSON.parse(userStr) : null;
+
       const payload = {
-        branchId: '1',
+        branchId: user?.branchId || '1',
         tableId: orderType === 'AT_TABLE' ? tableId : undefined,
         orderType,
         totalAmount,
@@ -62,29 +69,20 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
         }))
       };
 
-      const res = await api.post('/orders', payload);
+      await api.post('/orders', payload);
       
-      const newOrder = res.data;
-      setCreatedOrderId(newOrder.id);
-      
-      if (!autoPay) {
-        setSuccessMsg({
-          title: 'Đã gửi đơn cho bếp',
-          message: 'Đơn hàng đã được chuyển tới bếp thành công!',
-          subMessage: 'Nhân viên bếp sẽ nhận được thông báo ngay lập tức.'
-        });
-        clearCart();
-        setCreatedOrderId(null);
-        setTableId('');
-      } else {
-        // Open payment modal
-        onOpenPayment(newOrder.id, totalAmount);
-      }
+      setSuccessMsg({
+        title: 'Đã gửi đơn cho bếp',
+        message: 'Đơn hàng đã được chuyển tới bếp thành công!',
+        subMessage: 'Nhân viên bếp sẽ nhận được thông báo ngay lập tức.'
+      });
+      clearCart();
+      setTableId('');
     } catch (error) {
       console.error(error);
       setErrorMsg({
         title: 'Lỗi tạo đơn',
-        error: 'Có lỗi xảy ra khi tạo đơn hàng. Vui lòng thử lại!'
+        error: 'Có lỗi xảy ra khi gửi đơn hàng cho bếp. Vui lòng thử lại!'
       });
     } finally {
       setIsSubmitting(false);
@@ -92,18 +90,41 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
   };
 
   const handlePaymentClick = () => {
-    if (cart.length === 0 && !createdOrderId) {
+    if (cart.length === 0) {
       setWarningMsg({ title: 'Giỏ hàng trống', message: 'Vui lòng chọn món trước khi thanh toán!' });
       return;
     }
-    
-    if (createdOrderId) {
-      // Already created, just pay
-      onOpenPayment(createdOrderId, totalAmount);
-    } else {
-      // Not created yet (Take away flow), create then pay
-      handleCreateOrder(true);
+    if (orderType === 'AT_TABLE' && !tableId) {
+      setWarningMsg({ title: 'Chưa chọn bàn', message: 'Vui lòng nhập hoặc chọn số bàn phục vụ!' });
+      return;
     }
+
+    const userStr = localStorage.getItem('pos_user');
+    const user = userStr ? JSON.parse(userStr) : null;
+
+    const orderData = {
+      branchId: user?.branchId || '1',
+      tableId: orderType === 'AT_TABLE' ? tableId : undefined,
+      orderType,
+      totalAmount,
+      finalAmount: totalAmount,
+      items: cart.map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        size: item.size || undefined,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        note: item.note || undefined,
+        toppings: item.toppings.map(t => ({
+          toppingId: t.toppingId,
+          toppingName: t.toppingName,
+          price: t.price,
+          quantity: t.quantity
+        }))
+      }))
+    };
+
+    onOpenPayment({ orderData, totalAmount });
   };
 
   return (
@@ -153,7 +174,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
             setShowTableMap(false);
           }}
           onPayTable={(id, total) => {
-            onOpenPayment(id, Math.round(Number(total || 0)));
+            onOpenPayment({ orderId: id, totalAmount: Math.round(Number(total || 0)) });
             setShowTableMap(false);
           }}
           onClose={() => setShowTableMap(false)}
@@ -213,7 +234,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
 
         <div className="flex gap-3">
           <button 
-            onClick={() => handleCreateOrder(false)}
+            onClick={handleSendToKitchen}
             disabled={isSubmitting || cart.length === 0}
             className="flex-1 py-3.5 bg-zinc-100 text-zinc-900 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-zinc-200 transition-colors disabled:opacity-50"
           >
@@ -221,7 +242,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
           </button>
           <button 
             onClick={handlePaymentClick}
-            disabled={isSubmitting || (cart.length === 0 && !createdOrderId)}
+            disabled={isSubmitting || cart.length === 0}
             className="flex-[2] py-3.5 bg-orange-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-orange-700 transition-colors disabled:opacity-50"
           >
             <CreditCard size={18} /> Thanh toán
