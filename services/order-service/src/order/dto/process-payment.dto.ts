@@ -1,4 +1,4 @@
-import { IsEnum, IsNumber } from 'class-validator';
+import { IsEnum, IsNumber, IsOptional } from 'class-validator';
 import { PaymentMethod } from '../entities/payment.entity';
 
 export class ProcessPaymentDto {
@@ -7,4 +7,12 @@ export class ProcessPaymentDto {
 
   @IsNumber()
   amountPaid: number;
+
+  @IsOptional()
+  @IsNumber()
+  discountPercent?: number;
+
+  @IsOptional()
+  @IsNumber()
+  finalAmount?: number;
 }

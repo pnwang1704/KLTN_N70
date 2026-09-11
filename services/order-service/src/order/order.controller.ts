@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Patch, Param } from '@nestjs/common';
+import { Controller, Post, Body, Patch, Delete, Param } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -13,6 +13,12 @@ export class OrderController {
   @Post()
   async createOrderHttp(@Body() createOrderDto: CreateOrderDto) {
     return this.orderService.createOrder(createOrderDto);
+  }
+
+  // HTTP endpoint for deleting pending order
+  @Delete(':id')
+  async deleteOrderHttp(@Param('id') id: string) {
+    return this.orderService.deleteOrder(id);
   }
 
   // HTTP endpoint for updating item status (e.g., from KDS)
@@ -34,6 +40,12 @@ export class OrderController {
   @MessagePattern('create_order')
   async handleCreateOrder(@Payload() createOrderDto: CreateOrderDto) {
     return this.orderService.createOrder(createOrderDto);
+  }
+
+  // Message Pattern for deleting order (e.g., from API Gateway)
+  @MessagePattern('delete_order')
+  async handleDeleteOrder(@Payload() id: string) {
+    return this.orderService.deleteOrder(id);
   }
 
   // Message Pattern for updating item status

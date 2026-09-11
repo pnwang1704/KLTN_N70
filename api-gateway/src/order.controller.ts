@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Inject } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Roles } from './common/decorators/roles.decorator';
 import { Public } from './common/decorators/public.decorator';
@@ -20,6 +20,12 @@ export class OrderController {
   @Post(':id/pay')
   processPayment(@Param('id') id: string, @Body() dto: ProcessPaymentDto) {
     return this.orderClient.send('process_payment', { orderId: id, processPaymentDto: dto });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Delete(':id')
+  deleteOrder(@Param('id') id: string) {
+    return this.orderClient.send('delete_order', id);
   }
 
   @Patch('item-status')

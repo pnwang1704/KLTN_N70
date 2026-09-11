@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne } from 'typeorm';
 import { OrderItem } from './order-item.entity';
+import { columnNumericTransformer } from '../../common/transformers/numeric.transformer';
 
 @Entity()
 export class OrderItemTopping {
@@ -12,7 +13,7 @@ export class OrderItemTopping {
   @Column()
   toppingName: string;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: columnNumericTransformer })
   price: number;
 
   @Column()

@@ -18,6 +18,8 @@ services:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
       RABBITMQ_ERLANG_COOKIE: "secret_cookie_fnb_kltn"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - app-network
     healthcheck:
@@ -35,6 +37,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: auth_db
+    volumes:
+      - postgres_auth_data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
@@ -52,6 +56,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: product_db
+    volumes:
+      - postgres_product_data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
@@ -69,6 +75,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: order_db
+    volumes:
+      - postgres_order_data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
@@ -86,6 +94,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: inventory_db
+    volumes:
+      - postgres_inventory_data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
@@ -103,6 +113,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: branch_db
+    volumes:
+      - postgres_branch_data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
@@ -120,6 +132,8 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: reporting_db
+    volumes:
+      - postgres_reporting_data:/var/lib/postgresql/data
     networks:
       - app-network
     healthcheck:
@@ -289,3 +303,13 @@ services:
       - order-service
     networks:
       - app-network
+
+volumes:
+  rabbitmq_data:
+  postgres_auth_data:
+  postgres_product_data:
+  postgres_order_data:
+  postgres_inventory_data:
+  postgres_branch_data:
+  postgres_reporting_data:
+

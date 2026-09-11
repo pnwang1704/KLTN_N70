@@ -133,7 +133,8 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                 </button>
                 <button 
                   onClick={() => {
-                    onPayTable(selectedOccupiedTable.id, selectedOccupiedTable.finalAmount);
+                    const amount = Math.round(Number(selectedOccupiedTable.finalAmount || selectedOccupiedTable.totalAmount || 0));
+                    onPayTable(selectedOccupiedTable.id, amount);
                     setSelectedOccupiedTable(null);
                     onClose();
                   }}

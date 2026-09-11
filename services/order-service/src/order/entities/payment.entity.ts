@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, OneToOne, JoinColumn } from 'typeorm';
 import { Order } from './order.entity';
+import { columnNumericTransformer } from '../../common/transformers/numeric.transformer';
 
 export enum PaymentMethod {
   CASH = 'CASH',
@@ -17,7 +18,7 @@ export class Payment {
   })
   paymentMethod: PaymentMethod;
 
-  @Column('decimal', { precision: 10, scale: 2 })
+  @Column('decimal', { precision: 10, scale: 2, transformer: columnNumericTransformer })
   amount: number;
 
   @CreateDateColumn()

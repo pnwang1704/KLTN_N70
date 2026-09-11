@@ -215,20 +215,14 @@ export class InventoryService implements OnModuleInit {
             lock: { mode: 'pessimistic_write' }, // lock row to prevent race conditions
           });
 
-          if (!stock) {
-            this.logger.warn(`Stock record not found for branch ${branchId}, ingredient ${recipeItem.ingredientId}. Creating new with negative stock.`);
-            stock = new Stock();
-            stock.branchId = branchId;
-            stock.ingredientId = recipeItem.ingredientId;
-            stock.currentQuantity = 0;
+          if (!stock || Number(stock.currentQuantity) < totalQuantityNeeded) {
+            this.logger.error(
+              `Insufficient stock for ingredient ${recipeItem.ingredientId} in branch ${branchId}. Available: ${stock ? stock.currentQuantity : 0}, needed: ${totalQuantityNeeded}`,
+            );
+            throw new RpcException('Insufficient stock');
           }
 
-          stock.currentQuantity -= totalQuantityNeeded;
-
-          if (stock.currentQuantity < 0) {
-            this.logger.warn(`Stock for ingredient ${stock.ingredientId} fell below zero. Current: ${stock.currentQuantity}`);
-          }
-
+          stock.currentQuantity = Number(stock.currentQuantity) - totalQuantityNeeded;
           await queryRunner.manager.save(stock);
         }
       }

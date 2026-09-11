@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { ProductList } from './components/ProductList';
-import { OrderPanel } from './components/OrderPanel';
+import { OrderPanel, type OpenPaymentParams } from './components/OrderPanel';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { PaymentModal } from './components/PaymentModal';
 import { LoginScreen } from './components/LoginScreen';
@@ -35,7 +35,7 @@ function App() {
   const { isConnected, toastMessage, clearToast, notifications, markAsRead } = useSocket(branchId);
   
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [paymentInfo, setPaymentInfo] = useState<{orderId: string, amount: number} | null>(null);
+  const [paymentInfo, setPaymentInfo] = useState<OpenPaymentParams | null>(null);
 
   if (!user) {
     return <LoginScreen onLoginSuccess={(u) => {
@@ -66,7 +66,7 @@ function App() {
           </div>
           
           <div className="w-[40%] h-full border-l border-zinc-200">
-            <OrderPanel onOpenPayment={(orderId, amount) => setPaymentInfo({ orderId, amount })} />
+            <OrderPanel onOpenPayment={(params) => setPaymentInfo(params)} />
           </div>
         </div>
       )}
@@ -94,7 +94,8 @@ function App() {
       {paymentInfo && (
         <PaymentModal 
           orderId={paymentInfo.orderId}
-          totalAmount={paymentInfo.amount}
+          orderData={paymentInfo.orderData}
+          totalAmount={paymentInfo.totalAmount}
           onClose={() => setPaymentInfo(null)}
           onSuccess={() => setPaymentInfo(null)}
         />
