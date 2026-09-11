@@ -235,8 +235,22 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
           </div>
 
           {paymentMethod === 'CASH' ? (
-            <div className="mb-4">
-              <label className="block text-sm font-semibold text-zinc-900 mb-2">Tiền khách đưa</label>
+            <div className="mb-5">
+              <div className="flex justify-between items-center mb-2">
+                <label className="block text-sm font-semibold text-zinc-900">Tiền khách đưa</label>
+                <button
+                  type="button"
+                  onClick={() => setAmountPaidStr(normalizedTotal.toString())}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
+                    amountPaid === normalizedTotal
+                      ? "bg-orange-600 text-white shadow-sm"
+                      : "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
+                  )}
+                >
+                  Đúng số tiền ({formatCurrency(normalizedTotal)})
+                </button>
+              </div>
               <input 
                 type="text" 
                 value={amountPaidStr}
@@ -247,27 +261,25 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, totalAmount
                 className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-lg font-bold text-zinc-900 focus:outline-none focus:border-orange-500 focus:bg-white"
                 placeholder="0"
               />
-              <div className="flex flex-wrap gap-2 mt-2.5">
-                <button
-                  type="button"
-                  onClick={() => setAmountPaidStr(normalizedTotal.toString())}
-                  className="px-3 py-1.5 text-xs font-semibold bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg transition-colors cursor-pointer"
-                >
-                  Đúng số tiền ({formatCurrency(normalizedTotal)})
-                </button>
-                {[50000, 100000, 200000, 500000]
-                  .filter(val => val > normalizedTotal)
-                  .slice(0, 3)
-                  .map(val => (
+              <div className="mt-3">
+                <p className="text-xs font-semibold text-zinc-500 mb-2">Chọn nhanh mệnh giá tiền mặt:</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {[10000, 20000, 50000, 100000, 200000, 500000].map((val) => (
                     <button
                       key={val}
                       type="button"
                       onClick={() => setAmountPaidStr(val.toString())}
-                      className="px-3 py-1.5 text-xs font-semibold bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-lg transition-colors cursor-pointer"
+                      className={cn(
+                        "py-2.5 px-2 text-xs font-bold rounded-xl border transition-all text-center cursor-pointer active:scale-95",
+                        amountPaid === val
+                          ? "bg-orange-500 border-orange-500 text-white shadow-sm"
+                          : "bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:border-zinc-300"
+                      )}
                     >
                       {formatCurrency(val)}
                     </button>
                   ))}
+                </div>
               </div>
             </div>
           ) : (
