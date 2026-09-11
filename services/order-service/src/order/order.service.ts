@@ -88,7 +88,7 @@ export class OrderService {
   }
 
   async processPayment(orderId: string, processPaymentDto: ProcessPaymentDto): Promise<Order> {
-    const { paymentMethod, amountPaid } = processPaymentDto;
+    const { paymentMethod, amountPaid, discountPercent, finalAmount } = processPaymentDto;
     const order = await this.orderRepository.findOne({
       where: { id: orderId },
       relations: {
@@ -105,7 +105,17 @@ export class OrderService {
       throw new BadRequestException('Order is already completed or cancelled');
     }
 
-    if (amountPaid < order.totalAmount) {
+    if (discountPercent !== undefined && discountPercent >= 0) {
+      order.discountPercent = discountPercent;
+      const discount = Math.round((order.totalAmount * discountPercent) / 100);
+      order.finalAmount = Math.max(0, order.totalAmount - discount);
+    } else if (finalAmount !== undefined) {
+      order.finalAmount = Math.round(Number(finalAmount));
+    }
+
+    const payable = order.finalAmount !== undefined && order.finalAmount !== null ? order.finalAmount : order.totalAmount;
+
+    if (amountPaid < payable) {
       throw new BadRequestException('Amount paid is less than total amount');
     }
 

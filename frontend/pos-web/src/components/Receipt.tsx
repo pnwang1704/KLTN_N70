@@ -97,7 +97,17 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
       <div className="border-b-2 border-dashed border-black mb-2"></div>
 
       <div className="text-sm space-y-1">
-        <div className="flex justify-between font-bold text-base">
+        <div className="flex justify-between">
+          <span>Tạm tính:</span>
+          <span>{formatCurrency(order.totalAmount || order.finalAmount)}</span>
+        </div>
+        {(order.discountPercent > 0 || (order.totalAmount && order.finalAmount && order.totalAmount > order.finalAmount)) && (
+          <div className="flex justify-between text-xs">
+            <span>Chiết khấu ({order.discountPercent || Math.round(((order.totalAmount - order.finalAmount) / order.totalAmount) * 100)}%):</span>
+            <span>-{formatCurrency(order.totalAmount - order.finalAmount)}</span>
+          </div>
+        )}
+        <div className="flex justify-between font-bold text-base pt-1 border-t border-dashed border-black">
           <span>TỔNG CỘNG:</span>
           <span>{formatCurrency(order.finalAmount || order.totalAmount)}</span>
         </div>

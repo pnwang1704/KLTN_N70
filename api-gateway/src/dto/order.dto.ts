@@ -92,6 +92,14 @@ export class ProcessPaymentDto {
 
   @IsNumber()
   amountPaid: number;
+
+  @IsOptional()
+  @IsNumber()
+  discountPercent?: number;
+
+  @IsOptional()
+  @IsNumber()
+  finalAmount?: number;
 }
 
 export class UpdateItemStatusDto {

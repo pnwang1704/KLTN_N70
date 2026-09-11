@@ -49,6 +49,9 @@ export class Order {
   @Column('decimal', { precision: 10, scale: 2, transformer: columnNumericTransformer })
   finalAmount: number;
 
+  @Column({ type: 'int', default: 0, nullable: true })
+  discountPercent: number;
+
   @OneToMany(() => OrderItem, item => item.order, { cascade: true })
   items: OrderItem[];
 
