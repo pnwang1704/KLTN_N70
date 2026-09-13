@@ -32,7 +32,7 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
           <FileText className="text-orange-600" />
           Lịch sử Đơn hàng
         </h2>
-        <button onClick={fetchOrders} className="px-4 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-100">
+        <button onClick={fetchOrders} className="px-4 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-100 cursor-pointer">
           Làm mới
         </button>
       </div>
@@ -57,7 +57,9 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
             ) : (
               orders.map(order => (
                 <tr key={order.id} className="hover:bg-orange-50/50 transition-colors">
-                  <td className="px-6 py-4 font-mono text-xs font-bold text-zinc-700">{order.id.split('-')[0]}</td>
+                  <td className="px-6 py-4 font-mono text-xs font-bold text-zinc-700">
+                    {order.orderCode ? `#${order.orderCode}` : order.id.split('-')[0]}
+                  </td>
                   <td className="px-6 py-4 text-zinc-600">{formatDate(order.createdAt)}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-md text-xs font-bold ${order.orderType === 'AT_TABLE' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
@@ -67,11 +69,11 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
                   <td className="px-6 py-4 font-bold text-zinc-900">{formatCurrency(order.finalAmount)}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2 py-1 rounded-md text-xs font-bold ${order.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-orange-100 text-orange-700'}`}>
-                      {order.status}
+                      {order.status === 'COMPLETED' ? 'Đã thanh toán' : order.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
-                    <button onClick={() => setSelectedOrder(order)} className="p-2 text-orange-600 hover:bg-orange-100 rounded-lg inline-flex items-center gap-1 font-semibold text-xs transition-colors">
+                    <button onClick={() => setSelectedOrder(order)} className="p-2 text-orange-600 hover:bg-orange-100 rounded-lg inline-flex items-center gap-1 font-semibold text-xs transition-colors cursor-pointer">
                       <Eye size={16} /> Chi tiết
                     </button>
                   </td>
@@ -87,8 +89,12 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:bg-white print:static print:inset-auto print:p-0">
           <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 print:hidden">
             <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-orange-50">
-              <h3 className="font-bold text-lg text-orange-900">Chi tiết đơn: {selectedOrder.id.split('-')[0]}</h3>
-              <button onClick={() => setSelectedOrder(null)} className="p-1 text-zinc-400 hover:text-zinc-900"><X size={20} /></button>
+              <div>
+                <h3 className="font-bold text-lg text-orange-900">
+                  Chi tiết đơn: {selectedOrder.orderCode ? `#${selectedOrder.orderCode}` : selectedOrder.id.split('-')[0]}
+                </h3>
+              </div>
+              <button onClick={() => setSelectedOrder(null)} className="p-1 text-zinc-400 hover:text-zinc-900 cursor-pointer"><X size={20} /></button>
             </div>
             
             <div className="p-6 max-h-[60vh] overflow-y-auto">
@@ -103,10 +109,10 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
                 </div>
               </div>
 
-              <h4 className="font-bold text-zinc-900 mb-3">Danh sách món ({selectedOrder.items.length})</h4>
+              <h4 className="font-bold text-zinc-900 mb-3">Danh sách món ({selectedOrder.items?.length || 0})</h4>
               <div className="flex flex-col gap-3">
-                {selectedOrder.items.map((item: any) => (
-                  <div key={item.id} className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl flex justify-between">
+                {selectedOrder.items?.map((item: any, idx: number) => (
+                  <div key={item.id || idx} className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl flex justify-between">
                     <div>
                       <div className="font-bold text-zinc-900 text-sm">{item.quantity}x {item.productName}</div>
                       <div className="text-xs text-zinc-500 mt-1">
@@ -115,7 +121,7 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
                       </div>
                       {item.note && <div className="text-xs text-orange-600 mt-1">Ghi chú: {item.note}</div>}
                     </div>
-                    <div className="font-bold text-sm">{formatCurrency(item.unitPrice * item.quantity + (item.toppings?.reduce((acc: number, t: any) => acc + t.price * t.quantity, 0) || 0) * item.quantity)}</div>
+                    <div className="font-bold text-sm">{formatCurrency(Number(item.unitPrice || 0) * Number(item.quantity || 1) + (item.toppings?.reduce((acc: number, t: any) => acc + Number(t.price || 0) * Number(t.quantity || 1), 0) || 0) * Number(item.quantity || 1))}</div>
                   </div>
                 ))}
               </div>
@@ -128,7 +134,7 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
               </div>
               <button 
                 onClick={() => window.print()}
-                className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 transition-colors"
+                className="px-6 py-3 bg-zinc-800 text-white font-bold rounded-xl flex items-center gap-2 hover:bg-zinc-700 transition-colors cursor-pointer"
               >
                 <Printer size={18} /> In Hóa Đơn
               </button>
@@ -141,3 +147,4 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
     </div>
   );
 };
+

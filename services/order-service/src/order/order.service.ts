@@ -266,6 +266,7 @@ export class OrderService {
       orders = await this.orderRepository.find({
         where: { id: In(orderIds), branchId },
         relations: { items: { toppings: true }, payment: true },
+        order: { createdAt: 'ASC' },
       });
     } else {
       orders = await this.orderRepository.find({
@@ -275,6 +276,7 @@ export class OrderService {
           status: Not(In([OrderStatus.COMPLETED, OrderStatus.CANCELLED])),
         },
         relations: { items: { toppings: true }, payment: true },
+        order: { createdAt: 'ASC' },
       });
     }
 
@@ -282,28 +284,61 @@ export class OrderService {
       throw new NotFoundException(`Không tìm thấy đơn hàng đang hoạt động cho bàn ${tableId}`);
     }
 
-    const completedOrderIds: string[] = [];
+    // If table has multiple orders (e.g. 2 or more rounds from customer-web),
+    // merge them into 1 single consolidated Order in the database so order history only shows 1 bill!
+    if (orders.length > 1) {
+      const primaryOrder = orders[0];
+      const otherOrders = orders.slice(1);
 
-    for (const order of orders) {
-      order.status = OrderStatus.COMPLETED;
-      if (!order.payment) {
-        const payment = new Payment();
-        payment.paymentMethod = paymentMethod;
-        payment.amount = Number(order.finalAmount || order.totalAmount || 0);
-        order.payment = payment;
-      } else {
-        order.payment.paymentMethod = paymentMethod;
-        order.payment.amount = Number(order.finalAmount || order.totalAmount || 0);
+      // Reassign all items from subsequent orders to primaryOrder
+      for (const otherOrder of otherOrders) {
+        if (otherOrder.items && otherOrder.items.length > 0) {
+          for (const item of otherOrder.items) {
+            item.order = primaryOrder;
+            await this.orderItemRepository.save(item);
+          }
+        }
       }
 
-      await this.orderRepository.save(order);
-      completedOrderIds.push(order.id);
+      // Delete other orders from DB (items are already reassigned)
+      for (const otherOrder of otherOrders) {
+        await this.orderRepository.delete(otherOrder.id);
+      }
+
+      // Reload primaryOrder with all items and toppings
+      const updatedPrimaryOrder = await this.orderRepository.findOne({
+        where: { id: primaryOrder.id },
+        relations: { items: { toppings: true }, payment: true },
+      });
+
+      if (!updatedPrimaryOrder) {
+        throw new NotFoundException('Primary order not found');
+      }
+
+      const combinedTotal = orders.reduce((sum, o) => sum + Number(o.totalAmount || 0), 0);
+      const combinedFinal = orders.reduce((sum, o) => sum + Number(o.finalAmount || o.totalAmount || 0), 0);
+
+      updatedPrimaryOrder.totalAmount = combinedTotal;
+      updatedPrimaryOrder.finalAmount = combinedFinal;
+      updatedPrimaryOrder.status = OrderStatus.COMPLETED;
+
+      if (!updatedPrimaryOrder.payment) {
+        const payment = new Payment();
+        payment.paymentMethod = paymentMethod;
+        payment.amount = amountPaid;
+        updatedPrimaryOrder.payment = payment;
+      } else {
+        updatedPrimaryOrder.payment.paymentMethod = paymentMethod;
+        updatedPrimaryOrder.payment.amount = amountPaid;
+      }
+
+      await this.orderRepository.save(updatedPrimaryOrder);
 
       // Emit event to inventory service via RabbitMQ
       const invPayload = {
-        orderId: order.id,
-        branchId: order.branchId,
-        items: order.items?.map(item => ({
+        orderId: updatedPrimaryOrder.id,
+        branchId: updatedPrimaryOrder.branchId,
+        items: updatedPrimaryOrder.items?.map(item => ({
           productId: item.productId,
           size: item.size,
           quantity: item.quantity,
@@ -316,21 +351,68 @@ export class OrderService {
       this.inventoryClient.emit('order.completed', invPayload);
 
       // Emit event to frontend via Socket.IO
-      this.eventsGateway.emitOrderPaid(order.branchId, {
-        orderId: order.id,
+      this.eventsGateway.emitOrderPaid(updatedPrimaryOrder.branchId, {
+        orderId: updatedPrimaryOrder.id,
         status: OrderStatus.COMPLETED
       });
+
+      // Emit table:completed event via Socket.IO
+      this.eventsGateway.emitTableCompleted(branchId, {
+        branchId,
+        tableId,
+        orderId: updatedPrimaryOrder.id,
+        orderIds: [updatedPrimaryOrder.id],
+      });
+
+      return { success: true, completedOrderIds: [updatedPrimaryOrder.id] };
     }
+
+    // Single order case
+    const order = orders[0];
+    order.status = OrderStatus.COMPLETED;
+    if (!order.payment) {
+      const payment = new Payment();
+      payment.paymentMethod = paymentMethod;
+      payment.amount = amountPaid;
+      order.payment = payment;
+    } else {
+      order.payment.paymentMethod = paymentMethod;
+      order.payment.amount = amountPaid;
+    }
+
+    await this.orderRepository.save(order);
+
+    // Emit event to inventory service via RabbitMQ
+    const invPayload = {
+      orderId: order.id,
+      branchId: order.branchId,
+      items: order.items?.map(item => ({
+        productId: item.productId,
+        size: item.size,
+        quantity: item.quantity,
+        toppings: item.toppings?.map(t => ({
+          toppingId: t.toppingId,
+          quantity: t.quantity
+        })) || []
+      })) || []
+    };
+    this.inventoryClient.emit('order.completed', invPayload);
+
+    // Emit event to frontend via Socket.IO
+    this.eventsGateway.emitOrderPaid(order.branchId, {
+      orderId: order.id,
+      status: OrderStatus.COMPLETED
+    });
 
     // Emit table:completed event via Socket.IO
     this.eventsGateway.emitTableCompleted(branchId, {
       branchId,
       tableId,
-      orderId: completedOrderIds[0],
-      orderIds: completedOrderIds,
+      orderId: order.id,
+      orderIds: [order.id],
     });
 
-    return { success: true, completedOrderIds };
+    return { success: true, completedOrderIds: [order.id] };
   }
 }
 
