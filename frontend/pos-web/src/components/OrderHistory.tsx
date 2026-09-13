@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Eye, X, Printer } from 'lucide-react';
 import api from '../lib/axios';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, formatPaymentMethod } from '../lib/utils';
 import { Receipt } from './Receipt';
 
 export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
@@ -99,7 +99,7 @@ export const OrderHistory: React.FC<{ branchId: string }> = ({ branchId }) => {
                 </div>
                 <div className="text-right">
                   <p className="text-zinc-500 mb-1">Phương thức TT:</p>
-                  <p className="font-semibold text-emerald-600">{selectedOrder.payment?.paymentMethod || 'Chưa TT'}</p>
+                  <p className="font-semibold text-emerald-600">{formatPaymentMethod(selectedOrder.payment?.paymentMethod)}</p>
                 </div>
               </div>
 

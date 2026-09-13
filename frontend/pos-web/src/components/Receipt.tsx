@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { formatCurrency, formatDate } from '../lib/utils';
+import { formatCurrency, formatDate, formatPaymentMethod } from '../lib/utils';
 
 interface ReceiptProps {
   order: any;
@@ -23,6 +23,23 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
 
   if (!order || !mountNode) return null;
 
+  const itemsSubtotal = order.items?.reduce((acc: number, item: any) => {
+    const itemUnitPrice = Number(item.unitPrice || 0);
+    const itemQuantity = Number(item.quantity || 1);
+    const itemTotal = itemUnitPrice * itemQuantity;
+    const toppingTotal = (item.toppings?.reduce((tAcc: number, t: any) => tAcc + Number(t.price || 0) * Number(t.quantity || 1), 0) || 0) * itemQuantity;
+    return acc + itemTotal + toppingTotal;
+  }, 0) || Number(order.totalAmount || order.finalAmount || 0);
+
+  const finalTotal = Math.round(Number(order.finalAmount || order.totalAmount || itemsSubtotal));
+  const discountAmount = Math.max(0, itemsSubtotal - finalTotal);
+  const discountPercent = order.discountPercent || (itemsSubtotal > 0 && discountAmount > 0 ? Math.round((discountAmount / itemsSubtotal) * 100) : 0);
+
+  const amountPaid = order.payment?.amount !== undefined && order.payment?.amount !== null 
+    ? Number(order.payment.amount) 
+    : undefined;
+  const changeAmount = amountPaid !== undefined ? Math.max(0, amountPaid - finalTotal) : 0;
+
   return createPortal(
     <div id="printable-receipt" className="bg-white text-black p-4 mx-auto">
       <div className="text-center mb-4">
@@ -36,7 +53,7 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
       <div className="text-xs mb-3 space-y-1">
         <div className="flex justify-between">
           <span>Số HĐ:</span>
-          <span className="font-bold">{order.id?.split('-')[0].toUpperCase()}</span>
+          <span className="font-bold">{order.orderCode ? `#${order.orderCode}` : (order.id ? order.id.split('-')[0].toUpperCase() : 'N/A')}</span>
         </div>
         <div className="flex justify-between">
           <span>Ngày:</span>
@@ -63,15 +80,17 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
           </tr>
         </thead>
         <tbody>
-          {order.items?.map((item: any) => {
-            const itemTotal = item.unitPrice * item.quantity;
-            const toppingTotal = (item.toppings?.reduce((acc: number, t: any) => acc + t.price * t.quantity, 0) || 0) * item.quantity;
+          {order.items?.map((item: any, idx: number) => {
+            const itemUnitPrice = Number(item.unitPrice || 0);
+            const itemQuantity = Number(item.quantity || 1);
+            const itemTotal = itemUnitPrice * itemQuantity;
+            const toppingTotal = (item.toppings?.reduce((acc: number, t: any) => acc + Number(t.price || 0) * Number(t.quantity || 1), 0) || 0) * itemQuantity;
             
             return (
-              <React.Fragment key={item.id || Math.random()}>
+              <React.Fragment key={item.id || `${item.productId || 'item'}-${idx}`}>
                 <tr>
                   <td className="pt-2 font-bold">{item.productName} {item.size ? `(${item.size})` : ''}</td>
-                  <td className="pt-2 text-center align-top" rowSpan={item.toppings?.length ? 2 : 1}>{item.quantity}</td>
+                  <td className="pt-2 text-center align-top" rowSpan={item.toppings?.length ? 2 : 1}>{itemQuantity}</td>
                   <td className="pt-2 text-right align-top font-bold" rowSpan={item.toppings?.length ? 2 : 1}>
                     {formatCurrency(itemTotal + toppingTotal)}
                   </td>
@@ -79,7 +98,7 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
                 {item.toppings?.length > 0 && (
                   <tr>
                     <td className="text-[10px] text-gray-600 pl-2 pb-1">
-                      + {item.toppings.map((t: any) => t.toppingName).join(', ')}
+                      + {item.toppings.map((t: any) => `${t.toppingName}${t.quantity > 1 ? ` (x${t.quantity})` : ''}`).join(', ')}
                     </td>
                   </tr>
                 )}
@@ -99,31 +118,31 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
       <div className="text-sm space-y-1">
         <div className="flex justify-between">
           <span>Tạm tính:</span>
-          <span>{formatCurrency(order.totalAmount || order.finalAmount)}</span>
+          <span>{formatCurrency(itemsSubtotal)}</span>
         </div>
-        {(order.discountPercent > 0 || (order.totalAmount && order.finalAmount && order.totalAmount > order.finalAmount)) && (
+        {discountAmount > 0 && (
           <div className="flex justify-between text-xs">
-            <span>Chiết khấu ({order.discountPercent || Math.round(((order.totalAmount - order.finalAmount) / order.totalAmount) * 100)}%):</span>
-            <span>-{formatCurrency(order.totalAmount - order.finalAmount)}</span>
+            <span>Chiết khấu ({discountPercent}%):</span>
+            <span>-{formatCurrency(discountAmount)}</span>
           </div>
         )}
         <div className="flex justify-between font-bold text-base pt-1 border-t border-dashed border-black">
           <span>TỔNG CỘNG:</span>
-          <span>{formatCurrency(order.finalAmount || order.totalAmount)}</span>
+          <span>{formatCurrency(finalTotal)}</span>
         </div>
         <div className="flex justify-between">
           <span>Phương thức TT:</span>
-          <span>{order.payment?.paymentMethod || 'Chưa TT'}</span>
+          <span className="font-semibold">{formatPaymentMethod(order.payment?.paymentMethod)}</span>
         </div>
-        {order.payment?.amount && (
+        {amountPaid !== undefined && (
           <>
             <div className="flex justify-between">
               <span>Tiền khách đưa:</span>
-              <span>{formatCurrency(order.payment.amount)}</span>
+              <span>{formatCurrency(amountPaid)}</span>
             </div>
             <div className="flex justify-between">
               <span>Tiền thối:</span>
-              <span>{formatCurrency(Math.max(0, order.payment.amount - (order.finalAmount || order.totalAmount)))}</span>
+              <span>{formatCurrency(changeAmount)}</span>
             </div>
           </>
         )}
