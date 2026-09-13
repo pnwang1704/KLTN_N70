@@ -17,7 +17,7 @@ interface TableSelectScreenProps {
   onConfirmTable: (tableId: string) => void;
 }
 
-const QUICK_TABLES = ['01', '02', '03', '05', '06', '08', '10', '12'];
+const QUICK_TABLES = ['1', '2', '3', '5', '6', '8', '10', '12'];
 
 export const TableSelectScreen: React.FC<TableSelectScreenProps> = ({
   initialTableId = '',
@@ -29,10 +29,14 @@ export const TableSelectScreen: React.FC<TableSelectScreenProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmed = tableInput.trim();
+    let trimmed = tableInput.trim();
     if (!trimmed) {
       setErrorMessage('Vui lòng nhập hoặc chọn số bàn của bạn!');
       return;
+    }
+    // Chuẩn hóa số bàn nếu người dùng gõ số có số 0 ở đầu (ví dụ "01" -> "1")
+    if (/^\d+$/.test(trimmed)) {
+      trimmed = String(parseInt(trimmed, 10));
     }
     setErrorMessage('');
     onConfirmTable(trimmed);
@@ -127,7 +131,7 @@ export const TableSelectScreen: React.FC<TableSelectScreenProps> = ({
                       setTableInput(e.target.value);
                       if (errorMessage) setErrorMessage('');
                     }}
-                    placeholder="VD: 05, 12,..."
+                    placeholder="VD: 5, 12,..."
                     className={cn(
                       "w-full text-center text-2xl sm:text-3xl font-extrabold tracking-wider text-zinc-900 bg-zinc-50 border-2 rounded-2xl py-4 px-12 focus:outline-none focus:bg-white transition-all shadow-inner",
                       errorMessage 

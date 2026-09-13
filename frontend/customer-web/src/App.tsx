@@ -36,8 +36,12 @@ function parseTableFromUrl(): { branchId: string; tableId: string } | null {
     }
 
     if (tableId.trim()) {
+      let cleanTableId = tableId.trim();
+      if (/^\d+$/.test(cleanTableId)) {
+        cleanTableId = String(parseInt(cleanTableId, 10));
+      }
       return {
-        tableId: tableId.trim(),
+        tableId: cleanTableId,
         branchId: (branchId || '1').trim(),
       };
     }
