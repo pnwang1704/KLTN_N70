@@ -13,12 +13,12 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `GET`  | `/auth/users` | `auth-service` | `ADMIN`, `MANAGER` | Lấy danh sách nhân viên (Hỗ trợ query `?branchId=`). Trả về danh sách user không chứa mật khẩu (`200 OK`). |
 | `PATCH`| `/auth/users/:id/status` | `auth-service` | `ADMIN`, `MANAGER` | Bật/Tắt trạng thái kích hoạt tài khoản (`isActive`: `true`/`false`) (`200 OK`, `404 Not Found`). |
 | `GET`  | `/orders` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách lịch sử đơn hàng (Hỗ trợ lọc theo `?branchId=`) (`200 OK`). |
-| `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở hoặc đang phục vụ tại chi nhánh (`200 OK`). |
+| `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`) (`200 OK`). |
 | `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (Dine-in Post-pay) hoặc POS Web (`201 Created`, `400 Bad Request`). |
-| `DELETE`| `/orders/:id` | `order-service` | `@Public`, `ADMIN`, `CASHIER` | Hủy đơn hàng tạm khi đóng modal thanh toán mà chưa thanh toán. **Điều kiện chặn:** Chỉ xóa khi `status === PENDING`, chặn xóa đơn đã `COMPLETED` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
-| `POST` | `/orders/:id/pay` | `order-service` | `ADMIN`, `CASHIER` | Hoàn tất thanh toán đơn hàng (Tiền mặt hoặc Chuyển khoản QR), ghi nhận `Payment`, đổi trạng thái sang `COMPLETED` và kích hoạt trừ kho qua RabbitMQ (`200 OK`, `400 Bad Request`, `404 Not Found`). |
-| `PATCH`| `/orders/:id/status` | `order-service` | `ADMIN`, `CASHIER`, `KITCHEN` | Cập nhật trạng thái tổng thể của đơn hàng (`PENDING` -> `IN_PROGRESS` -> `COMPLETED` -> `CANCELLED`) (`200 OK`). |
-| `PATCH`| `/orders/:id/items/:itemId` | `order-service` | `KITCHEN` | Cập nhật trạng thái từng món ăn trên màn hình KDS (`PENDING` -> `IN_PROGRESS` -> `COMPLETED`) (`200 OK`). |
+| `DELETE`| `/orders/:id` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Hủy đơn hàng tạm khi đóng modal thanh toán mà chưa thanh toán. **Điều kiện chặn:** Chỉ xóa khi `status === PENDING`, chặn xóa đơn đã `COMPLETED` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
+| `POST` | `/orders/:id/pay` | `order-service` | `ADMIN`, `CASHIER` | Hoàn tất thanh toán cho một đơn hàng cụ thể (Tiền mặt hoặc Chuyển khoản QR), ghi nhận `Payment`, đổi trạng thái sang `COMPLETED` và kích hoạt trừ kho qua RabbitMQ (`200 OK`, `400 Bad Request`, `404 Not Found`). |
+| `POST` | `/orders/pay-table` | `order-service` | `ADMIN`, `CASHIER` | Hoàn tất thanh toán toàn bộ đơn của một bàn: hợp nhất các đợt gọi thành 1 đơn `COMPLETED`, lưu `Payment`, dọn dẹp đơn phụ và phát Socket.IO `table:completed` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
+| `PATCH`| `/orders/item-status` | `order-service` | `KITCHEN`, `ADMIN` | Cập nhật trạng thái từng món ăn trên màn hình KDS (`PENDING` -> `IN_PROGRESS` -> `COMPLETED`) (`200 OK`). |
 | `GET`  | `/inventory` | `inventory-service` | `ADMIN`, `MANAGER` | Lấy danh sách tồn kho nguyên liệu theo chi nhánh (`200 OK`). |
 | `POST` | `/inventory/stock-in` | `inventory-service` | `ADMIN`, `MANAGER` | Nhập nguyên vật liệu vào kho chi nhánh (`201 Created`). |
 | `POST` | `/payments/payos/create` | `api-gateway` | `@Public` | Tạo link thanh toán VietQR động tích hợp PayOS (tự động gắn `orderCode` và số tiền chính xác sau chiết khấu) (`200 OK`). |
@@ -32,7 +32,7 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 {
   "branchId": "1",
   "orderType": "AT_TABLE",
-  "tableId": "05",
+  "tableId": "5",
   "totalAmount": 90000,
   "finalAmount": 81000,
   "discountPercent": 10,
@@ -57,42 +57,38 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 }
 ```
 
-### 1.2. DTO Mẫu: Hoàn tất thanh toán (`POST /orders/:id/pay`)
+### 1.2. DTO Mẫu: Hoàn tất thanh toán bàn (`POST /orders/pay-table`)
 ```json
 {
+  "branchId": "1",
+  "tableId": "5",
   "paymentMethod": "CASH",
-  "amountPaid": 100000,
-  "discountPercent": 10,
-  "finalAmount": 81000
+  "amountPaid": 100000
 }
 ```
 **Response (200 OK):**
 ```json
 {
-  "id": "c8b4f179-631d-408a-bfe0-55e143b44b82",
-  "orderCode": 26031201,
-  "branchId": "1",
-  "tableId": "05",
-  "orderType": "AT_TABLE",
-  "status": "COMPLETED",
-  "totalAmount": 90000,
-  "finalAmount": 81000,
-  "discountPercent": 10,
-  "payment": {
-    "id": "d9812e34-512a-4422-90ab-332918471abc",
-    "paymentMethod": "CASH",
-    "amount": 100000
-  },
-  "createdAt": "2026-09-11T08:15:30.000Z",
-  "updatedAt": "2026-09-11T08:20:12.000Z"
+  "success": true,
+  "completedOrderIds": [
+    "c8b4f179-631d-408a-bfe0-55e143b44b82"
+  ]
 }
 ```
 
 ### 1.3. Response Mẫu: Hủy đơn hàng PENDING (`DELETE /orders/:id`)
+* **Endpoint:** `DELETE /orders/:id`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Mục đích:** Xóa sạch bản ghi đơn hàng tạm (dọn dẹp database khi khách đóng modal thanh toán trước khi xác nhận tiền).
+* **Ràng buộc nghiệp vụ:**
+  - Nếu đơn hàng có trạng thái khác `PENDING` (ví dụ: `COMPLETED`): Trả về `400 Bad Request` với thông báo `"Chỉ được phép xóa đơn hàng đang ở trạng thái PENDING"`.
+  - Nếu không tìm thấy mã đơn: Trả về `404 Not Found` với thông báo `"Order not found"`.
+
+**Response (200 OK):**
 ```json
 {
   "success": true,
-  "message": "Order deleted successfully"
+  "message": "Đã xóa đơn hàng thành công"
 }
 ```
 
@@ -109,13 +105,16 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `{ cmd: 'get_users' }` | API Gateway | `auth-service` | `{ branchId?: string }` | `User[]` |
 | `{ cmd: 'toggle_user_status' }` | API Gateway | `auth-service` | `{ id: string }` | `User` (Trạng thái `isActive` đã lật) |
 | `{ cmd: 'validate_token' }` | API Gateway | `auth-service` | `{ token: string }` | `{ valid: boolean, user: JwtPayload }` |
-| `{ cmd: 'create_order' }` | API Gateway | `order-service` | `CreateOrderDto` | `Order` mới tạo (`status: PENDING`) |
-| `{ cmd: 'get_orders' }` | API Gateway | `order-service` | `{ branchId?: string }` | `Order[]` (kèm items & toppings) |
-| `'pay_order'` | API Gateway | `order-service` | `{ orderId, processPaymentDto }` | `Order` (`status: COMPLETED`, `payment`) |
-| `'delete_order'` | API Gateway | `order-service` | `{ id: string }` | `{ success: boolean, message: string }` |
+| `'create_order'` | API Gateway | `order-service` | `CreateOrderDto` | `Order` mới tạo (`status: PENDING`) |
+| `'get_orders'` | API Gateway | `order-service` | `branchId: string` | `Order[]` (kèm items & toppings) |
+| `'get_active_orders'` | API Gateway | `order-service` | `{ branchId: string, tableId?: string }` | `Order[]` (các đơn chưa hoàn tất của bàn/chi nhánh) |
+| `'process_payment'` | API Gateway | `order-service` | `{ orderId, processPaymentDto }` | `Order` (`status: COMPLETED`, `payment`) |
+| `'pay_table_orders'` | API Gateway | `order-service` | `{ branchId, tableId, paymentMethod, amountPaid }` | `{ success: boolean, completedOrderIds: string[] }` |
+| `'delete_order'` | API Gateway | `order-service` | `id: string` | `{ success: boolean, message: string }` |
+| `'update_item_status'` | API Gateway | `order-service` | `UpdateItemStatusDto` | `OrderItem` |
+| `'process_payos_webhook'` | API Gateway | `order-service` | `{ orderCode, amount }` | `Order` |
 | `{ cmd: 'get_inventory' }` | API Gateway | `inventory-service`| `{ branchId?: string }` | `BranchStock[]` |
 | `{ cmd: 'stock_in' }` | API Gateway | `inventory-service`| `StockInDto` | `StockTransaction` |
-| `'process_payos_webhook'` | API Gateway | `order-service` | `{ orderCode, amount }` | `{ success: boolean, orderId }` |
 
 ---
 
@@ -136,6 +135,7 @@ WebSocket Server chạy trên `order-service` (Port `3004`) phụ trách đẩy 
 | Event Name | Chiều truyền | Room / Scope | Mô tả chức năng |
 | :--- | :--- | :--- | :--- |
 | `joinBranchRoom` | Client -> Server | Toàn bộ Clients | Client gửi chuỗi `branchId`. Server đưa Socket Client vào room tương ứng nhằm cô lập dữ liệu theo từng chi nhánh (Multi-branch Isolation). |
-| `newOrder` | Server -> KDS Web | `branch_${branchId}` | Phát khi có đơn hàng mới tạo (`PENDING`). KDS tự động thêm thẻ đơn vào danh sách chế biến kèm chuông báo và đồng hồ đếm ngược. |
+| `NEW_ORDER_CREATED` | Server -> KDS Web | `branch_${branchId}` | Phát khi có đơn hàng mới tạo (`PENDING`). KDS tự động thêm thẻ đơn vào danh sách chế biến kèm chuông báo và đồng hồ đếm ngược. |
 | `ITEM_READY` | Server -> POS Web | `branch_${branchId}` | Phát khi Đầu bếp bấm "Hoàn thành" một món trên KDS. POS Web hiển thị Toast thông báo nổi và lưu vào danh sách thông báo (Notification Dropdown). |
 | `order:paid` | Server -> POS Web | `branch_${branchId}` | Phát khi đơn hàng nhận được thanh toán thành công từ Webhook PayOS hoặc quẹt thẻ. POS Web lập tức đóng modal thanh toán và kích hoạt in hóa đơn. |
+| `table:completed` | Server -> Customer & POS Web | `branch_${branchId}` | Phát khi thu ngân hoàn tất thanh toán cho bàn. Payload: `{ branchId, tableId, orderId, orderIds }`. Customer Web tự động đóng modal tra cứu món và reset bàn; POS Web chuyển trạng thái bàn sang Bàn trống. |

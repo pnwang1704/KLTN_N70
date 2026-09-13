@@ -10,9 +10,9 @@ Hệ thống được thiết kế theo mô hình **Microservices Architecture**
 graph TB
     %% Client Layer
     subgraph Clients ["Lớp Ứng Dụng Người Dùng (Client Layer)"]
-        CW["Customer Web (Mobile QR)"]
-        POS["POS Web (Thu ngân / Quản lý)"]
-        KDS["KDS Web (Màn hình Bếp)"]
+        CW["Customer Web (Mobile QR / Port 5174)<br/>- Auto-redirect Table URL<br/>- Tra cứu Món đã gọi tại bàn"]
+        POS["POS Web (Port 5175)<br/>- Thu ngân / Quản lý / Sơ đồ bàn<br/>- Chiết khấu & Thanh toán đa phương thức"]
+        KDS["KDS Web (Port 5173)<br/>- Màn hình Bếp điều phối Realtime"]
     end
 
     %% External Services
@@ -27,13 +27,13 @@ graph TB
 
     %% Message Broker
     subgraph Broker ["Hạ Tầng Tin Nhắn (Message Broker)"]
-        RMQ{{"RabbitMQ Broker<br/>(Exchanges & Queues)"}}
+        RMQ{{"RabbitMQ Broker (Port 5672 / 15672)<br/>(Exchanges & Queues)"}}
     end
 
     %% Microservices Layer
     subgraph Services ["Lớp Dịch Vụ Nghiệp Vụ (Microservices Layer)"]
-        AS["Auth Service<br/>(Bcrypt, JWT, RBAC)"]
-        OS["Order Service (Port 3004)<br/>- Order Lifecycle<br/>- Socket.IO Realtime Gateway"]
+        AS["Auth Service (Port 3001)<br/>(Bcrypt, JWT, RBAC)"]
+        OS["Order Service (Port 3004)<br/>- Order Lifecycle & Table Consolidate<br/>- Socket.IO Realtime Gateway"]
         IS["Inventory Service<br/>- Recipe Management<br/>- Transactional Deduct Stock"]
         BS["Branch Service<br/>(Bàn ăn, Chi nhánh)"]
         PS["Product Service<br/>(Menu, Size, Topping)"]
@@ -45,19 +45,21 @@ graph TB
         DB1[("Auth DB<br/>(PostgreSQL 5432)")]
         DB2[("Order DB<br/>(PostgreSQL 5435)")]
         DB3[("Inventory DB<br/>(PostgreSQL 5436)")]
-        DB4[("Branch DB<br/>(PostgreSQL 5433)")]
+        DB4[("Branch DB<br/>(PostgreSQL 5437)")]
         DB5[("Product DB<br/>(PostgreSQL 5434)")]
-        DB6[("Reporting DB<br/>(PostgreSQL 5437)")]
+        DB6[("Reporting DB<br/>(PostgreSQL 5438)")]
     end
 
     %% Client Interactions
-    CW -->|"HTTP REST (Dine-in Order)"| GW
-    POS -->|"HTTP REST (Order, Pay, Staff)"| GW
+    CW -->|"HTTP REST (Create Order, Active Orders)"| GW
+    POS -->|"HTTP REST (Order, Pay Table, Staff, Stock)"| GW
     KDS -->|"HTTP REST (Update Item Status)"| GW
 
     %% Realtime WebSocket
-    OS -.->|"Socket.IO (newOrder)"| KDS
+    OS -.->|"Socket.IO (NEW_ORDER_CREATED)"| KDS
     OS -.->|"Socket.IO (ITEM_READY, order:paid)"| POS
+    OS -.->|"Socket.IO (table:completed)"| CW
+    OS -.->|"Socket.IO (table:completed)"| POS
 
     %% External PayOS Integration
     GW <-->|"Tạo VietQR & Nhận Webhook"| PayOS
@@ -93,11 +95,11 @@ Nhằm giải quyết triệt để rủi ro mất dữ liệu khi container b�
 | Dịch vụ Container | Cổng Host | Named Volume | Đường dẫn Mount trong Container |
 | :--- | :--- | :--- | :--- |
 | `fnb_postgres_auth` | `5432` | `postgres_auth_data` | `/var/lib/postgresql/data` |
-| `fnb_postgres_branch` | `5433` | `postgres_branch_data` | `/var/lib/postgresql/data` |
 | `fnb_postgres_product`| `5434` | `postgres_product_data` | `/var/lib/postgresql/data` |
 | `fnb_postgres_order` | `5435` | `postgres_order_data` | `/var/lib/postgresql/data` |
 | `fnb_postgres_inventory`| `5436` | `postgres_inventory_data` | `/var/lib/postgresql/data` |
-| `fnb_postgres_reporting`| `5437` | `postgres_reporting_data` | `/var/lib/postgresql/data` |
+| `fnb_postgres_branch` | `5437` | `postgres_branch_data` | `/var/lib/postgresql/data` |
+| `fnb_postgres_reporting`| `5438` | `postgres_reporting_data` | `/var/lib/postgresql/data` |
 | `fnb_rabbitmq` | `5672`, `15672`| `rabbitmq_data` | `/var/lib/rabbitmq` |
 
 ---
@@ -117,11 +119,12 @@ Nhằm tối ưu thời gian phản hồi cho các giao dịch tại quầy thu 
 ## 4. Socket.IO Realtime Gateway & Phân Tách Chi Nhánh (Room Isolation)
 
 Order Service tổ chức một WebSocket Server độc lập lắng nghe tại cổng `3004`:
-- **Room Isolation (`joinBranchRoom`):** Khi POS Web hoặc KDS Web khởi chạy, ứng dụng gửi sự kiện `joinBranchRoom(branchId)`. Socket Server sẽ đưa client vào room riêng biệt (ví dụ: `branch_1`, `branch_2`).
+- **Room Isolation (`joinBranchRoom`):** Khi POS Web, KDS Web hoặc Customer Web khởi chạy, ứng dụng gửi sự kiện `joinBranchRoom(branchId)`. Socket Server sẽ đưa client vào room riêng biệt (ví dụ: `branch_1`, `branch_2`).
 - **Phân phối sự kiện đúng địa chỉ:**
-  - Đơn hàng mới từ QR bàn chi nhánh 1 chỉ kích hoạt thông báo trên màn hình KDS của chi nhánh 1 (`newOrder`).
+  - Đơn hàng mới từ QR bàn chi nhánh 1 chỉ kích hoạt thông báo trên màn hình KDS của chi nhánh 1 (`NEW_ORDER_CREATED`).
   - Món hoàn thành tại bếp chi nhánh 1 chỉ kích hoạt âm báo và Toast nổi trên POS của chi nhánh 1 (`ITEM_READY`).
   - Đơn hàng thanh toán thành công qua PayOS chỉ gửi tín hiệu `order:paid` tới quầy thu ngân của chi nhánh đó.
+  - Khi thu ngân xác nhận thanh toán bàn tại POS, `order-service` phát sự kiện `table:completed` (kèm `branchId`, `tableId`, `orderId`) tới toàn room: Customer Web tại bàn đó lập tức đóng modal món đã gọi, xóa giỏ hàng và giải phóng bàn; đồng thời POS Web cập nhật sơ đồ bàn về trạng thái Bàn trống.
 
 ---
 

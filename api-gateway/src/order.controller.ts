@@ -38,4 +38,28 @@ export class OrderController {
   getOrders(@Query('branchId') branchId: string) {
     return this.orderClient.send('get_orders', branchId || '1');
   }
+
+  @Public()
+  @Get('active')
+  getActiveOrders(
+    @Query('branchId') branchId: string,
+    @Query('tableId') tableId?: string,
+  ) {
+    return this.orderClient.send('get_active_orders', { branchId: branchId || '1', tableId });
+  }
+
+  @Roles('CASHIER', 'ADMIN')
+  @Post('pay-table')
+  processTablePayment(
+    @Body() body: {
+      branchId: string;
+      tableId: string;
+      orderIds?: string[];
+      paymentMethod: any;
+      amountPaid: number;
+    },
+  ) {
+    return this.orderClient.send('pay_table_orders', body);
+  }
 }
+

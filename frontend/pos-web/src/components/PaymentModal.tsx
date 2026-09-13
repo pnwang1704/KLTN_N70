@@ -30,7 +30,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
   const [payOsQr, setPayOsQr] = useState<string>('');
-  const [orderCode, setOrderCode] = useState<number | null>(null);
+  const [orderCode, setOrderCode] = useState<number | null>(orderData?.orderCode || orderData?.orders?.[0]?.orderCode || null);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId || null);
   const [tempQrCreatedId, setTempQrCreatedId] = useState<string | null>(null);
   const [warningMsg, setWarningMsg] = useState<{ title?: string; message: string } | null>(null);
@@ -42,6 +42,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
       setActiveOrderId(orderId);
     }
   }, [orderId]);
+
+  useEffect(() => {
+    if (orderData?.orderCode) {
+      setOrderCode(orderData.orderCode);
+    } else if (orderData?.orders?.[0]?.orderCode) {
+      setOrderCode(orderData.orders[0].orderCode);
+    }
+  }, [orderData]);
 
   useEffect(() => {
     setAmountPaidStr(formatAmountInput(normalizedTotal));
@@ -61,6 +69,37 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
     onClose();
   };
 
+  const isSuccessRef = React.useRef(isSuccess);
+  const isSubmittingRef = React.useRef(isSubmitting);
+  const paymentMethodRef = React.useRef(paymentMethod);
+  const orderDataRef = React.useRef(orderData);
+  const normalizedTotalRef = React.useRef(normalizedTotal);
+  const orderCodeRef = React.useRef(orderCode);
+
+  useEffect(() => {
+    isSuccessRef.current = isSuccess;
+  }, [isSuccess]);
+
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
+
+  useEffect(() => {
+    paymentMethodRef.current = paymentMethod;
+  }, [paymentMethod]);
+
+  useEffect(() => {
+    orderDataRef.current = orderData;
+  }, [orderData]);
+
+  useEffect(() => {
+    normalizedTotalRef.current = normalizedTotal;
+  }, [normalizedTotal]);
+
+  useEffect(() => {
+    orderCodeRef.current = orderCode;
+  }, [orderCode]);
+
   useEffect(() => {
     const userStr = localStorage.getItem('pos_user');
     const user = userStr ? JSON.parse(userStr) : null;
@@ -73,22 +112,84 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
     });
 
     socket.on('order:paid', async (data: any) => {
+      // If already marked success, submitting in progress, or cashier is processing CASH, do NOT overwrite!
+      if (isSuccessRef.current || isSubmittingRef.current || paymentMethodRef.current === 'CASH') {
+        return;
+      }
+
       const targetId = activeOrderId || orderId;
       if (targetId && data.orderId === targetId && data.status === 'COMPLETED') {
         setTempQrCreatedId(null);
-        try {
-          const res = await api.get(`/orders?branchId=${branchId}`);
-          const foundOrder = res.data.find((o: any) => o.id === targetId);
-          if (foundOrder) {
-            setCompletedOrder({ 
-              ...foundOrder, 
-              discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0, 
-              finalAmount: normalizedTotal, 
-              payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal } 
+        const curOrderData = orderDataRef.current;
+        const curTotal = normalizedTotalRef.current;
+
+        // If paying for a table with multiple orders, complete remaining table orders
+        if (curOrderData?.orderIds && curOrderData.orderIds.length > 0) {
+          try {
+            await api.post('/orders/pay-table', {
+              branchId,
+              tableId: curOrderData.tableId,
+              orderIds: curOrderData.orderIds,
+              paymentMethod: 'BANK_TRANSFER',
+              amountPaid: curTotal,
             });
+          } catch (err) {
+            console.warn('pay-table call during socket order:paid:', err);
           }
-        } catch (e) {
-          console.error("Could not fetch order for receipt", e);
+
+          setCompletedOrder({
+            id: curOrderData.orderIds[0],
+            orderCode: orderCodeRef.current || curOrderData.orderCode || curOrderData.orders?.[0]?.orderCode || undefined,
+            tableId: curOrderData.tableId,
+            orderType: 'AT_TABLE',
+            branchId,
+            items: curOrderData.items,
+            discountPercent: curOrderData.discountPercent || 0,
+            totalAmount: curOrderData.totalAmount || curTotal,
+            finalAmount: curTotal,
+            createdAt: new Date().toISOString(),
+            payment: { paymentMethod: 'BANK_TRANSFER', amount: curTotal }
+          });
+        } else if (curOrderData?.items && curOrderData.items.length > 0) {
+          setCompletedOrder({
+            id: targetId,
+            orderCode: orderCodeRef.current || curOrderData.orderCode || undefined,
+            tableId: curOrderData.tableId,
+            orderType: curOrderData.orderType || 'TAKE_AWAY',
+            branchId: curOrderData.branchId || branchId,
+            items: curOrderData.items,
+            discountPercent: curOrderData.discountPercent || 0,
+            totalAmount: curOrderData.totalAmount || curTotal,
+            finalAmount: curTotal,
+            createdAt: new Date().toISOString(),
+            payment: { paymentMethod: 'BANK_TRANSFER', amount: curTotal }
+          });
+        } else {
+          try {
+            const res = await api.get(`/orders?branchId=${branchId}`);
+            const foundOrder = res.data.find((o: any) => o.id === targetId);
+            if (foundOrder) {
+              let itemsToUse = foundOrder.items || [];
+              let totalAmountToUse = foundOrder.totalAmount || curTotal;
+              if (foundOrder.tableId && foundOrder.orderType === 'AT_TABLE') {
+                const tableOrders = res.data.filter((o: any) => o.tableId === foundOrder.tableId && o.orderType === 'AT_TABLE');
+                if (tableOrders.length > 1) {
+                  itemsToUse = tableOrders.flatMap((o: any) => o.items || []);
+                  totalAmountToUse = tableOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
+                }
+              }
+              setCompletedOrder({ 
+                ...foundOrder, 
+                items: itemsToUse,
+                totalAmount: totalAmountToUse,
+                discountPercent: foundOrder.discountPercent || curOrderData?.discountPercent || 0, 
+                finalAmount: curTotal, 
+                payment: { paymentMethod: 'BANK_TRANSFER', amount: curTotal } 
+              });
+            }
+          } catch (e) {
+            console.error("Could not fetch order for receipt", e);
+          }
         }
         setIsSuccess(true);
         clearCart();
@@ -98,7 +199,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
     return () => {
       socket.disconnect();
     };
-  }, [orderId, activeOrderId, normalizedTotal, clearCart, orderData]);
+  }, [orderId, activeOrderId, clearCart]);
 
   // Auto set amount paid to total if bank transfer & generate PayOS QR
   useEffect(() => {
@@ -173,16 +274,70 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             const userStr = localStorage.getItem('pos_user');
             const user = userStr ? JSON.parse(userStr) : null;
             const branchId = user?.branchId || 1;
-            const resOrder = await api.get(`/orders?branchId=${branchId}`);
-            const targetId = activeOrderId || orderId;
-            const foundOrder = resOrder.data.find((o: any) => o.id === targetId);
-            if (foundOrder) {
-              setCompletedOrder({ 
-                ...foundOrder, 
-                discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0, 
-                finalAmount: normalizedTotal, 
-                payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal } 
+
+            if (orderData?.orderIds && orderData.orderIds.length > 0) {
+              try {
+                await api.post('/orders/pay-table', {
+                  branchId,
+                  tableId: orderData.tableId,
+                  orderIds: orderData.orderIds,
+                  paymentMethod: 'BANK_TRANSFER',
+                  amountPaid: normalizedTotal,
+                });
+              } catch (err) {
+                console.warn('pay-table call during QR status check:', err);
+              }
+              setCompletedOrder({
+                id: orderData.orderIds[0],
+                orderCode: orderCode || orderData.orderCode || orderData.orders?.[0]?.orderCode || undefined,
+                tableId: orderData.tableId,
+                orderType: 'AT_TABLE',
+                branchId,
+                items: orderData.items,
+                discountPercent: orderData.discountPercent || 0,
+                finalAmount: normalizedTotal,
+                totalAmount: orderData.totalAmount || normalizedTotal,
+                createdAt: new Date().toISOString(),
+                payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal }
               });
+            } else if (orderData?.items && orderData.items.length > 0) {
+              const targetId = activeOrderId || orderId || 'ORDER';
+              setCompletedOrder({
+                id: targetId,
+                orderCode: orderCode || orderData.orderCode || undefined,
+                tableId: orderData.tableId,
+                orderType: orderData.orderType || 'TAKE_AWAY',
+                branchId: orderData.branchId || branchId,
+                items: orderData.items,
+                discountPercent: orderData.discountPercent || 0,
+                totalAmount: orderData.totalAmount || normalizedTotal,
+                finalAmount: normalizedTotal,
+                createdAt: new Date().toISOString(),
+                payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal }
+              });
+            } else {
+              const resOrder = await api.get(`/orders?branchId=${branchId}`);
+              const targetId = activeOrderId || orderId;
+              const foundOrder = resOrder.data.find((o: any) => o.id === targetId);
+              if (foundOrder) {
+                let itemsToUse = foundOrder.items || [];
+                let totalAmountToUse = foundOrder.totalAmount || normalizedTotal;
+                if (foundOrder.tableId && foundOrder.orderType === 'AT_TABLE') {
+                  const tableOrders = resOrder.data.filter((o: any) => o.tableId === foundOrder.tableId && o.orderType === 'AT_TABLE');
+                  if (tableOrders.length > 1) {
+                    itemsToUse = tableOrders.flatMap((o: any) => o.items || []);
+                    totalAmountToUse = tableOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
+                  }
+                }
+                setCompletedOrder({ 
+                  ...foundOrder, 
+                  items: itemsToUse,
+                  totalAmount: totalAmountToUse,
+                  discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0, 
+                  finalAmount: normalizedTotal, 
+                  payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal } 
+                });
+              }
             }
             setIsSuccess(true);
             clearCart();
@@ -205,77 +360,135 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
     }
     
     setIsSubmitting(true);
+    isSubmittingRef.current = true;
     try {
       let targetOrderId = activeOrderId || orderId;
       let orderToComplete: any = null;
 
-      // If new order from cart, create it now with current items
-      if (!targetOrderId && orderData) {
+      if (orderData?.orderIds && orderData.orderIds.length > 0) {
         const userStr = localStorage.getItem('pos_user');
         const user = userStr ? JSON.parse(userStr) : null;
         const branchId = user?.branchId || orderData.branchId || '1';
 
-        const createRes = await api.post('/orders', {
-          ...orderData,
+        await api.post('/orders/pay-table', {
           branchId,
-          totalAmount: orderData.totalAmount || normalizedTotal,
-          finalAmount: normalizedTotal,
-          discountPercent: orderData.discountPercent || 0,
-          paymentMethod
-        });
-        orderToComplete = createRes.data;
-        targetOrderId = orderToComplete.id;
-        setActiveOrderId(targetOrderId || null);
-      }
-
-      if (targetOrderId) {
-        await api.post(`/orders/${targetOrderId}/pay`, {
+          tableId: orderData.tableId,
+          orderIds: orderData.orderIds,
           paymentMethod,
           amountPaid,
-          discountPercent: orderData?.discountPercent || 0,
-          finalAmount: normalizedTotal
         });
 
-        // Clear tempQrCreatedId so handleClose won't delete the completed order
         setTempQrCreatedId(null);
-
-        // Fetch the order to get full details for the receipt
-        try {
+        setCompletedOrder({
+          id: orderData.orderIds[0],
+          orderCode: orderCode || orderData.orderCode || orderData.orders?.[0]?.orderCode || undefined,
+          tableId: orderData.tableId,
+          orderType: 'AT_TABLE',
+          branchId,
+          items: orderData.items,
+          discountPercent: orderData.discountPercent || 0,
+          totalAmount: orderData.totalAmount || normalizedTotal,
+          finalAmount: normalizedTotal,
+          createdAt: new Date().toISOString(),
+          payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
+        });
+      } else {
+        // If new order from cart, create it now with current items
+        if (!targetOrderId && orderData) {
           const userStr = localStorage.getItem('pos_user');
           const user = userStr ? JSON.parse(userStr) : null;
-          const res = await api.get(`/orders?branchId=${user?.branchId || 1}`);
-          const foundOrder = res.data.find((o: any) => o.id === targetOrderId);
-          if (foundOrder) {
-            setCompletedOrder({
-              ...foundOrder,
-              discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0,
-              finalAmount: normalizedTotal,
-              payment: { paymentMethod, amount: amountPaid }
-            });
-          } else if (orderToComplete) {
-            setCompletedOrder({
-              ...orderToComplete,
-              discountPercent: orderData?.discountPercent || 0,
-              finalAmount: normalizedTotal,
-              payment: { paymentMethod, amount: amountPaid }
-            });
-          }
-        } catch (e) {
-          console.error("Could not fetch order for receipt", e);
-          if (orderToComplete) {
-            setCompletedOrder({
-              ...orderToComplete,
-              discountPercent: orderData?.discountPercent || 0,
-              finalAmount: normalizedTotal,
-              payment: { paymentMethod, amount: amountPaid }
-            });
-          }
+          const branchId = user?.branchId || orderData.branchId || '1';
+
+          const createRes = await api.post('/orders', {
+            ...orderData,
+            branchId,
+            totalAmount: orderData.totalAmount || normalizedTotal,
+            finalAmount: normalizedTotal,
+            discountPercent: orderData.discountPercent || 0,
+            paymentMethod
+          });
+          orderToComplete = createRes.data;
+          targetOrderId = orderToComplete.id;
+          setActiveOrderId(targetOrderId || null);
         }
 
-        setIsSuccess(true);
-        clearCart();
+        if (targetOrderId) {
+          await api.post(`/orders/${targetOrderId}/pay`, {
+            paymentMethod,
+            amountPaid,
+            discountPercent: orderData?.discountPercent || 0,
+            finalAmount: normalizedTotal
+          });
+
+          // Clear tempQrCreatedId so handleClose won't delete the completed order
+          setTempQrCreatedId(null);
+
+          if (orderData?.items && orderData.items.length > 0) {
+            setCompletedOrder({
+              id: targetOrderId,
+              orderCode: orderCode || orderToComplete?.orderCode || orderData.orderCode || undefined,
+              tableId: orderData.tableId,
+              orderType: orderData.orderType || 'TAKE_AWAY',
+              branchId: orderData.branchId || '1',
+              items: orderData.items,
+              discountPercent: orderData.discountPercent || 0,
+              totalAmount: orderData.totalAmount || normalizedTotal,
+              finalAmount: normalizedTotal,
+              createdAt: new Date().toISOString(),
+              payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
+            });
+          } else {
+            // Fetch the order to get full details for the receipt
+            try {
+              const userStr = localStorage.getItem('pos_user');
+              const user = userStr ? JSON.parse(userStr) : null;
+              const res = await api.get(`/orders?branchId=${user?.branchId || 1}`);
+              const foundOrder = res.data.find((o: any) => o.id === targetOrderId);
+              if (foundOrder) {
+                let itemsToUse = foundOrder.items || [];
+                let totalAmountToUse = foundOrder.totalAmount || normalizedTotal;
+                if (foundOrder.tableId && foundOrder.orderType === 'AT_TABLE') {
+                  const tableOrders = res.data.filter((o: any) => o.tableId === foundOrder.tableId && o.orderType === 'AT_TABLE');
+                  if (tableOrders.length > 1) {
+                    itemsToUse = tableOrders.flatMap((o: any) => o.items || []);
+                    totalAmountToUse = tableOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
+                  }
+                }
+                setCompletedOrder({
+                  ...foundOrder,
+                  items: itemsToUse,
+                  totalAmount: totalAmountToUse,
+                  discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0,
+                  finalAmount: normalizedTotal,
+                  payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
+                });
+              } else if (orderToComplete) {
+                setCompletedOrder({
+                  ...orderToComplete,
+                  discountPercent: orderData?.discountPercent || 0,
+                  finalAmount: normalizedTotal,
+                  payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
+                });
+              }
+            } catch (e) {
+              console.error("Could not fetch order for receipt", e);
+              if (orderToComplete) {
+                setCompletedOrder({
+                  ...orderToComplete,
+                  discountPercent: orderData?.discountPercent || 0,
+                  finalAmount: normalizedTotal,
+                  payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
+                });
+              }
+            }
+          }
+        }
       }
+
+      setIsSuccess(true);
+      clearCart();
     } catch (error) {
+
       console.error(error);
       setErrorMsg({
         title: 'Thanh toán thất bại',

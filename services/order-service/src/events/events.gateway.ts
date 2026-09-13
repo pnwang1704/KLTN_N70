@@ -33,4 +33,9 @@ export class EventsGateway {
   emitOrderPaid(branchId: string, payload: any) {
     this.server.to(branchId).emit('order:paid', payload);
   }
+
+  emitTableCompleted(branchId: string, payload: { branchId: string; tableId: string; orderId?: string; orderIds?: string[] }) {
+    this.server.to(branchId).emit('table:completed', payload);
+  }
 }
+
