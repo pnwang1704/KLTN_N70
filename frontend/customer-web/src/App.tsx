@@ -1,145 +1,215 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { ProductCard } from './components/ProductCard';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { CartModal } from './components/CartModal';
 import { SuccessScreen } from './components/SuccessScreen';
+import { TableSelectScreen } from './components/TableSelectScreen';
 import { mockCategories, mockProducts } from './data/mockData';
 import type { Product } from './types';
 import { cn } from './lib/utils';
-import { Coffee } from 'lucide-react';
+
+const STORAGE_KEY_BRANCH = 'customer_branch_id';
+const STORAGE_KEY_TABLE = 'customer_table_id';
+
+/**
+ * Extracts branchId and tableId from current URL (Query params or Path)
+ * Supports:
+ * - ?branchId=1&tableId=5
+ * - ?branch=1&table=5
+ * - ?tableId=5 (defaults branchId to '1')
+ * - /table/5?branch=1
+ * - /table/5
+ */
+function parseTableFromUrl(): { branchId: string; tableId: string } | null {
+  try {
+    const url = new URL(window.location.href);
+    const searchParams = url.searchParams;
+
+    let tableId = searchParams.get('tableId') || searchParams.get('table') || '';
+    let branchId = searchParams.get('branchId') || searchParams.get('branch') || '';
+
+    // Check path pattern: /table/:tableId
+    const pathMatch = url.pathname.match(/\/table\/([^/?#]+)/i);
+    if (pathMatch && pathMatch[1]) {
+      tableId = decodeURIComponent(pathMatch[1]);
+    }
+
+    if (tableId.trim()) {
+      return {
+        tableId: tableId.trim(),
+        branchId: (branchId || '1').trim(),
+      };
+    }
+  } catch (e) {
+    console.warn('Could not parse URL params', e);
+  }
+
+  return null;
+}
 
 function MainApp() {
-  const [branchId, setBranchId] = useState<string>('');
+  const [branchId, setBranchId] = useState<string>('1');
   const [tableId, setTableId] = useState<string>('');
+  const [isReady, setIsReady] = useState(false);
   
   const [activeCategoryId, setActiveCategoryId] = useState(mockCategories[0].id);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [successOrder, setSuccessOrder] = useState<any>(null);
-  const [isReady, setIsReady] = useState(false);
 
-  useEffect(() => {
-    // Read from URL query params
-    const params = new URLSearchParams(window.location.search);
-    const bId = params.get('branchId');
-    const tId = params.get('tableId');
-    if (bId) setBranchId(bId);
-    if (tId) setTableId(tId);
-    if (bId && tId) setIsReady(true);
+  // Sync state & routing
+  const applyTableSession = useCallback((bId: string, tId: string, pushToMenu = true) => {
+    const cleanBranchId = bId || '1';
+    const cleanTableId = tId.trim();
+
+    setBranchId(cleanBranchId);
+    setTableId(cleanTableId);
+    localStorage.setItem(STORAGE_KEY_BRANCH, cleanBranchId);
+    localStorage.setItem(STORAGE_KEY_TABLE, cleanTableId);
+    setIsReady(true);
+
+    if (pushToMenu) {
+      const targetUrl = `/menu?branchId=${cleanBranchId}&tableId=${cleanTableId}`;
+      if (window.location.pathname !== '/menu' || window.location.search !== `?branchId=${cleanBranchId}&tableId=${cleanTableId}`) {
+        window.history.replaceState({ page: 'menu', branchId: cleanBranchId, tableId: cleanTableId }, '', targetUrl);
+      }
+    }
   }, []);
+
+  // Handle URL identification & session restore
+  useEffect(() => {
+    const urlInfo = parseTableFromUrl();
+    const storedTableId = localStorage.getItem(STORAGE_KEY_TABLE);
+    const storedBranchId = localStorage.getItem(STORAGE_KEY_BRANCH) || '1';
+
+    if (urlInfo && urlInfo.tableId) {
+      // 1. Auto-redirect when URL contains table info (e.g. ?branchId=1&tableId=5 or /table/5)
+      applyTableSession(urlInfo.branchId, urlInfo.tableId, true);
+    } else if (window.location.pathname.startsWith('/menu') && storedTableId) {
+      // 2. Refresh on /menu with stored session
+      applyTableSession(storedBranchId, storedTableId, false);
+    } else {
+      // 3. Fallback screen: Show manual entry
+      if (storedTableId) {
+        setTableId(storedTableId);
+      }
+      if (storedBranchId) {
+        setBranchId(storedBranchId);
+      }
+      setIsReady(false);
+    }
+  }, [applyTableSession]);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = () => {
+      const urlInfo = parseTableFromUrl();
+      if (urlInfo && urlInfo.tableId) {
+        applyTableSession(urlInfo.branchId, urlInfo.tableId, false);
+      } else if (window.location.pathname === '/' || window.location.pathname === '') {
+        setIsReady(false);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [applyTableSession]);
+
+  // User manually confirms table on Fallback Screen
+  const handleConfirmManualTable = (manualTableId: string) => {
+    applyTableSession(branchId || '1', manualTableId, true);
+  };
+
+  // User clicks "Đổi bàn" in Header
+  const handleChangeTable = () => {
+    window.history.pushState({ page: 'table-select' }, '', '/');
+    setIsReady(false);
+  };
 
   const filteredProducts = mockProducts.filter(p => p.categoryId === activeCategoryId);
 
+  // Fallback Screen for manual entry
   if (!isReady) {
     return (
-      <div className="min-h-screen bg-orange-50 flex flex-col items-center justify-center p-6">
-        <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm mb-6">
-          <Coffee size={40} className="text-orange-500" />
-        </div>
-        <h1 className="text-2xl font-bold text-zinc-900 mb-2">Chào mừng bạn!</h1>
-        <p className="text-zinc-500 text-center mb-8">Vui lòng nhập thông tin bàn để bắt đầu gọi món</p>
-        
-        <div className="w-full max-w-sm bg-white p-6 rounded-3xl shadow-sm border border-zinc-100">
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-zinc-700 mb-1">Mã Chi Nhánh (Mặc định 1)</label>
-            <input 
-              type="text" 
-              value={branchId}
-              onChange={e => setBranchId(e.target.value)}
-              className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500"
-              placeholder="Nhập 1..."
-            />
-          </div>
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-zinc-700 mb-1">Số Bàn</label>
-            <input 
-              type="text" 
-              value={tableId}
-              onChange={e => setTableId(e.target.value)}
-              className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 focus:outline-none focus:border-orange-500"
-              placeholder="VD: 12"
-            />
-          </div>
-          <button 
-            onClick={() => {
-              if(!branchId || !tableId) return alert('Vui lòng nhập đầy đủ Mã Chi Nhánh và Số Bàn!');
-              setIsReady(true);
-            }}
-            className="w-full bg-orange-600 text-white rounded-xl py-3.5 font-bold active:scale-95 transition-transform"
-          >
-            Bắt đầu Gọi món
-          </button>
-        </div>
-      </div>
+      <TableSelectScreen 
+        initialTableId={tableId}
+        branchName="Chi nhánh 1: Quận Gò Vấp (12 Nguyễn Văn Bảo)"
+        onConfirmTable={handleConfirmManualTable}
+      />
     );
   }
 
+  // Main Menu & Ordering Screen (Mobile-First Frame)
   return (
-    <div className="relative min-h-screen bg-zinc-50 pb-24 max-w-md mx-auto shadow-2xl overflow-hidden bg-white">
-      <Header 
-        branchId={branchId} 
-        tableId={tableId} 
-        onOpenCart={() => setIsCartOpen(true)} 
-      />
+    <div className="min-h-screen bg-zinc-900/90 sm:bg-zinc-100 flex items-start justify-center sm:py-6 sm:px-4">
+      <div className="relative min-h-screen sm:min-h-[720px] sm:max-h-[92vh] sm:rounded-3xl w-full max-w-md bg-white shadow-2xl pb-24 flex flex-col overflow-y-auto animate-in fade-in duration-200">
+        
+        <Header 
+          branchId={branchId} 
+          tableId={tableId} 
+          onOpenCart={() => setIsCartOpen(true)} 
+          onChangeTable={handleChangeTable}
+        />
 
-      {/* Category Horizontal Scroll */}
-      <div className="sticky top-[61px] z-30 bg-white/80 backdrop-blur-md border-b border-zinc-100 py-3">
-        <div className="flex gap-2 overflow-x-auto px-4 hide-scrollbar snap-x">
-          {mockCategories.map(cat => (
-            <button
-              key={cat.id}
-              onClick={() => setActiveCategoryId(cat.id)}
-              className={cn(
-                "whitespace-nowrap px-4 py-2 rounded-full text-sm font-semibold snap-start transition-colors",
-                activeCategoryId === cat.id 
-                  ? "bg-zinc-900 text-white" 
-                  : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
-              )}
-            >
-              {cat.name}
-            </button>
+        {/* Category Horizontal Scroll */}
+        <div className="sticky top-[61px] z-30 bg-white/90 backdrop-blur-md border-b border-zinc-100 py-3 shadow-xs">
+          <div className="flex gap-2 overflow-x-auto px-4 hide-scrollbar snap-x">
+            {mockCategories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCategoryId(cat.id)}
+                className={cn(
+                  "whitespace-nowrap px-4 py-2 rounded-full text-xs sm:text-sm font-semibold snap-start transition-all cursor-pointer shrink-0 active:scale-95",
+                  activeCategoryId === cat.id 
+                    ? "bg-zinc-900 text-white shadow-xs" 
+                    : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900"
+                )}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Product List */}
+        <div className="p-4 grid grid-cols-2 gap-3.5 flex-1">
+          {filteredProducts.map(product => (
+            <ProductCard 
+              key={product.id} 
+              product={product} 
+              onClick={setSelectedProduct} 
+            />
           ))}
         </div>
-      </div>
 
-      {/* Product List */}
-      <div className="p-4 grid grid-cols-2 gap-4">
-        {filteredProducts.map(product => (
-          <ProductCard 
-            key={product.id} 
-            product={product} 
-            onClick={setSelectedProduct} 
+        {/* Modals */}
+        {selectedProduct && (
+          <ProductDetailModal 
+            product={selectedProduct} 
+            onClose={() => setSelectedProduct(null)} 
           />
-        ))}
+        )}
+
+        {isCartOpen && (
+          <CartModal 
+            branchId={branchId}
+            tableId={tableId}
+            onClose={() => setIsCartOpen(false)}
+            onSuccess={(order) => {
+              setIsCartOpen(false);
+              setSuccessOrder(order);
+            }}
+          />
+        )}
+
+        {successOrder && (
+          <SuccessScreen 
+            order={successOrder} 
+            onBackToMenu={() => setSuccessOrder(null)} 
+          />
+        )}
       </div>
-
-      {/* Modals */}
-      {selectedProduct && (
-        <ProductDetailModal 
-          product={selectedProduct} 
-          onClose={() => setSelectedProduct(null)} 
-        />
-      )}
-
-      {isCartOpen && (
-        <CartModal 
-          branchId={branchId}
-          tableId={tableId}
-          onClose={() => setIsCartOpen(false)}
-          onSuccess={(order) => {
-            setIsCartOpen(false);
-            setSuccessOrder(order);
-          }}
-        />
-      )}
-
-      {successOrder && (
-        <SuccessScreen 
-          order={successOrder} 
-          onBackToMenu={() => setSuccessOrder(null)} 
-        />
-      )}
     </div>
   );
 }
