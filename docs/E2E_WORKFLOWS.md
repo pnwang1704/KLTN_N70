@@ -50,34 +50,63 @@ sequenceDiagram
 
 ---
 
-## 2. Luồng Khách Đặt Món Tại Bàn (Dine-in Post-pay) & Bếp Tiếp Nhận Realtime
+## 2. Luồng Khách Đặt Món Tại Bàn (Dine-in Post-pay) & Tự Động Nhận Diện Bàn (Auto-redirect)
 
-Khách hàng quét mã QR tại bàn ăn để gọi món theo mô hình **Thanh toán sau tại quầy (Post-pay)**. Đơn hàng được chuyển thẳng tới Nhà bếp (KDS) ngay lập tức.
+Khách hàng quét mã QR tại bàn ăn để gọi món theo mô hình **Thanh toán sau tại quầy (Post-pay)**. Hệ thống hỗ trợ tự động nhận diện bàn qua URL, gọi nhiều đợt trong bữa ăn và tra cứu danh sách món đã gọi theo thời gian thực.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Customer as Khách hàng tại bàn
-    participant Mobile as Customer Web (QR)
-    participant GW as API Gateway
+    participant Mobile as Customer Web (QR / Port 5174)
+    participant GW as API Gateway (Port 3000)
     participant OS as Order Service (Port 3004)
-    participant KDS as KDS Web (Màn hình Bếp)
+    participant KDS as KDS Web (Port 5173)
     participant DB as Order DB
 
-    Customer->>Mobile: Quét mã QR tại bàn (vd: Bàn 05)
-    Mobile->>Mobile: Chọn món, chọn Size (M/L), Topping, Ghi chú
-    Customer->>Mobile: Bấm "Gửi đơn gọi món"
-    Mobile->>GW: POST /orders (orderType: 'AT_TABLE', tableId: '05', items, totalAmount)
+    %% Giai đoạn 1: Quét QR & Tự động nhận diện bàn
+    Note over Customer, Mobile: Giai đoạn 1: Quét mã QR & Tự động chuyển hướng (Auto-redirect)
+    Customer->>Mobile: Quét mã QR tại bàn (vd: http://localhost:5174/?branchId=1&tableId=5)
+    alt URL có chứa branchId & tableId
+        Mobile->>Mobile: Tự động lưu branchId=1, tableId=5 vào LocalStorage
+        Mobile->>Mobile: Tự động chuyển hướng thẳng vào Menu món (/menu)
+    else URL không có tham số (Fallback Screen)
+        Mobile->>Customer: Hiển thị giao diện Mobile-first có Hero Banner & lưới chọn nhanh số bàn (1, 2, 3...)
+        Customer->>Mobile: Bấm chọn Bàn 5 -> Chuyển sang Menu món
+    end
+
+    %% Giai đoạn 2: Gọi món đợt 1
+    Note over Customer, DB: Giai đoạn 2: Khách gửi đơn đợt 1 (Đồ uống)
+    Customer->>Mobile: Chọn món, chọn Size (M/L), Topping, Ghi chú
+    Customer->>Mobile: Bấm "Gửi đơn gọi món" (Đợt 1)
+    Mobile->>GW: POST /orders (orderType: 'AT_TABLE', tableId: '5', items, totalAmount)
     GW->>OS: RabbitMQ RPC: { cmd: 'create_order' }
     OS->>DB: Lưu đơn hàng (status = 'PENDING', items.itemStatus = 'PENDING')
-    DB-->>OS: Đơn hàng mới (id, orderCode)
-    OS->>KDS: Socket.IO Emit 'newOrder' tới room branch_1
-    OS-->>GW: Trả về thông tin Order
+    DB-->>OS: Đơn hàng mới (id_1, orderCode_1)
+    OS->>KDS: Socket.IO Emit 'NEW_ORDER_CREATED' tới room branch_1
+    OS-->>GW: Trả về thông tin Order đợt 1
     GW-->>Mobile: HTTP 201 Created (Order data)
+    KDS->>KDS: Chuông báo ting ting & hiện thẻ đơn Bàn 5 trên màn hình bếp
+    Mobile->>Customer: Màn hình "Đặt món thành công! Vui lòng thanh toán tại quầy khi dùng bữa xong"
+
+    %% Giai đoạn 3: Gọi món đợt 2 & Tra cứu món đã gọi
+    Note over Customer, DB: Giai đoạn 3: Khách gọi thêm đợt 2 & Tra cứu lịch sử món tại bàn
+    Customer->>Mobile: Chọn thêm món đợt 2 (Cà phê / Bánh ngọt)
+    Customer->>Mobile: Bấm "Gửi đơn gọi món" (Đợt 2)
+    Mobile->>GW: POST /orders (orderType: 'AT_TABLE', tableId: '5', items_2)
+    GW->>OS: RabbitMQ RPC: { cmd: 'create_order' }
+    OS->>DB: Lưu đơn đợt 2 (id_2, status = 'PENDING')
+    OS->>KDS: Socket.IO Emit 'NEW_ORDER_CREATED' (Đợt 2)
+    GW-->>Mobile: HTTP 201 Created
     
-    %% Trải nghiệm khách hàng và bếp
-    KDS->>KDS: Kích hoạt âm thanh ting ting & hiển thị thẻ đơn Bàn 05
-    Mobile->>Customer: Hiển thị màn hình "Đặt món thành công!":<br/>- Bàn số 05, Mã đơn #26031201<br/>- Danh sách món & Tạm tính<br/>- Thông báo: Quý khách vui lòng thanh toán tại quầy khi dùng bữa xong
+    Customer->>Mobile: Bấm nút "Món đã gọi" (Receipt Icon trên Header)
+    Mobile->>GW: GET /orders/active?branchId=1&tableId=5
+    GW->>OS: RabbitMQ RPC: { cmd: 'get_active_orders' }
+    OS->>DB: Truy vấn các đơn của Bàn 5 có status != COMPLETED && status != CANCELLED
+    DB-->>OS: Trả về danh sách [Order đợt 1, Order đợt 2]
+    OS-->>GW: Active Orders data
+    GW-->>Mobile: HTTP 200 OK
+    Mobile->>Customer: Mở Drawer hiển thị gộp tất cả món qua các đợt gọi & Tổng tạm tính chung của bàn
 ```
 
 ---
@@ -121,36 +150,40 @@ sequenceDiagram
 
 ---
 
-## 4. Luồng Chiết Khấu, Thanh Toán Tại Quầy POS & Trừ Kho Bất Đồng Bộ (SAGA)
+## 4. Luồng Chiết Khấu, Thanh Toán Bàn Tại Quầy POS & Trừ Kho Bất Đồng Bộ (SAGA)
 
-Thu ngân tiếp nhận yêu cầu thanh toán của khách, áp dụng chiết khấu tại giỏ hàng, thu tiền (Tiền mặt hoặc VietQR PayOS), in hóa đơn và kích hoạt trừ kho ngầm qua RabbitMQ.
+Thu ngân tiếp nhận yêu cầu thanh toán của khách, xem toàn bộ món gộp từ các đợt gọi, áp dụng chiết khấu, thu tiền (Tiền mặt hoặc VietQR PayOS), in hóa đơn gộp chuẩn xác, phát tín hiệu giải phóng bàn theo thời gian thực và kích hoạt trừ kho ngầm qua RabbitMQ.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Cashier as Thu ngân
-    participant POS as POS Web
-    participant GW as API Gateway
-    participant OS as Order Service
+    participant POS as POS Web (Port 5175)
+    participant CW as Customer Web (Port 5174)
+    participant GW as API Gateway (Port 3000)
+    participant OS as Order Service (Port 3004)
     participant PayOS as Cổng PayOS (VietQR)
     participant RMQ as RabbitMQ Broker
     participant IS as Inventory Service
     participant DB_O as Order DB
     participant DB_I as Inventory DB
 
-    Cashier->>POS: Chọn Bàn 05 trên Sơ đồ bàn (hoặc tạo đơn mang về)
+    Cashier->>POS: Chọn Bàn 5 trên Sơ đồ bàn (Đang phục vụ)
+    POS->>POS: Hiển thị gộp toàn bộ danh sách món từ các đợt gọi & Tổng tạm tính
     POS->>POS: Nhập Chiết khấu (% hoặc VNĐ) ngay tại chân OrderPanel
     POS->>POS: Tự động tính: finalTotal = subtotal - discountAmount
-    Cashier->>POS: Bấm "Thanh toán" -> Mở PaymentModal (nhận đúng finalTotal)
+    Cashier->>POS: Bấm "Thanh toán bàn này" -> Mở PaymentModal (nhận đúng finalTotal)
 
     alt Phương thức: TIỀN MẶT (CASH)
-        Cashier->>POS: Bấm chọn mệnh giá nhanh hoặc "Đúng số tiền"
+        Cashier->>POS: Chọn mệnh giá nhanh hoặc nhập tiền khách đưa
         POS->>POS: Hiển thị tiền thối lại (changeAmount = amountPaid - finalTotal)
         Cashier->>POS: Bấm "Xác nhận Thanh toán"
-        POS->>GW: POST /orders/:id/pay (paymentMethod: 'CASH', amountPaid, finalAmount, discountPercent)
-        GW->>OS: RabbitMQ RPC: 'pay_order'
-        OS->>DB_O: Lưu Payment, cập nhật Order status = 'COMPLETED'
-        OS-->>GW: Order completed
+        POS->>GW: POST /orders/pay-table (branchId: '1', tableId: '5', paymentMethod: 'CASH', amountPaid)
+        GW->>OS: RabbitMQ RPC: 'pay_table_orders'
+        OS->>DB_O: Tìm các đơn active của Bàn 5 (status != COMPLETED && status != CANCELLED)
+        Note over OS, DB_O: Hợp nhất các đợt gọi thành 1 hóa đơn:<br/>- Gán toàn bộ món của đợt phụ vào primaryOrder<br/>- Cập nhật totalAmount & finalAmount gộp<br/>- Đổi status = COMPLETED & Xóa đơn phụ rỗng
+        OS->>DB_O: Lưu primaryOrder & Payment
+        OS-->>GW: Trả về kết quả thanh toán thành công
         GW-->>POS: HTTP 200 OK
     else Phương thức: CHUYỂN KHOẢN (VIETQR - PAYOS)
         Cashier->>POS: Chọn tab "Chuyển khoản (QR)"
@@ -164,20 +197,27 @@ sequenceDiagram
         Customer->>PayOS: Quét mã VietQR và chuyển khoản bằng Mobile Banking
         PayOS->>GW: Webhook POST /webhooks/payos (Báo thanh toán thành công)
         GW->>OS: RabbitMQ Message: 'process_payos_webhook'
-        OS->>DB_O: Lưu Payment 'BANK_TRANSFER', cập nhật status = 'COMPLETED'
+        OS->>DB_O: Tự động gọi hợp nhất và hoàn tất thanh toán cho bàn
         OS->>POS: Socket.IO Emit 'order:paid'
         POS->>POS: Nhận tín hiệu, tự động đóng Modal thanh toán
     end
 
+    %% Giải phóng bàn Realtime
+    Note over OS, CW: Giải phóng bàn ăn Realtime qua Socket.IO
+    OS->>CW: Socket.IO Emit 'table:completed' (branchId: '1', tableId: '5')
+    OS->>POS: Socket.IO Emit 'table:completed' (branchId: '1', tableId: '5')
+    CW->>CW: Đóng Drawer món đã gọi, xóa giỏ hàng & reset màn hình bàn
+    POS->>POS: Đổi trạng thái Bàn 5 trên Sơ đồ bàn sang Bàn trống (Màu xanh)
+
     %% In hóa đơn
-    POS->>POS: Kích hoạt in hóa đơn tự động (Receipt khổ 80mm):<br/>Tạm tính, Chiết khấu, TỔNG CỘNG, Tiền khách đưa, Tiền thối
+    POS->>POS: Kích hoạt in hóa đơn nhiệt tự động (Receipt khổ 80mm):<br/>Hiển thị đầy đủ tất cả món của các đợt gọi, Tạm tính, Chiết khấu, TỔNG CỘNG, Tiền khách đưa, Tiền thối
 
     %% Trừ kho bất đồng bộ SAGA
     Note over OS, DB_I: Cơ chế Event-Driven Trừ kho ngầm (Background Task)
     OS-)RMQ: Event Emit: 'order_completed' (orderId, branchId, items)
     RMQ-)IS: Consumer nhận sự kiện 'order_completed'
     IS->>DB_I: Mở TypeORM Transaction (QueryRunner)
-    loop Từng món và Topping trong đơn
+    loop Từng món và Topping trong đơn gộp
         IS->>DB_I: Tra cứu Recipe theo productId & size
         IS->>DB_I: Kiểm tra tồn kho nguyên liệu trong BranchStock
         alt Đủ nguyên liệu
