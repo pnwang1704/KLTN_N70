@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Patch, Delete, Param } from '@nestjs/common';
+import { Controller, Post, Body, Patch, Delete, Param, Get, Query } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -8,6 +8,29 @@ import { ProcessPaymentDto } from './dto/process-payment.dto';
 @Controller('orders')
 export class OrderController {
   constructor(private readonly orderService: OrderService) {}
+
+  // HTTP endpoint for getting active orders of a table
+  @Get('active')
+  async getActiveOrdersHttp(
+    @Query('branchId') branchId: string,
+    @Query('tableId') tableId?: string,
+  ) {
+    return this.orderService.getActiveOrders({ branchId: branchId || '1', tableId });
+  }
+
+  // HTTP endpoint for processing payment for all table orders
+  @Post('pay-table')
+  async processTablePaymentHttp(
+    @Body() body: {
+      branchId: string;
+      tableId: string;
+      orderIds?: string[];
+      paymentMethod: any;
+      amountPaid: number;
+    },
+  ) {
+    return this.orderService.processTablePayment(body);
+  }
 
   // HTTP endpoint for creating order (e.g., from POS)
   @Post()
@@ -71,4 +94,23 @@ export class OrderController {
   async handleGetOrders(@Payload() branchId: string) {
     return this.orderService.getOrders(branchId);
   }
+
+  // Message Pattern for getting active orders of table
+  @MessagePattern('get_active_orders')
+  async handleGetActiveOrders(@Payload() payload: { branchId: string; tableId?: string }) {
+    return this.orderService.getActiveOrders(payload);
+  }
+
+  // Message Pattern for paying table orders
+  @MessagePattern('pay_table_orders')
+  async handlePayTableOrders(@Payload() payload: {
+    branchId: string;
+    tableId: string;
+    orderIds?: string[];
+    paymentMethod: any;
+    amountPaid: number;
+  }) {
+    return this.orderService.processTablePayment(payload);
+  }
 }
+

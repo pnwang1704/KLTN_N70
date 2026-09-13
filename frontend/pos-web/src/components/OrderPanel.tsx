@@ -210,8 +210,8 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
             setTableId(id);
             setShowTableMap(false);
           }}
-          onPayTable={(id, total) => {
-            onOpenPayment({ orderId: id, totalAmount: Math.round(Number(total || 0)) });
+          onPayTable={(id, total, orderObj) => {
+            onOpenPayment({ orderId: id, totalAmount: Math.round(Number(total || 0)), orderData: orderObj });
             setShowTableMap(false);
           }}
           onClose={() => setShowTableMap(false)}

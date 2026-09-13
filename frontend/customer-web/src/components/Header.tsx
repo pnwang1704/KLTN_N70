@@ -1,15 +1,24 @@
 import React from 'react';
-import { ShoppingBag, Store } from 'lucide-react';
+import { ShoppingBag, Store, Receipt } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 
 interface HeaderProps {
   branchId: string;
   tableId: string;
   onOpenCart: () => void;
+  onOpenActiveOrders?: () => void;
+  activeItemsCount?: number;
   onChangeTable?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ branchId, tableId, onOpenCart, onChangeTable }) => {
+export const Header: React.FC<HeaderProps> = ({
+  branchId,
+  tableId,
+  onOpenCart,
+  onOpenActiveOrders,
+  activeItemsCount = 0,
+  onChangeTable,
+}) => {
   const { totalItems } = useCart();
 
   return (
@@ -33,19 +42,41 @@ export const Header: React.FC<HeaderProps> = ({ branchId, tableId, onOpenCart, o
           </div>
         </div>
         
-        <button 
-          onClick={onOpenCart}
-          className="relative p-2.5 text-zinc-700 bg-zinc-100/90 rounded-full hover:bg-orange-50 hover:text-orange-600 transition-all cursor-pointer active:scale-95"
-          aria-label="Giỏ hàng"
-        >
-          <ShoppingBag size={22} />
-          {totalItems > 0 && (
-            <span className="absolute -top-1 -right-1 inline-flex items-center justify-center w-5 h-5 text-[11px] font-extrabold text-white bg-red-500 rounded-full border-2 border-white animate-in zoom-in-50">
-              {totalItems}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Món đã gọi button */}
+          <button 
+            type="button"
+            onClick={onOpenActiveOrders}
+            className="relative p-2.5 text-zinc-700 bg-zinc-100/90 rounded-full hover:bg-orange-50 hover:text-orange-600 transition-all cursor-pointer active:scale-95"
+            aria-label="Món đã gọi"
+            title="Lịch sử món đã gọi tại bàn"
+          >
+            <Receipt size={21} />
+            {activeItemsCount > 0 && (
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1 text-[10px] font-black text-white bg-orange-600 rounded-full border-2 border-white animate-in zoom-in-50 shadow-xs">
+                {activeItemsCount}
+              </span>
+            )}
+          </button>
+
+          {/* Giỏ hàng button */}
+          <button 
+            type="button"
+            onClick={onOpenCart}
+            className="relative p-2.5 text-zinc-700 bg-zinc-100/90 rounded-full hover:bg-orange-50 hover:text-orange-600 transition-all cursor-pointer active:scale-95"
+            aria-label="Giỏ hàng"
+            title="Giỏ hàng hiện tại"
+          >
+            <ShoppingBag size={21} />
+            {totalItems > 0 && (
+              <span className="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[20px] h-5 px-1 text-[10px] font-black text-white bg-red-500 rounded-full border-2 border-white animate-in zoom-in-50 shadow-xs">
+                {totalItems}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
     </header>
   );
 };
+

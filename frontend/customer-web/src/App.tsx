@@ -1,16 +1,23 @@
 import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import { io, Socket } from 'socket.io-client';
+import { CheckCircle2, Sparkles } from 'lucide-react';
 import { Header } from './components/Header';
 import { ProductCard } from './components/ProductCard';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { CartModal } from './components/CartModal';
+import { ActiveOrderModal } from './components/ActiveOrderModal';
 import { SuccessScreen } from './components/SuccessScreen';
 import { TableSelectScreen } from './components/TableSelectScreen';
+import { useCart } from './context/CartContext';
 import { mockCategories, mockProducts } from './data/mockData';
 import type { Product } from './types';
 import { cn } from './lib/utils';
 
 const STORAGE_KEY_BRANCH = 'customer_branch_id';
 const STORAGE_KEY_TABLE = 'customer_table_id';
+const API_BASE_URL = 'http://localhost:3000';
+const SOCKET_URL = 'http://localhost:3004';
 
 /**
  * Extracts branchId and tableId from current URL (Query params or Path)
@@ -60,7 +67,30 @@ function MainApp() {
   const [activeCategoryId, setActiveCategoryId] = useState(mockCategories[0].id);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isActiveOrderOpen, setIsActiveOrderOpen] = useState(false);
+  const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const [isLoadingActiveOrders, setIsLoadingActiveOrders] = useState(false);
   const [successOrder, setSuccessOrder] = useState<any>(null);
+  const [paymentSuccessNotice, setPaymentSuccessNotice] = useState<{ show: boolean; message: string } | null>(null);
+
+  const { clearCart } = useCart();
+
+  // Fetch active orders of current table
+  const fetchActiveOrders = useCallback(async (bId?: string, tId?: string) => {
+    const targetBranch = bId || branchId || '1';
+    const targetTable = tId || tableId;
+    if (!targetTable) return;
+
+    setIsLoadingActiveOrders(true);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/orders/active?branchId=${targetBranch}&tableId=${targetTable}`);
+      setActiveOrders(Array.isArray(res.data) ? res.data : []);
+    } catch (error) {
+      console.warn('Could not fetch active orders:', error);
+    } finally {
+      setIsLoadingActiveOrders(false);
+    }
+  }, [branchId, tableId]);
 
   // Sync state & routing
   const applyTableSession = useCallback((bId: string, tId: string, pushToMenu = true) => {
@@ -73,13 +103,15 @@ function MainApp() {
     localStorage.setItem(STORAGE_KEY_TABLE, cleanTableId);
     setIsReady(true);
 
+    fetchActiveOrders(cleanBranchId, cleanTableId);
+
     if (pushToMenu) {
       const targetUrl = `/menu?branchId=${cleanBranchId}&tableId=${cleanTableId}`;
       if (window.location.pathname !== '/menu' || window.location.search !== `?branchId=${cleanBranchId}&tableId=${cleanTableId}`) {
         window.history.replaceState({ page: 'menu', branchId: cleanBranchId, tableId: cleanTableId }, '', targetUrl);
       }
     }
-  }, []);
+  }, [fetchActiveOrders]);
 
   // Handle URL identification & session restore
   useEffect(() => {
@@ -120,6 +152,55 @@ function MainApp() {
     return () => window.removeEventListener('popstate', handlePopState);
   }, [applyTableSession]);
 
+  // Socket.IO real-time synchronization
+  useEffect(() => {
+    if (!isReady || !tableId) return;
+
+    const socket: Socket = io(SOCKET_URL);
+
+    socket.on('connect', () => {
+      socket.emit('joinBranchRoom', branchId || '1');
+    });
+
+    // Listen for table completion event from POS (cashier completed payment)
+    socket.on('table:completed', (data: { branchId: string; tableId: string; orderId?: string }) => {
+      if (String(data.branchId) === String(branchId) && String(data.tableId) === String(tableId)) {
+        // Clear active orders, cart, and local table session
+        setActiveOrders([]);
+        clearCart();
+        localStorage.removeItem(STORAGE_KEY_TABLE);
+        setIsActiveOrderOpen(false);
+        setSuccessOrder(null);
+        setPaymentSuccessNotice({
+          show: true,
+          message: `Bàn ${tableId} của bạn đã hoàn tất thanh toán. Cảm ơn quý khách!`
+        });
+      }
+    });
+
+    // Refresh when kitchen status updates or new order is created
+    socket.on('NEW_ORDER_CREATED', (orderData: any) => {
+      if (String(orderData?.branchId) === String(branchId) && String(orderData?.tableId) === String(tableId)) {
+        fetchActiveOrders();
+      }
+    });
+
+    socket.on('ITEM_READY', (itemData: any) => {
+      if (String(itemData?.order?.tableId) === String(tableId)) {
+        fetchActiveOrders();
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [isReady, branchId, tableId, clearCart, fetchActiveOrders]);
+
+  // Total active items count across all orders of this table
+  const totalActiveItems = activeOrders.reduce((sum, o) => {
+    return sum + (o.items?.reduce((itemSum: number, item: any) => itemSum + Number(item.quantity || 1), 0) || 0);
+  }, 0);
+
   // User manually confirms table on Fallback Screen
   const handleConfirmManualTable = (manualTableId: string) => {
     applyTableSession(branchId || '1', manualTableId, true);
@@ -129,6 +210,14 @@ function MainApp() {
   const handleChangeTable = () => {
     window.history.pushState({ page: 'table-select' }, '', '/');
     setIsReady(false);
+  };
+
+  // Reset table after payment completed notice
+  const handleAcknowledgePaymentCompleted = () => {
+    setPaymentSuccessNotice(null);
+    setTableId('');
+    setIsReady(false);
+    window.history.pushState({ page: 'table-select' }, '', '/');
   };
 
   const filteredProducts = mockProducts.filter(p => p.categoryId === activeCategoryId);
@@ -152,7 +241,9 @@ function MainApp() {
         <Header 
           branchId={branchId} 
           tableId={tableId} 
-          onOpenCart={() => setIsCartOpen(true)} 
+          onOpenCart={() => setIsCartOpen(true)}
+          onOpenActiveOrders={() => setIsActiveOrderOpen(true)}
+          activeItemsCount={totalActiveItems}
           onChangeTable={handleChangeTable}
         />
 
@@ -203,15 +294,53 @@ function MainApp() {
             onSuccess={(order) => {
               setIsCartOpen(false);
               setSuccessOrder(order);
+              fetchActiveOrders();
             }}
+          />
+        )}
+
+        {isActiveOrderOpen && (
+          <ActiveOrderModal 
+            orders={activeOrders}
+            tableId={tableId}
+            onClose={() => setIsActiveOrderOpen(false)}
+            onRefresh={() => fetchActiveOrders()}
+            isLoading={isLoadingActiveOrders}
           />
         )}
 
         {successOrder && (
           <SuccessScreen 
             order={successOrder} 
-            onBackToMenu={() => setSuccessOrder(null)} 
+            onBackToMenu={() => {
+              setSuccessOrder(null);
+              fetchActiveOrders();
+            }} 
           />
+        )}
+
+        {/* Real-time Payment Success Dialog when POS completes payment */}
+        {paymentSuccessNotice?.show && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-300">
+            <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                <CheckCircle2 size={36} />
+              </div>
+              <div className="flex items-center justify-center gap-1 text-xs font-bold text-orange-600 uppercase tracking-wider mb-1">
+                <Sparkles size={14} /> Hoàn tất thanh toán
+              </div>
+              <h3 className="text-xl font-black text-zinc-900 mb-2">Cảm ơn quý khách!</h3>
+              <p className="text-sm text-zinc-600 mb-6 leading-relaxed">
+                {paymentSuccessNotice.message} Chúc bạn một ngày tốt lành và hẹn gặp lại!
+              </p>
+              <button
+                onClick={handleAcknowledgePaymentCompleted}
+                className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-2xl shadow-md active:scale-95 transition-all cursor-pointer"
+              >
+                Về trang bắt đầu
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -219,3 +348,4 @@ function MainApp() {
 }
 
 export default MainApp;
+

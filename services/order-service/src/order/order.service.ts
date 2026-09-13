@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Not, In } from 'typeorm';
 import { Order, OrderStatus } from './entities/order.entity';
 import { OrderItem, ItemStatus } from './entities/order-item.entity';
 import { OrderItemTopping } from './entities/order-item-topping.entity';
@@ -159,6 +159,14 @@ export class OrderService {
       status: OrderStatus.COMPLETED
     });
 
+    if (savedOrder.tableId) {
+      this.eventsGateway.emitTableCompleted(savedOrder.branchId, {
+        branchId: savedOrder.branchId,
+        tableId: savedOrder.tableId,
+        orderId: savedOrder.id,
+      });
+    }
+
     return savedOrder;
   }
 
@@ -210,4 +218,109 @@ export class OrderService {
     await this.orderRepository.remove(order);
     return { success: true, message: 'Đã xóa đơn hàng thành công' };
   }
+
+  async getActiveOrders(params: { branchId: string; tableId?: string }): Promise<Order[]> {
+    const { branchId, tableId } = params;
+    const where: any = {
+      branchId: branchId || '1',
+      status: Not(In([OrderStatus.COMPLETED, OrderStatus.CANCELLED])),
+    };
+
+    if (tableId) {
+      where.tableId = tableId;
+    }
+
+    return this.orderRepository.find({
+      where,
+      relations: {
+        items: { toppings: true },
+        payment: true,
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+  }
+
+  async processTablePayment(payload: {
+    branchId: string;
+    tableId: string;
+    orderIds?: string[];
+    paymentMethod: any;
+    amountPaid: number;
+  }): Promise<{ success: boolean; completedOrderIds: string[] }> {
+    const { branchId, tableId, orderIds, paymentMethod, amountPaid } = payload;
+
+    let orders: Order[] = [];
+    if (orderIds && orderIds.length > 0) {
+      orders = await this.orderRepository.find({
+        where: { id: In(orderIds), branchId },
+        relations: { items: { toppings: true }, payment: true },
+      });
+    } else {
+      orders = await this.orderRepository.find({
+        where: {
+          branchId,
+          tableId,
+          status: Not(In([OrderStatus.COMPLETED, OrderStatus.CANCELLED])),
+        },
+        relations: { items: { toppings: true }, payment: true },
+      });
+    }
+
+    if (orders.length === 0) {
+      throw new NotFoundException(`Không tìm thấy đơn hàng đang hoạt động cho bàn ${tableId}`);
+    }
+
+    const completedOrderIds: string[] = [];
+
+    for (const order of orders) {
+      order.status = OrderStatus.COMPLETED;
+      if (!order.payment) {
+        const payment = new Payment();
+        payment.paymentMethod = paymentMethod;
+        payment.amount = Number(order.finalAmount || order.totalAmount || 0);
+        order.payment = payment;
+      } else {
+        order.payment.paymentMethod = paymentMethod;
+        order.payment.amount = Number(order.finalAmount || order.totalAmount || 0);
+      }
+
+      await this.orderRepository.save(order);
+      completedOrderIds.push(order.id);
+
+      // Emit event to inventory service via RabbitMQ
+      const invPayload = {
+        orderId: order.id,
+        branchId: order.branchId,
+        items: order.items?.map(item => ({
+          productId: item.productId,
+          size: item.size,
+          quantity: item.quantity,
+          toppings: item.toppings?.map(t => ({
+            toppingId: t.toppingId,
+            quantity: t.quantity
+          })) || []
+        })) || []
+      };
+      this.inventoryClient.emit('order.completed', invPayload);
+
+      // Emit event to frontend via Socket.IO
+      this.eventsGateway.emitOrderPaid(order.branchId, {
+        orderId: order.id,
+        status: OrderStatus.COMPLETED
+      });
+    }
+
+    // Emit table:completed event via Socket.IO
+    this.eventsGateway.emitTableCompleted(branchId, {
+      branchId,
+      tableId,
+      orderId: completedOrderIds[0],
+      orderIds: completedOrderIds,
+    });
+
+    return { success: true, completedOrderIds };
+  }
 }
+

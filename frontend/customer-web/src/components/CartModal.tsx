@@ -54,12 +54,14 @@ export const CartModal: React.FC<CartModalProps> = ({ branchId, tableId, onClose
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-zinc-50 animate-in slide-in-from-right duration-300">
-      {/* Header */}
-      <div className="bg-white border-b border-zinc-200 px-4 py-3 flex items-center shadow-sm">
-        <button onClick={onClose} className="p-2 -ml-2 text-zinc-600 hover:text-zinc-900 rounded-full">
-          <X size={24} />
-        </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs sm:p-4 animate-in fade-in duration-200">
+      <div className="relative w-full sm:max-w-md h-full sm:h-[92vh] sm:max-h-[820px] sm:rounded-3xl bg-zinc-50 flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="bg-white border-b border-zinc-200 px-4 py-3 flex items-center shadow-sm shrink-0">
+          <button onClick={onClose} className="p-2 -ml-2 text-zinc-600 hover:text-zinc-900 rounded-full">
+            <X size={24} />
+          </button>
+
         <h2 className="flex-1 text-center text-lg font-bold text-zinc-900 pr-8">Giỏ hàng của bạn</h2>
       </div>
 
@@ -130,6 +132,8 @@ export const CartModal: React.FC<CartModalProps> = ({ branchId, tableId, onClose
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 };
+
