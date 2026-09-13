@@ -7,6 +7,25 @@ interface ReceiptProps {
   user: any;
 }
 
+const groupReceiptItems = (items: any[] = []) => {
+  const map = new Map<string, any>();
+  for (const item of items) {
+    const toppingKey = (item.toppings || [])
+      .map((t: any) => `${t.toppingId || t.toppingName}-${t.quantity || 1}-${t.price}`)
+      .sort()
+      .join('|');
+    const key = `${item.productId || item.productName}-${item.size || ''}-${toppingKey}-${item.note || ''}`;
+    
+    if (map.has(key)) {
+      const existing = map.get(key);
+      existing.quantity = Number(existing.quantity || 1) + Number(item.quantity || 1);
+    } else {
+      map.set(key, { ...item, quantity: Number(item.quantity || 1) });
+    }
+  }
+  return Array.from(map.values());
+};
+
 export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
 
@@ -23,7 +42,9 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
 
   if (!order || !mountNode) return null;
 
-  const itemsSubtotal = order.items?.reduce((acc: number, item: any) => {
+  const displayItems = groupReceiptItems(order.items);
+
+  const itemsSubtotal = displayItems.reduce((acc: number, item: any) => {
     const itemUnitPrice = Number(item.unitPrice || 0);
     const itemQuantity = Number(item.quantity || 1);
     const itemTotal = itemUnitPrice * itemQuantity;
@@ -80,7 +101,7 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
           </tr>
         </thead>
         <tbody>
-          {order.items?.map((item: any, idx: number) => {
+          {displayItems.map((item: any, idx: number) => {
             const itemUnitPrice = Number(item.unitPrice || 0);
             const itemQuantity = Number(item.quantity || 1);
             const itemTotal = itemUnitPrice * itemQuantity;

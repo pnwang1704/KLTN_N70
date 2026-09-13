@@ -304,6 +304,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                       totalAmount: amount,
                       finalAmount: amount,
                       orderType: 'AT_TABLE',
+                      orderCode: selectedOccupiedTable.orders?.[0]?.orderCode,
                     }
                   );
                   setSelectedOccupiedTable(null);

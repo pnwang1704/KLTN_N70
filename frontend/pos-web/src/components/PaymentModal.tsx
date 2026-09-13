@@ -30,7 +30,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
   const [payOsQr, setPayOsQr] = useState<string>('');
-  const [orderCode, setOrderCode] = useState<number | null>(null);
+  const [orderCode, setOrderCode] = useState<number | null>(orderData?.orderCode || orderData?.orders?.[0]?.orderCode || null);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId || null);
   const [tempQrCreatedId, setTempQrCreatedId] = useState<string | null>(null);
   const [warningMsg, setWarningMsg] = useState<{ title?: string; message: string } | null>(null);
@@ -42,6 +42,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
       setActiveOrderId(orderId);
     }
   }, [orderId]);
+
+  useEffect(() => {
+    if (orderData?.orderCode) {
+      setOrderCode(orderData.orderCode);
+    } else if (orderData?.orders?.[0]?.orderCode) {
+      setOrderCode(orderData.orders[0].orderCode);
+    }
+  }, [orderData]);
 
   useEffect(() => {
     setAmountPaidStr(formatAmountInput(normalizedTotal));
@@ -62,6 +70,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
   };
 
   const isSuccessRef = React.useRef(isSuccess);
+  const isSubmittingRef = React.useRef(isSubmitting);
   const paymentMethodRef = React.useRef(paymentMethod);
   const orderDataRef = React.useRef(orderData);
   const normalizedTotalRef = React.useRef(normalizedTotal);
@@ -70,6 +79,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
   useEffect(() => {
     isSuccessRef.current = isSuccess;
   }, [isSuccess]);
+
+  useEffect(() => {
+    isSubmittingRef.current = isSubmitting;
+  }, [isSubmitting]);
 
   useEffect(() => {
     paymentMethodRef.current = paymentMethod;
@@ -99,8 +112,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
     });
 
     socket.on('order:paid', async (data: any) => {
-      // If already marked success or cashier is processing CASH, do NOT overwrite!
-      if (isSuccessRef.current || paymentMethodRef.current === 'CASH') {
+      // If already marked success, submitting in progress, or cashier is processing CASH, do NOT overwrite!
+      if (isSuccessRef.current || isSubmittingRef.current || paymentMethodRef.current === 'CASH') {
         return;
       }
 
@@ -126,7 +139,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
 
           setCompletedOrder({
             id: curOrderData.orderIds[0],
-            orderCode: orderCodeRef.current || undefined,
+            orderCode: orderCodeRef.current || curOrderData.orderCode || curOrderData.orders?.[0]?.orderCode || undefined,
             tableId: curOrderData.tableId,
             orderType: 'AT_TABLE',
             branchId,
@@ -140,7 +153,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
         } else if (curOrderData?.items && curOrderData.items.length > 0) {
           setCompletedOrder({
             id: targetId,
-            orderCode: orderCodeRef.current || undefined,
+            orderCode: orderCodeRef.current || curOrderData.orderCode || undefined,
             tableId: curOrderData.tableId,
             orderType: curOrderData.orderType || 'TAKE_AWAY',
             branchId: curOrderData.branchId || branchId,
@@ -156,8 +169,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             const res = await api.get(`/orders?branchId=${branchId}`);
             const foundOrder = res.data.find((o: any) => o.id === targetId);
             if (foundOrder) {
+              let itemsToUse = foundOrder.items || [];
+              let totalAmountToUse = foundOrder.totalAmount || curTotal;
+              if (foundOrder.tableId && foundOrder.orderType === 'AT_TABLE') {
+                const tableOrders = res.data.filter((o: any) => o.tableId === foundOrder.tableId && o.orderType === 'AT_TABLE');
+                if (tableOrders.length > 1) {
+                  itemsToUse = tableOrders.flatMap((o: any) => o.items || []);
+                  totalAmountToUse = tableOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
+                }
+              }
               setCompletedOrder({ 
                 ...foundOrder, 
+                items: itemsToUse,
+                totalAmount: totalAmountToUse,
                 discountPercent: foundOrder.discountPercent || curOrderData?.discountPercent || 0, 
                 finalAmount: curTotal, 
                 payment: { paymentMethod: 'BANK_TRANSFER', amount: curTotal } 
@@ -265,7 +289,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
               }
               setCompletedOrder({
                 id: orderData.orderIds[0],
-                orderCode: orderCode || undefined,
+                orderCode: orderCode || orderData.orderCode || orderData.orders?.[0]?.orderCode || undefined,
                 tableId: orderData.tableId,
                 orderType: 'AT_TABLE',
                 branchId,
@@ -280,7 +304,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
               const targetId = activeOrderId || orderId || 'ORDER';
               setCompletedOrder({
                 id: targetId,
-                orderCode: orderCode || undefined,
+                orderCode: orderCode || orderData.orderCode || undefined,
                 tableId: orderData.tableId,
                 orderType: orderData.orderType || 'TAKE_AWAY',
                 branchId: orderData.branchId || branchId,
@@ -296,8 +320,19 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
               const targetId = activeOrderId || orderId;
               const foundOrder = resOrder.data.find((o: any) => o.id === targetId);
               if (foundOrder) {
+                let itemsToUse = foundOrder.items || [];
+                let totalAmountToUse = foundOrder.totalAmount || normalizedTotal;
+                if (foundOrder.tableId && foundOrder.orderType === 'AT_TABLE') {
+                  const tableOrders = resOrder.data.filter((o: any) => o.tableId === foundOrder.tableId && o.orderType === 'AT_TABLE');
+                  if (tableOrders.length > 1) {
+                    itemsToUse = tableOrders.flatMap((o: any) => o.items || []);
+                    totalAmountToUse = tableOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
+                  }
+                }
                 setCompletedOrder({ 
                   ...foundOrder, 
+                  items: itemsToUse,
+                  totalAmount: totalAmountToUse,
                   discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0, 
                   finalAmount: normalizedTotal, 
                   payment: { paymentMethod: 'BANK_TRANSFER', amount: normalizedTotal } 
@@ -325,6 +360,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
     }
     
     setIsSubmitting(true);
+    isSubmittingRef.current = true;
     try {
       let targetOrderId = activeOrderId || orderId;
       let orderToComplete: any = null;
@@ -345,7 +381,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
         setTempQrCreatedId(null);
         setCompletedOrder({
           id: orderData.orderIds[0],
-          orderCode: orderCode || undefined,
+          orderCode: orderCode || orderData.orderCode || orderData.orders?.[0]?.orderCode || undefined,
           tableId: orderData.tableId,
           orderType: 'AT_TABLE',
           branchId,
@@ -354,7 +390,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
           totalAmount: orderData.totalAmount || normalizedTotal,
           finalAmount: normalizedTotal,
           createdAt: new Date().toISOString(),
-          payment: { paymentMethod, amount: amountPaid }
+          payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
         });
       } else {
         // If new order from cart, create it now with current items
@@ -390,7 +426,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
           if (orderData?.items && orderData.items.length > 0) {
             setCompletedOrder({
               id: targetOrderId,
-              orderCode: orderCode || orderToComplete?.orderCode || undefined,
+              orderCode: orderCode || orderToComplete?.orderCode || orderData.orderCode || undefined,
               tableId: orderData.tableId,
               orderType: orderData.orderType || 'TAKE_AWAY',
               branchId: orderData.branchId || '1',
@@ -399,7 +435,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
               totalAmount: orderData.totalAmount || normalizedTotal,
               finalAmount: normalizedTotal,
               createdAt: new Date().toISOString(),
-              payment: { paymentMethod, amount: amountPaid }
+              payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
             });
           } else {
             // Fetch the order to get full details for the receipt
@@ -409,18 +445,29 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
               const res = await api.get(`/orders?branchId=${user?.branchId || 1}`);
               const foundOrder = res.data.find((o: any) => o.id === targetOrderId);
               if (foundOrder) {
+                let itemsToUse = foundOrder.items || [];
+                let totalAmountToUse = foundOrder.totalAmount || normalizedTotal;
+                if (foundOrder.tableId && foundOrder.orderType === 'AT_TABLE') {
+                  const tableOrders = res.data.filter((o: any) => o.tableId === foundOrder.tableId && o.orderType === 'AT_TABLE');
+                  if (tableOrders.length > 1) {
+                    itemsToUse = tableOrders.flatMap((o: any) => o.items || []);
+                    totalAmountToUse = tableOrders.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
+                  }
+                }
                 setCompletedOrder({
                   ...foundOrder,
+                  items: itemsToUse,
+                  totalAmount: totalAmountToUse,
                   discountPercent: foundOrder.discountPercent || orderData?.discountPercent || 0,
                   finalAmount: normalizedTotal,
-                  payment: { paymentMethod, amount: amountPaid }
+                  payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
                 });
               } else if (orderToComplete) {
                 setCompletedOrder({
                   ...orderToComplete,
                   discountPercent: orderData?.discountPercent || 0,
                   finalAmount: normalizedTotal,
-                  payment: { paymentMethod, amount: amountPaid }
+                  payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
                 });
               }
             } catch (e) {
@@ -430,7 +477,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
                   ...orderToComplete,
                   discountPercent: orderData?.discountPercent || 0,
                   finalAmount: normalizedTotal,
-                  payment: { paymentMethod, amount: amountPaid }
+                  payment: { paymentMethod, amount: paymentMethod === 'CASH' ? amountPaid : normalizedTotal }
                 });
               }
             }

@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, Inject } from '@nes
 import { ClientProxy } from '@nestjs/microservices';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Not, In } from 'typeorm';
-import { Order, OrderStatus } from './entities/order.entity';
+import { Order, OrderStatus, OrderType } from './entities/order.entity';
 import { OrderItem, ItemStatus } from './entities/order-item.entity';
 import { OrderItemTopping } from './entities/order-item-topping.entity';
 import { Payment } from './entities/payment.entity';
@@ -177,6 +177,16 @@ export class OrderService {
 
     if (!order) {
       throw new NotFoundException(`Order with orderCode ${orderCode} not found`);
+    }
+
+    if (order.orderType === OrderType.AT_TABLE && order.tableId) {
+      await this.processTablePayment({
+        branchId: order.branchId,
+        tableId: order.tableId,
+        paymentMethod: 'BANK_TRANSFER',
+        amountPaid,
+      });
+      return order;
     }
 
     return this.processPayment(order.id, {
