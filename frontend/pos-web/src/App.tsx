@@ -99,7 +99,7 @@ function App() {
       )}
 
       {activeTab === 'HISTORY' && (
-        <OrderHistory branchId={branchId} />
+        <OrderHistory branchId={branchId} currentShift={currentShift} />
       )}
 
       {activeTab === 'INVENTORY' && (

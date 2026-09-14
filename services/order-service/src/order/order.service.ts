@@ -199,17 +199,29 @@ export class OrderService {
     });
   }
 
-  async getOrders(branchId: string): Promise<Order[]> {
-    return this.orderRepository.find({
-      where: { branchId },
-      relations: {
-        items: { toppings: true },
-        payment: true,
-      },
-      order: {
-        createdAt: 'DESC',
-      },
-    });
+  async getOrders(params: string | { branchId: string; fromDate?: string; toDate?: string }): Promise<Order[]> {
+    const branchId = typeof params === 'string' ? params : (params.branchId || '1');
+    const fromDate = typeof params === 'object' ? params.fromDate : undefined;
+    const toDate = typeof params === 'object' ? params.toDate : undefined;
+
+    const query = this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.toppings', 'toppings')
+      .leftJoinAndSelect('order.payment', 'payment')
+      .where('order.branchId = :branchId', { branchId });
+
+    if (fromDate) {
+      query.andWhere('order.createdAt >= :fromDate', { fromDate: new Date(fromDate) });
+    }
+
+    if (toDate) {
+      query.andWhere('order.createdAt <= :toDate', { toDate: new Date(toDate) });
+    }
+
+    query.orderBy('order.createdAt', 'DESC');
+
+    return query.getMany();
   }
 
   async deleteOrder(orderId: string): Promise<{ success: boolean; message: string }> {

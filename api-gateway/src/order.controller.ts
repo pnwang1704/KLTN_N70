@@ -60,8 +60,14 @@ export class OrderController {
 
   @Roles('ADMIN', 'MANAGER', 'CASHIER')
   @Get()
-  getOrders(@Query('branchId') branchId: string) {
-    return this.orderClient.send('get_orders', branchId || '1');
+  getOrders(
+    @Req() req: any,
+    @Query('branchId') queryBranchId?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    const branchId = queryBranchId || req.user?.branchId || '1';
+    return this.orderClient.send('get_orders', { branchId, fromDate, toDate });
   }
 
   @Public()

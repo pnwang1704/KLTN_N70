@@ -12,7 +12,7 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `POST` | `/auth/users` | `auth-service` | `ADMIN`, `MANAGER` | Tạo tài khoản nhân viên mới (`username`, `password`, `fullName`, `role`: `ADMIN` \| `MANAGER` \| `CASHIER` \| `KITCHEN` \| `WAITER`, `branchId`) (`201 Created`, `400 Bad Request`, `403 Forbidden`). |
 | `GET`  | `/auth/users` | `auth-service` | `ADMIN`, `MANAGER` | Lấy danh sách nhân viên (Hỗ trợ query `?branchId=`). Trả về danh sách user không chứa mật khẩu (`200 OK`). |
 | `PATCH`| `/auth/users/:id/status` | `auth-service` | `ADMIN`, `MANAGER` | Bật/Tắt trạng thái kích hoạt tài khoản (`isActive`: `true`/`false`) (`200 OK`, `404 Not Found`). |
-| `GET`  | `/orders` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách lịch sử đơn hàng (Hỗ trợ lọc theo `?branchId=`) (`200 OK`). |
+| `GET`  | `/orders` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách lịch sử đơn hàng (Hỗ trợ lọc theo `?branchId=&fromDate=&toDate=`) (`200 OK`). |
 | `GET`  | `/orders/shift-summary` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Báo cáo doanh thu và tổng kết ca của Thu ngân (`?branchId=&cashierId=&fromDate=&toDate=`) (`200 OK`). |
 | `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`) (`200 OK`). |
 | `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (Dine-in Post-pay) hoặc POS Web (`201 Created`, `400 Bad Request`). |
@@ -140,7 +140,7 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `{ cmd: 'toggle_user_status' }` | API Gateway | `auth-service` | `{ id: string }` | `User` (Trạng thái `isActive` đã lật) |
 | `{ cmd: 'validate_token' }` | API Gateway | `auth-service` | `{ token: string }` | `{ valid: boolean, user: JwtPayload }` |
 | `'create_order'` | API Gateway | `order-service` | `CreateOrderDto` | `Order` mới tạo (`status: PENDING`) |
-| `'get_orders'` | API Gateway | `order-service` | `branchId: string` | `Order[]` (kèm items & toppings) |
+| `'get_orders'` | API Gateway | `order-service` | `branchId: string` \| `{ branchId, fromDate?, toDate? }` | `Order[]` (kèm items & toppings) |
 | `'get_active_orders'` | API Gateway | `order-service` | `{ branchId: string, tableId?: string }` | `Order[]` (các đơn chưa hoàn tất của bàn/chi nhánh) |
 | `'get_shift_summary'` | API Gateway | `order-service` | `{ branchId, cashierId?, fromDate?, toDate? }` | `ShiftSummaryResult` (`totalRevenue`, `totalCash`, `totalBankTransfer`, `totalOrders`, `recentOrders`) |
 | `'process_payment'` | API Gateway | `order-service` | `{ orderId, processPaymentDto }` | `Order` (`status: COMPLETED`, `payment`) |

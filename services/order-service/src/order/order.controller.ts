@@ -91,8 +91,18 @@ export class OrderController {
 
   // Message Pattern for getting orders
   @MessagePattern('get_orders')
-  async handleGetOrders(@Payload() branchId: string) {
-    return this.orderService.getOrders(branchId);
+  async handleGetOrders(@Payload() payload: string | { branchId: string; fromDate?: string; toDate?: string }) {
+    return this.orderService.getOrders(payload);
+  }
+
+  // HTTP endpoint for getting orders
+  @Get()
+  async getOrdersHttp(
+    @Query('branchId') branchId: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return this.orderService.getOrders({ branchId: branchId || '1', fromDate, toDate });
   }
 
   // Message Pattern for getting active orders of table
