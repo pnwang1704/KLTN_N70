@@ -63,6 +63,7 @@
 | **UC16** | Bền vững hóa dữ liệu Docker Compose | Hạ tầng Devops | **ĐÃ HOÀN THÀNH** | Cấu hình Named Persistent Volumes cho RabbitMQ và 6 Database PostgreSQL, chống mất dữ liệu khi restart/rebuild container. |
 | **UC17** | Kiểm thử tự động (Unit Testing) | Toàn hệ thống | **ĐÃ HOÀN THÀNH** | Xây dựng bộ Jest Unit Tests toàn diện: kiểm thử phân quyền RBAC Guard (`roles.guard.spec.ts`) và kiểm thử tính toàn vẹn Transaction trừ kho/rollback khi thiếu nguyên liệu (`inventory.service.spec.ts`). |
 | **UC18** | Luồng Khách hàng Toàn diện & Realtime Sync | Customer / POS | **ĐÃ HOÀN THÀNH** | Quét QR tự nhận diện bàn, gọi nhiều đợt, xem danh sách "Món đã gọi", gộp hóa đơn tại POS khi thanh toán và tự động giải phóng bàn real-time qua sự kiện Socket.IO `table:completed`. |
+| **UC19** | Quản lý Ca làm việc & Báo cáo kết ca (Shift Summary) | POS Web / Order | **ĐÃ HOÀN THÀNH** | Thu ngân bắt buộc chọn ca (Ca 1 / Ca 2 tự động gợi ý theo giờ hệ thống) khi đăng nhập, hiển thị badge ca làm việc trên Header. Báo cáo kết ca vận hành tức thời từ `order-service` theo `branchId`, `cashierId`, và khoảng thời gian UTC `fromDate`-`toDate`. Thống kê chi tiết tiền mặt, chuyển khoản VietQR, tổng doanh thu, số đơn đã phục vụ, danh sách đơn trong ca và in phiếu kết ca nhiệt 80mm chuẩn chữ ký bàn giao. |
 
 ---
 
@@ -97,3 +98,12 @@
 * **Bối cảnh:** Khi bàn được thanh toán tại quầy POS, ứng dụng của khách trên điện thoại cần biết bàn đã kết thúc để không hiển thị đơn cũ nữa.
 * **Vấn đề:** Khách hàng tiếp theo ngồi vào bàn đó có thể thấy đơn của khách trước nếu không có cơ chế reset tức thì.
 * **Giải pháp:** Sau khi hoàn tất thanh toán bàn, `order-service` phát sự kiện Socket.IO `table:completed` tới room của chi nhánh. `customer-web` nhận tín hiệu lập tức đóng Drawer món đã gọi, xóa trắng giỏ hàng và reset trạng thái bàn; đồng thời `pos-web` cập nhật màu bàn trên Sơ đồ bàn về trạng thái Trống.
+
+### Quyết định 7: Quản lý Ca làm việc & Báo cáo kết ca vận hành tức thời (Shift Summary)
+* **Bối cảnh:** Khi giao ca, thu ngân cần đối chiếu tiền mặt thực tế trong két và tiền chuyển khoản VietQR trong ca làm việc để bàn giao cho ca sau.
+* **Vấn đề:** Nếu dùng Reporting Service tổng hợp theo batch định kỳ thì số liệu không phản ánh kịp thời các giao dịch vừa phát sinh; ngoài ra nếu lọc cố định từ 00:00:00 thì không phân tách được giữa Ca 1 và Ca 2.
+* **Giải pháp:** 
+  1. Yêu cầu Thu ngân chọn Ca làm việc (`Ca 1 (06:00 - 14:00)` hoặc `Ca 2 (14:00 - 22:00)`) khi đăng nhập, hệ thống tự động gợi ý ca dựa trên giờ hiện tại và lưu phiên ca `pos_shift` (`shiftCode`, `shiftName`, `openedAt`, `cashierName`).
+  2. Báo cáo kết ca được truy vấn trực tiếp từ `order-service` thông qua API Gateway với bộ lọc khoảng thời gian UTC `fromDate` (thời điểm mở ca thực tế) đến `toDate` (thời điểm kết ca).
+  3. Ghi nhận `cashierId` đồng loạt vào toàn bộ các đơn của bàn khi thanh toán gộp bàn (`processTablePayment`) và cho phép truy vấn tương thích cả các đơn QR đặt tại bàn không gán thu ngân (`cashierId IS NULL`).
+  4. Hỗ trợ xuất mẫu in nhiệt 80mm với đầy đủ thông tin chi nhánh, thu ngân, ca trực, giờ mở/đóng ca, phân tách doanh thu theo phương thức thanh toán và các dòng chữ ký xác nhận bàn giao.

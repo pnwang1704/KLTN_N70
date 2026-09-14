@@ -30,3 +30,18 @@ export function formatDate(dateString: string) {
     minute: '2-digit',
   }).format(new Date(dateString));
 }
+
+export function formatDateTimeFull(dateInput?: string | Date | null): string {
+  if (!dateInput) return '';
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const hours = pad(d.getHours());
+  const minutes = pad(d.getMinutes());
+  const seconds = pad(d.getSeconds());
+  const day = pad(d.getDate());
+  const month = pad(d.getMonth() + 1);
+  const year = d.getFullYear();
+  return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
+}
+

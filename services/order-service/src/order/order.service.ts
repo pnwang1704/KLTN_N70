@@ -5,7 +5,7 @@ import { Repository, Not, In } from 'typeorm';
 import { Order, OrderStatus, OrderType } from './entities/order.entity';
 import { OrderItem, ItemStatus } from './entities/order-item.entity';
 import { OrderItemTopping } from './entities/order-item-topping.entity';
-import { Payment } from './entities/payment.entity';
+import { Payment, PaymentMethod } from './entities/payment.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateItemStatusDto } from './dto/update-item-status.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
@@ -134,6 +134,10 @@ export class OrderService {
       order.payment.amount = amountPaid;
     }
 
+    if (processPaymentDto.cashierId) {
+      order.cashierId = processPaymentDto.cashierId;
+    }
+
     const savedOrder = await this.orderRepository.save(order);
 
     // Emit event to inventory service via RabbitMQ
@@ -195,17 +199,29 @@ export class OrderService {
     });
   }
 
-  async getOrders(branchId: string): Promise<Order[]> {
-    return this.orderRepository.find({
-      where: { branchId },
-      relations: {
-        items: { toppings: true },
-        payment: true,
-      },
-      order: {
-        createdAt: 'DESC',
-      },
-    });
+  async getOrders(params: string | { branchId: string; fromDate?: string; toDate?: string }): Promise<Order[]> {
+    const branchId = typeof params === 'string' ? params : (params.branchId || '1');
+    const fromDate = typeof params === 'object' ? params.fromDate : undefined;
+    const toDate = typeof params === 'object' ? params.toDate : undefined;
+
+    const query = this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.items', 'items')
+      .leftJoinAndSelect('items.toppings', 'toppings')
+      .leftJoinAndSelect('order.payment', 'payment')
+      .where('order.branchId = :branchId', { branchId });
+
+    if (fromDate) {
+      query.andWhere('order.createdAt >= :fromDate', { fromDate: new Date(fromDate) });
+    }
+
+    if (toDate) {
+      query.andWhere('order.createdAt <= :toDate', { toDate: new Date(toDate) });
+    }
+
+    query.orderBy('order.createdAt', 'DESC');
+
+    return query.getMany();
   }
 
   async deleteOrder(orderId: string): Promise<{ success: boolean; message: string }> {
@@ -258,8 +274,9 @@ export class OrderService {
     orderIds?: string[];
     paymentMethod: any;
     amountPaid: number;
+    cashierId?: string;
   }): Promise<{ success: boolean; completedOrderIds: string[] }> {
-    const { branchId, tableId, orderIds, paymentMethod, amountPaid } = payload;
+    const { branchId, tableId, orderIds, paymentMethod, amountPaid, cashierId } = payload;
 
     let orders: Order[] = [];
     if (orderIds && orderIds.length > 0) {
@@ -332,6 +349,10 @@ export class OrderService {
         updatedPrimaryOrder.payment.amount = amountPaid;
       }
 
+      if (cashierId) {
+        updatedPrimaryOrder.cashierId = cashierId;
+      }
+
       await this.orderRepository.save(updatedPrimaryOrder);
 
       // Emit event to inventory service via RabbitMQ
@@ -380,6 +401,10 @@ export class OrderService {
       order.payment.amount = amountPaid;
     }
 
+    if (cashierId) {
+      order.cashierId = cashierId;
+    }
+
     await this.orderRepository.save(order);
 
     // Emit event to inventory service via RabbitMQ
@@ -414,5 +439,105 @@ export class OrderService {
 
     return { success: true, completedOrderIds: [order.id] };
   }
+
+  async getShiftSummary(params: {
+    branchId: string;
+    cashierId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<{
+    totalRevenue: number;
+    totalCash: number;
+    totalBankTransfer: number;
+    totalOrders: number;
+    cashierId?: string;
+    date: string;
+    recentOrders: Array<{
+      id: string;
+      orderCode: number;
+      tableId?: string;
+      orderType: OrderType;
+      finalAmount: number;
+      paymentMethod?: string;
+      createdAt: Date;
+    }>;
+  }> {
+    const { branchId, cashierId, fromDate, toDate } = params;
+
+    let startDate: Date;
+    if (fromDate) {
+      startDate = new Date(fromDate);
+    } else {
+      startDate = new Date();
+      startDate.setHours(0, 0, 0, 0);
+    }
+
+    let endDate: Date;
+    if (toDate) {
+      endDate = new Date(toDate);
+    } else {
+      endDate = new Date();
+    }
+
+    const query = this.orderRepository
+      .createQueryBuilder('order')
+      .leftJoinAndSelect('order.payment', 'payment')
+      .where('order.branchId = :branchId', { branchId })
+      .andWhere('order.status = :status', { status: OrderStatus.COMPLETED })
+      .andWhere('order.createdAt >= :startDate', { startDate })
+      .andWhere('order.createdAt <= :endDate', { endDate })
+      .orderBy('order.createdAt', 'DESC');
+
+    if (cashierId) {
+      query.andWhere('(order.cashierId = :cashierId OR order.cashierId IS NULL)', { cashierId });
+    }
+
+    const orders = await query.getMany();
+
+    let totalRevenue = 0;
+    let totalCash = 0;
+    let totalBankTransfer = 0;
+
+    for (const order of orders) {
+      const amount = Number(
+        order.finalAmount !== undefined && order.finalAmount !== null
+          ? order.finalAmount
+          : (order.totalAmount || 0),
+      );
+      totalRevenue += amount;
+
+      const method = order.payment?.paymentMethod;
+      if (method === PaymentMethod.CASH || (method as string) === 'CASH') {
+        totalCash += amount;
+      } else if (method === PaymentMethod.BANK_TRANSFER || (method as string) === 'BANK_TRANSFER') {
+        totalBankTransfer += amount;
+      } else {
+        totalCash += amount;
+      }
+    }
+
+    return {
+      totalRevenue,
+      totalCash,
+      totalBankTransfer,
+      totalOrders: orders.length,
+      cashierId,
+      date: new Date().toISOString().split('T')[0],
+      recentOrders: orders.map(o => ({
+        id: o.id,
+        orderCode: o.orderCode,
+        tableId: o.tableId,
+        orderType: o.orderType,
+        finalAmount: Number(
+          o.finalAmount !== undefined && o.finalAmount !== null
+            ? o.finalAmount
+            : (o.totalAmount || 0),
+        ),
+        paymentMethod: o.payment?.paymentMethod,
+        createdAt: o.createdAt,
+      })),
+    };
+  }
 }
+
 
