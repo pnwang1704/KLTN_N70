@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wifi, WifiOff, LogOut, Bell, Check, Clock, FileText } from 'lucide-react';
+import { Wifi, WifiOff, LogOut, Bell, Check, Clock, FileText, X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { NotificationItem } from '../hooks/useSocket';
 import type { ShiftSession } from './ShiftSelectModal';
@@ -30,12 +30,14 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenShiftSelect,
 }) => {
   const [showNotifications, setShowNotifications] = React.useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
-  const handleLogout = () => {
+  const handleConfirmLogout = () => {
     localStorage.removeItem('pos_token');
     localStorage.removeItem('pos_user');
     onLogout();
+    setShowLogoutConfirm(false);
   };
 
   return (
@@ -173,13 +175,68 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <button 
-          onClick={handleLogout}
-          className="p-2 bg-red-50 rounded-full hover:bg-red-100 transition-colors text-red-600"
+          onClick={() => setShowLogoutConfirm(true)}
+          className="p-2 bg-red-50 rounded-full hover:bg-red-100 transition-colors text-red-600 cursor-pointer"
           title="Đăng xuất"
         >
           <LogOut size={20} />
         </button>
       </div>
+
+      {/* Confirmation Modal: Đăng xuất & đóng ca làm việc */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200 p-6 flex flex-col items-center text-center relative">
+            <button
+              onClick={() => setShowLogoutConfirm(false)}
+              className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 p-1.5 rounded-full hover:bg-zinc-100 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200/80 flex items-center justify-center mb-4 shadow-inner">
+              <LogOut size={26} className="text-amber-600 translate-x-0.5" />
+            </div>
+
+            <h3 className="text-lg font-black text-zinc-900 tracking-tight mb-1.5">
+              Xác nhận đăng xuất
+            </h3>
+
+            <p className="text-sm font-semibold text-zinc-800 leading-relaxed mb-1">
+              Bạn có muốn đăng xuất và đóng ca làm việc?
+            </p>
+
+            {currentShift && (
+              <div className="my-3 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-850 font-bold flex items-center gap-1.5">
+                <Clock size={13} className="text-amber-600 shrink-0" />
+                <span>Ca hiện tại: {currentShift.shiftName.replace(/\s*\(.*?\)/, '') || currentShift.shiftName}</span>
+              </div>
+            )}
+
+            <p className="text-xs text-zinc-400 mb-6">
+              Phiên ca làm việc của bạn sẽ được đóng và lưu trữ trên hệ thống.
+            </p>
+
+            <div className="flex items-center gap-3 w-full">
+              <button
+                type="button"
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-zinc-300 font-bold text-zinc-600 text-xs hover:bg-zinc-100 transition-colors cursor-pointer"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmLogout}
+                className="flex-1 py-2.5 px-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold rounded-xl text-xs shadow-lg shadow-red-600/25 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <LogOut size={14} />
+                <span>Đăng xuất & Đóng ca</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 };

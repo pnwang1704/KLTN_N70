@@ -15,7 +15,7 @@ import {
   ArrowRightLeft
 } from 'lucide-react';
 import api from '../lib/axios';
-import { formatCurrency, formatDate, formatPaymentMethod } from '../lib/utils';
+import { formatCurrency, formatDate, formatDateTimeFull, formatPaymentMethod } from '../lib/utils';
 import type { ShiftSession } from './ShiftSelectModal';
 
 interface ShiftSummaryModalProps {
@@ -28,23 +28,6 @@ interface ShiftSummaryModalProps {
 }
 
 /**
- * Format datetime to exact format: HH:mm:ss DD/MM/YYYY
- */
-export function formatDateTimeFull(dateInput?: string | Date | null): string {
-  if (!dateInput) return '';
-  const d = new Date(dateInput);
-  if (isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const hours = pad(d.getHours());
-  const minutes = pad(d.getMinutes());
-  const seconds = pad(d.getSeconds());
-  const day = pad(d.getDate());
-  const month = pad(d.getMonth() + 1);
-  const year = d.getFullYear();
-  return `${hours}:${minutes}:${seconds} ${day}/${month}/${year}`;
-}
-
-/**
  * High-reliability 80mm thermal receipt printing via isolated hidden iframe
  */
 export const printShiftReceipt = (params: {
@@ -53,10 +36,12 @@ export const printShiftReceipt = (params: {
   shiftName: string;
   openedAt?: string;
   closedAt: string;
-  totalOrders: number;
+  initialCash: number;
   totalCash: number;
+  closingCash: number;
   totalBankTransfer: number;
   totalRevenue: number;
+  totalOrders: number;
 }) => {
   const {
     branchId,
@@ -64,10 +49,12 @@ export const printShiftReceipt = (params: {
     shiftName,
     openedAt,
     closedAt,
-    totalOrders,
+    initialCash,
     totalCash,
+    closingCash,
     totalBankTransfer,
     totalRevenue,
+    totalOrders,
   } = params;
 
   const openedAtStr = openedAt ? formatDateTimeFull(openedAt) : 'Đầu ngày';
@@ -118,32 +105,39 @@ export const printShiftReceipt = (params: {
         font-weight: 800;
         margin-top: 4px;
       }
+      .section-title {
+        font-size: 11px;
+        font-weight: 800;
+        text-align: center;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
       .dashed {
         border-bottom: 1px dashed #000;
-        margin: 8px 0;
+        margin: 7px 0;
       }
       .solid {
         border-bottom: 1.5px solid #000;
-        margin: 8px 0;
+        margin: 7px 0;
       }
       .row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin: 4px 0;
+        margin: 3px 0;
       }
       .row-total {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 900;
-        margin: 8px 0;
+        margin: 5px 0;
       }
       .signatures {
         display: flex;
         justify-content: space-between;
-        margin-top: 20px;
+        margin-top: 18px;
         page-break-inside: avoid;
       }
       .sign-col {
@@ -152,11 +146,18 @@ export const printShiftReceipt = (params: {
         font-size: 10px;
       }
       .sign-space {
-        height: 52px;
+        height: 50px;
+      }
+      .confirm-note {
+        text-align: center;
+        margin-top: 10px;
+        font-size: 10px;
+        font-weight: bold;
+        line-height: 1.3;
       }
       .footer {
         text-align: center;
-        margin-top: 16px;
+        margin-top: 14px;
         font-size: 9px;
         color: #444;
         font-style: italic;
@@ -196,26 +197,42 @@ export const printShiftReceipt = (params: {
 
     <div class="dashed"></div>
 
+    <!-- Bảng đối soát tiền mặt trong két -->
     <div>
+      <div class="section-title uppercase">ĐỐI SOÁT TIỀN MẶT TRONG KÉT</div>
       <div class="row">
-        <span>Tổng số đơn hoàn tất:</span>
-        <span class="font-bold">${totalOrders} đơn</span>
+        <span>Tiền đầu ca nhận:</span>
+        <span class="font-bold">${formatCurrency(initialCash)}</span>
       </div>
       <div class="row">
-        <span>Tiền mặt (CASH):</span>
+        <span>Tiền mặt thu trong ca:</span>
         <span class="font-bold">${formatCurrency(totalCash)}</span>
       </div>
-      <div class="row">
-        <span>Chuyển khoản (VietQR):</span>
-        <span class="font-bold">${formatCurrency(totalBankTransfer)}</span>
+      <div class="solid"></div>
+      <div class="row-total">
+        <span>==> TỔNG TIỀN MẶT TRONG KÉT:</span>
+        <span>${formatCurrency(closingCash)}</span>
       </div>
     </div>
 
-    <div class="solid"></div>
+    <div class="dashed"></div>
 
-    <div class="row-total">
-      <span>TỔNG DOANH THU:</span>
-      <span>${formatCurrency(totalRevenue)}</span>
+    <!-- Bảng doanh thu ca trực -->
+    <div>
+      <div class="section-title uppercase">DOANH THU BÁN HÀNG TRONG CA</div>
+      <div class="row">
+        <span>Số đơn đã phục vụ:</span>
+        <span class="font-bold">${totalOrders} đơn</span>
+      </div>
+      <div class="row">
+        <span>Doanh thu chuyển khoản:</span>
+        <span class="font-bold">${formatCurrency(totalBankTransfer)}</span>
+      </div>
+      <div class="solid"></div>
+      <div class="row-total">
+        <span>TỔNG DOANH THU TRONG CA:</span>
+        <span>${formatCurrency(totalRevenue)}</span>
+      </div>
     </div>
 
     <div class="dashed"></div>
@@ -233,6 +250,10 @@ export const printShiftReceipt = (params: {
         <div class="sign-space"></div>
         <div class="font-bold">....................</div>
       </div>
+    </div>
+
+    <div class="confirm-note">
+      Xác nhận bàn giao đúng số tiền mặt trong két: ${formatCurrency(closingCash)}
     </div>
 
     <div class="footer">
@@ -345,8 +366,34 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Financial calculations including initialCash from currentShift or localStorage
+  const initialCash = (() => {
+    if (currentShift?.initialCash !== undefined) return Number(currentShift.initialCash);
+    try {
+      const stored = localStorage.getItem('pos_shift');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed?.initialCash !== undefined) return Number(parsed.initialCash);
+      }
+    } catch (e) {
+      // ignore
+    }
+    return 0;
+  })();
+  const totalCash = Number(summaryData?.totalCash || 0);
+  const closingCash = initialCash + totalCash;
+  const totalBankTransfer = Number(summaryData?.totalBankTransfer || 0);
+  const totalRevenue = Number(summaryData?.totalRevenue || 0);
+  const totalOrders = Number(summaryData?.totalOrders || 0);
+
   const cashierDisplayName = currentShift?.cashierName || user?.fullName || user?.username || 'Thu ngân';
-  const shiftDisplayName = currentShift?.shiftName || 'Ca làm việc';
+  const getShortShiftName = (shiftName?: string, shiftCode?: string) => {
+    if (shiftCode === 'CA_1') return 'Ca 1';
+    if (shiftCode === 'CA_2') return 'Ca 2';
+    if (!shiftName) return 'Ca làm việc';
+    return shiftName.replace(/\s*\(.*?\)/, '').trim() || shiftName;
+  };
+  const shortShiftName = getShortShiftName(currentShift?.shiftName, currentShift?.shiftCode);
   const openedAtDisplay = currentShift?.openedAt ? formatDateTimeFull(currentShift.openedAt) : 'Đầu ngày';
   const closedAtDisplay = formatDateTimeFull(printTime || new Date().toISOString());
 
@@ -357,13 +404,15 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
     printShiftReceipt({
       branchId: branchId || '1',
       cashierName: cashierDisplayName,
-      shiftName: shiftDisplayName,
+      shiftName: shortShiftName,
       openedAt: currentShift?.openedAt,
       closedAt: now,
-      totalOrders: summaryData?.totalOrders || 0,
-      totalCash: summaryData?.totalCash || 0,
-      totalBankTransfer: summaryData?.totalBankTransfer || 0,
-      totalRevenue: summaryData?.totalRevenue || 0,
+      initialCash,
+      totalCash,
+      closingCash,
+      totalBankTransfer,
+      totalRevenue,
+      totalOrders,
     });
   };
 
@@ -388,7 +437,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
             </div>
             <div className="flex justify-between">
               <span>Ca làm việc:</span>
-              <span className="font-bold">{shiftDisplayName}</span>
+              <span className="font-bold">{shortShiftName}</span>
             </div>
             <div className="flex justify-between">
               <span>Giờ mở ca:</span>
@@ -402,46 +451,70 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
 
           <div className="border-b border-dashed border-black my-2" />
 
-          <div className="space-y-1.5 my-3 text-[11px]">
-            <div className="flex justify-between items-center">
-              <span>Tổng số đơn hoàn tất:</span>
-              <span className="font-bold text-sm">{summaryData?.totalOrders || 0} đơn</span>
+          {/* Cash reconciliation */}
+          <div className="space-y-1.5 my-2.5 text-[11px]">
+            <div className="text-center font-bold uppercase text-[10px] tracking-wider mb-1">
+              ĐỐI SOÁT TIỀN MẶT TRONG KÉT
             </div>
             <div className="flex justify-between items-center">
-              <span>Tiền mặt (CASH):</span>
-              <span className="font-bold text-sm">{formatCurrency(summaryData?.totalCash || 0)}</span>
+              <span>Tiền đầu ca nhận:</span>
+              <span className="font-bold">{formatCurrency(initialCash)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span>Chuyển khoản (VietQR):</span>
-              <span className="font-bold text-sm">{formatCurrency(summaryData?.totalBankTransfer || 0)}</span>
+              <span>Tiền mặt thu trong ca:</span>
+              <span className="font-bold">{formatCurrency(totalCash)}</span>
+            </div>
+            <div className="border-b border-black my-1" />
+            <div className="flex justify-between items-center font-black text-xs">
+              <span>{'==>'} TỔNG TIỀN MẶT TRONG KÉT:</span>
+              <span>{formatCurrency(closingCash)}</span>
             </div>
           </div>
 
-          <div className="border-b border-black my-2" />
+          <div className="border-b border-dashed border-black my-2" />
 
-          <div className="flex justify-between items-center my-2 text-sm font-black">
-            <span>TỔNG DOANH THU:</span>
-            <span>{formatCurrency(summaryData?.totalRevenue || 0)}</span>
+          {/* Shift sales breakdown */}
+          <div className="space-y-1.5 my-2.5 text-[11px]">
+            <div className="text-center font-bold uppercase text-[10px] tracking-wider mb-1">
+              DOANH THU BÁN HÀNG TRONG CA
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Số đơn đã phục vụ:</span>
+              <span className="font-bold">{totalOrders} đơn</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>Doanh thu chuyển khoản:</span>
+              <span className="font-bold">{formatCurrency(totalBankTransfer)}</span>
+            </div>
+            <div className="border-b border-black my-1" />
+            <div className="flex justify-between items-center font-black text-xs">
+              <span>TỔNG DOANH THU TRONG CA:</span>
+              <span>{formatCurrency(totalRevenue)}</span>
+            </div>
           </div>
 
           <div className="border-b border-dashed border-black my-3" />
 
-          <div className="grid grid-cols-2 gap-4 mt-6 text-center text-[10px]">
+          <div className="grid grid-cols-2 gap-4 mt-5 text-center text-[10px]">
             <div>
               <p className="font-bold">Thu ngân bàn giao</p>
               <p className="italic text-[9px] text-zinc-500">(Ký & ghi rõ họ tên)</p>
-              <div className="h-14"></div>
+              <div className="h-12"></div>
               <p className="font-bold">{cashierDisplayName}</p>
             </div>
             <div>
               <p className="font-bold">Người nhận bàn giao</p>
               <p className="italic text-[9px] text-zinc-500">(Ký & ghi rõ họ tên)</p>
-              <div className="h-14"></div>
+              <div className="h-12"></div>
               <p className="font-bold">..................................</p>
             </div>
           </div>
 
-          <div className="text-center mt-6 text-[9px] text-zinc-500 italic">
+          <div className="text-center mt-3 text-[10px] font-bold">
+            Xác nhận bàn giao đúng số tiền mặt trong két: {formatCurrency(closingCash)}
+          </div>
+
+          <div className="text-center mt-4 text-[9px] text-zinc-500 italic">
             Thời điểm in: {closedAtDisplay}<br/>
             Hệ thống Quản lý Vận hành Chuỗi F&B N70 POS
           </div>
@@ -493,7 +566,9 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
                 </div>
                 <div>
                   <p className="text-zinc-400 font-medium">Ca làm việc</p>
-                  <p className="font-bold text-zinc-800 truncate">{shiftDisplayName}</p>
+                  <p className="font-bold text-zinc-800 truncate" title={currentShift?.shiftName || shortShiftName}>
+                    {shortShiftName}
+                  </p>
                 </div>
               </div>
 
@@ -522,74 +597,94 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
 
             {/* 4 Financial Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* 1. Cash Card - Emphasized for Cash Drawer Reconciliation */}
-              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-5 text-white shadow-lg shadow-emerald-500/15 relative overflow-hidden">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-emerald-100">
-                    💵 Tiền mặt trong két (CASH)
-                  </span>
-                  <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
-                    <Banknote size={20} className="text-white" />
+              {/* 1. Cash Card - Highlight Cash Reconciliation with initialCash */}
+              <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-5 text-white shadow-lg shadow-emerald-600/20 relative overflow-hidden flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-100 flex items-center gap-1.5">
+                      💵 Tổng tiền mặt trong két
+                    </span>
+                    <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                      <Banknote size={20} className="text-white" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black tracking-tight mt-0.5 text-white">
+                    {formatCurrency(closingCash)}
                   </div>
                 </div>
-                <div className="text-2xl font-black tracking-tight mt-1">
-                  {formatCurrency(summaryData?.totalCash || 0)}
+
+                <div className="mt-3.5 pt-3 border-t border-emerald-500/50 space-y-1.5 text-xs">
+                  <div className="flex justify-between text-emerald-100">
+                    <span>Tiền đầu ca nhận bàn giao:</span>
+                    <span className="font-bold text-white">{formatCurrency(initialCash)}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-100">
+                    <span>Tiền mặt phát sinh trong ca:</span>
+                    <span className="font-bold text-white">+{formatCurrency(totalCash)}</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-200 font-bold pt-1.5 border-t border-emerald-500/30 text-xs">
+                    <span>Tổng tiền mặt trong két hiện tại:</span>
+                    <span className="text-amber-300 font-black">{formatCurrency(closingCash)}</span>
+                  </div>
                 </div>
-                <p className="text-[11px] text-emerald-100 mt-1">
-                  Số tiền mặt thực tế cần kiểm đếm bàn giao
-                </p>
               </div>
 
               {/* 2. Bank Transfer Card */}
-              <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-lg shadow-blue-500/15 relative overflow-hidden">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-blue-100">
-                    💳 Chuyển khoản (VietQR / PayOS)
-                  </span>
-                  <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
-                    <CreditCard size={20} className="text-white" />
+              <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-lg shadow-blue-500/15 relative overflow-hidden flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-blue-100">
+                      💳 Chuyển khoản (VietQR / PayOS)
+                    </span>
+                    <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                      <CreditCard size={20} className="text-white" />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black tracking-tight mt-1">
+                    {formatCurrency(totalBankTransfer)}
                   </div>
                 </div>
-                <div className="text-2xl font-black tracking-tight mt-1">
-                  {formatCurrency(summaryData?.totalBankTransfer || 0)}
-                </div>
-                <p className="text-[11px] text-blue-100 mt-1">
-                  Tiền đã thanh toán qua tài khoản ngân hàng
+                <p className="text-[11px] text-blue-100 mt-3 pt-3 border-t border-blue-500/40">
+                  Tiền đã thanh toán qua tài khoản ngân hàng (Napas 247)
                 </p>
               </div>
 
               {/* 3. Total Revenue Card */}
-              <div className="bg-white border-2 border-orange-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                    💰 Tổng doanh thu ca
-                  </span>
-                  <div className="p-2 bg-orange-100 rounded-xl text-orange-600">
-                    <Coins size={20} />
+              <div className="bg-white border-2 border-orange-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                      💰 Doanh thu bán hàng trong ca
+                    </span>
+                    <div className="p-2 bg-orange-100 rounded-xl text-orange-600">
+                      <Coins size={20} />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black text-orange-600 tracking-tight mt-1">
+                    {formatCurrency(totalRevenue)}
                   </div>
                 </div>
-                <div className="text-2xl font-black text-orange-600 tracking-tight mt-1">
-                  {formatCurrency(summaryData?.totalRevenue || 0)}
-                </div>
-                <p className="text-[11px] text-zinc-400 mt-1">
-                  Doanh thu lũy kế từ lúc mở ca đến nay
+                <p className="text-[11px] text-zinc-400 mt-3 pt-3 border-t border-zinc-100">
+                  = Tiền mặt ({formatCurrency(totalCash)}) + Chuyển khoản ({formatCurrency(totalBankTransfer)})
                 </p>
               </div>
 
               {/* 4. Total Orders Served */}
-              <div className="bg-white border-2 border-zinc-200 rounded-2xl p-5 shadow-sm">
-                <div className="flex justify-between items-start mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                    📋 Đơn hàng đã phục vụ
-                  </span>
-                  <div className="p-2 bg-purple-100 rounded-xl text-purple-600">
-                    <ClipboardList size={20} />
+              <div className="bg-white border-2 border-zinc-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+                <div>
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                      📋 Đơn hàng đã phục vụ
+                    </span>
+                    <div className="p-2 bg-purple-100 rounded-xl text-purple-600">
+                      <ClipboardList size={20} />
+                    </div>
+                  </div>
+                  <div className="text-2xl font-black text-zinc-900 tracking-tight mt-1">
+                    {totalOrders} <span className="text-sm font-semibold text-zinc-500">đơn</span>
                   </div>
                 </div>
-                <div className="text-2xl font-black text-zinc-900 tracking-tight mt-1">
-                  {summaryData?.totalOrders || 0} <span className="text-sm font-semibold text-zinc-500">đơn</span>
-                </div>
-                <p className="text-[11px] text-zinc-400 mt-1">
+                <p className="text-[11px] text-zinc-400 mt-3 pt-3 border-t border-zinc-100">
                   Các đơn đã thanh toán hoàn tất (COMPLETED)
                 </p>
               </div>
