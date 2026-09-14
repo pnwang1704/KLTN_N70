@@ -126,12 +126,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
         // If paying for a table with multiple orders, complete remaining table orders
         if (curOrderData?.orderIds && curOrderData.orderIds.length > 0) {
           try {
+            const userStr = localStorage.getItem('pos_user');
+            const user = userStr ? JSON.parse(userStr) : null;
             await api.post('/orders/pay-table', {
               branchId,
               tableId: curOrderData.tableId,
               orderIds: curOrderData.orderIds,
               paymentMethod: 'BANK_TRANSFER',
               amountPaid: curTotal,
+              cashierId: user?.id || user?.sub,
             });
           } catch (err) {
             console.warn('pay-table call during socket order:paid:', err);
@@ -223,7 +226,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
               totalAmount: orderData.totalAmount || normalizedTotal,
               finalAmount: normalizedTotal,
               discountPercent: orderData.discountPercent || 0,
-              paymentMethod: 'BANK_TRANSFER'
+              paymentMethod: 'BANK_TRANSFER',
+              cashierId: user?.id || user?.sub,
             });
             const newOrder = res.data;
             targetOrderId = newOrder.id;
@@ -283,6 +287,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
                   orderIds: orderData.orderIds,
                   paymentMethod: 'BANK_TRANSFER',
                   amountPaid: normalizedTotal,
+                  cashierId: user?.id || user?.sub,
                 });
               } catch (err) {
                 console.warn('pay-table call during QR status check:', err);
@@ -376,6 +381,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
           orderIds: orderData.orderIds,
           paymentMethod,
           amountPaid,
+          cashierId: user?.id || user?.sub,
         });
 
         setTempQrCreatedId(null);
@@ -405,7 +411,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             totalAmount: orderData.totalAmount || normalizedTotal,
             finalAmount: normalizedTotal,
             discountPercent: orderData.discountPercent || 0,
-            paymentMethod
+            paymentMethod,
+            cashierId: user?.id || user?.sub,
           });
           orderToComplete = createRes.data;
           targetOrderId = orderToComplete.id;
@@ -413,11 +420,15 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
         }
 
         if (targetOrderId) {
+          const userStr = localStorage.getItem('pos_user');
+          const user = userStr ? JSON.parse(userStr) : null;
+
           await api.post(`/orders/${targetOrderId}/pay`, {
             paymentMethod,
             amountPaid,
             discountPercent: orderData?.discountPercent || 0,
-            finalAmount: normalizedTotal
+            finalAmount: normalizedTotal,
+            cashierId: user?.id || user?.sub,
           });
 
           // Clear tempQrCreatedId so handleClose won't delete the completed order

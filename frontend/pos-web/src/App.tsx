@@ -8,12 +8,17 @@ import { LoginScreen } from './components/LoginScreen';
 import { OrderHistory } from './components/OrderHistory';
 import { InventoryManagement } from './components/InventoryManagement';
 import { StaffManagement } from './components/StaffManagement';
+import { ShiftSelectModal, type ShiftSession } from './components/ShiftSelectModal';
+import { ShiftSummaryModal } from './components/ShiftSummaryModal';
 import { useSocket } from './hooks/useSocket';
 import type { Product } from './types';
 
 function App() {
   const [user, setUser] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'POS' | 'HISTORY' | 'INVENTORY' | 'STAFF'>('POS');
+  const [currentShift, setCurrentShift] = useState<ShiftSession | null>(null);
+  const [showShiftSelect, setShowShiftSelect] = useState<boolean>(false);
+  const [showShiftSummary, setShowShiftSummary] = useState<boolean>(false);
   
   useEffect(() => {
     // Check if user is already logged in
@@ -23,9 +28,21 @@ function App() {
       setUser(JSON.parse(storedUser));
     }
 
+    // Check if shift is already active
+    const storedShift = localStorage.getItem('pos_shift');
+    if (storedShift) {
+      try {
+        setCurrentShift(JSON.parse(storedShift));
+      } catch (e) {
+        console.error('Lỗi parse pos_shift:', e);
+      }
+    }
+
     // Listen for unauthorized event from Axios interceptor
     const handleUnauthorized = () => {
       setUser(null);
+      setCurrentShift(null);
+      localStorage.removeItem('pos_shift');
     };
     window.addEventListener('auth:unauthorized', handleUnauthorized);
     return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
@@ -41,6 +58,11 @@ function App() {
     return <LoginScreen onLoginSuccess={(u) => {
       setUser(u);
       setActiveTab('POS');
+      // If no active shift, prompt selection
+      const storedShift = localStorage.getItem('pos_shift');
+      if (!storedShift) {
+        setShowShiftSelect(true);
+      }
     }} />;
   }
 
@@ -51,12 +73,17 @@ function App() {
         user={user} 
         onLogout={() => {
           setUser(null);
+          setCurrentShift(null);
+          localStorage.removeItem('pos_shift');
           setActiveTab('POS');
         }} 
         activeTab={activeTab}
         setActiveTab={(t) => setActiveTab(t as any)}
         notifications={notifications}
         onMarkAsRead={markAsRead}
+        currentShift={currentShift}
+        onOpenShiftSummary={() => setShowShiftSummary(true)}
+        onOpenShiftSelect={() => setShowShiftSelect(true)}
       />
       
       {activeTab === 'POS' && (
@@ -100,6 +127,33 @@ function App() {
           onSuccess={() => setPaymentInfo(null)}
         />
       )}
+
+      {/* Shift Selection Modal */}
+      {(showShiftSelect || (user && !currentShift)) && (
+        <ShiftSelectModal 
+          user={user}
+          currentShift={currentShift}
+          canDismiss={!!currentShift}
+          onClose={() => setShowShiftSelect(false)}
+          onSelectShift={(shift) => {
+            setCurrentShift(shift);
+            setShowShiftSelect(false);
+          }}
+        />
+      )}
+
+      {/* Shift Summary Report Modal */}
+      <ShiftSummaryModal 
+        isOpen={showShiftSummary}
+        onClose={() => setShowShiftSummary(false)}
+        user={user}
+        currentShift={currentShift}
+        branchId={branchId}
+        onSwitchShift={() => {
+          setShowShiftSummary(false);
+          setShowShiftSelect(true);
+        }}
+      />
 
       {/* Toast Notification for Realtime ITEM_READY */}
       {toastMessage && (

@@ -83,6 +83,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
 
       const payload = {
         branchId: user?.branchId || '1',
+        cashierId: user?.id || user?.sub,
         tableId: orderType === 'AT_TABLE' ? tableId : undefined,
         orderType,
         totalAmount: subtotal,
@@ -140,6 +141,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
 
     const orderData = {
       branchId: user?.branchId || '1',
+      cashierId: user?.id || user?.sub,
       tableId: orderType === 'AT_TABLE' ? tableId : undefined,
       orderType,
       totalAmount: subtotal,

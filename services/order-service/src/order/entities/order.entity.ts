@@ -26,6 +26,9 @@ export class Order {
   @Column({ nullable: true })
   tableId: string;
 
+  @Column({ nullable: true })
+  cashierId: string;
+
   @Column({ type: 'bigint', nullable: true })
   orderCode: number;
 

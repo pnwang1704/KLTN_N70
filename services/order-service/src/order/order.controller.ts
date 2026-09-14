@@ -112,5 +112,32 @@ export class OrderController {
   }) {
     return this.orderService.processTablePayment(payload);
   }
+
+  // Message Pattern for getting shift summary
+  @MessagePattern('get_shift_summary')
+  async handleGetShiftSummary(@Payload() payload: {
+    branchId: string;
+    cashierId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }) {
+    return this.orderService.getShiftSummary(payload);
+  }
+
+  // HTTP endpoint for getting shift summary
+  @Get('shift-summary')
+  async getShiftSummaryHttp(
+    @Query('branchId') branchId: string,
+    @Query('cashierId') cashierId?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return this.orderService.getShiftSummary({
+      branchId: branchId || '1',
+      cashierId,
+      fromDate,
+      toDate,
+    });
+  }
 }
 

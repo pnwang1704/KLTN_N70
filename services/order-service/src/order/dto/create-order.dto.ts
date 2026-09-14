@@ -70,4 +70,8 @@ export class CreateOrderDto {
   @IsOptional()
   @IsEnum(PaymentMethod)
   paymentMethod?: PaymentMethod;
+
+  @IsOptional()
+  @IsString()
+  cashierId?: string;
 }

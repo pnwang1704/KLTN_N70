@@ -13,6 +13,7 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `GET`  | `/auth/users` | `auth-service` | `ADMIN`, `MANAGER` | Lấy danh sách nhân viên (Hỗ trợ query `?branchId=`). Trả về danh sách user không chứa mật khẩu (`200 OK`). |
 | `PATCH`| `/auth/users/:id/status` | `auth-service` | `ADMIN`, `MANAGER` | Bật/Tắt trạng thái kích hoạt tài khoản (`isActive`: `true`/`false`) (`200 OK`, `404 Not Found`). |
 | `GET`  | `/orders` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách lịch sử đơn hàng (Hỗ trợ lọc theo `?branchId=`) (`200 OK`). |
+| `GET`  | `/orders/shift-summary` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Báo cáo doanh thu và tổng kết ca của Thu ngân (`?branchId=&cashierId=&fromDate=&toDate=`) (`200 OK`). |
 | `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`) (`200 OK`). |
 | `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (Dine-in Post-pay) hoặc POS Web (`201 Created`, `400 Bad Request`). |
 | `DELETE`| `/orders/:id` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Hủy đơn hàng tạm khi đóng modal thanh toán mà chưa thanh toán. **Điều kiện chặn:** Chỉ xóa khi `status === PENDING`, chặn xóa đơn đã `COMPLETED` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
@@ -92,6 +93,39 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 }
 ```
 
+### 1.4. Query Báo cáo kết ca / Doanh thu trong ca của Thu ngân (`GET /orders/shift-summary`)
+* **Endpoint:** `GET /orders/shift-summary`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Query Parameters:**
+  - `branchId` (bắt buộc): ID chi nhánh (ví dụ: `1`).
+  - `cashierId` (tùy chọn): ID thu ngân (nếu không truyền, tự động trích xuất từ JWT token `req.user.sub`).
+  - `fromDate` (tùy chọn): Thời điểm bắt đầu ca (ISO 8601 string, ví dụ: `2026-09-14T06:00:00.000Z`).
+  - `toDate` (tùy chọn): Thời điểm kết ca / thời điểm truy vấn (ISO 8601 string).
+* **Mục đích:** Cung cấp số liệu tài chính vận hành tức thời cho Thu ngân đối soát két tiền mặt và doanh thu ca trực, hỗ trợ in Phiếu kết ca nhiệt 80mm trước khi bàn giao.
+
+**Response (200 OK):**
+```json
+{
+  "totalRevenue": 1250000,
+  "totalCash": 750000,
+  "totalBankTransfer": 500000,
+  "totalOrders": 15,
+  "recentOrders": [
+    {
+      "id": "e93bc4da-...",
+      "orderCode": 10024,
+      "orderType": "AT_TABLE",
+      "finalAmount": 85000,
+      "createdAt": "2026-09-14T07:15:00.000Z",
+      "payment": {
+        "paymentMethod": "CASH",
+        "amount": 100000
+      }
+    }
+  ]
+}
+```
+
 ---
 
 ## 2. Message Pattern RPC (Giao tiếp đồng bộ Request-Response qua RabbitMQ)
@@ -108,6 +142,7 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `'create_order'` | API Gateway | `order-service` | `CreateOrderDto` | `Order` mới tạo (`status: PENDING`) |
 | `'get_orders'` | API Gateway | `order-service` | `branchId: string` | `Order[]` (kèm items & toppings) |
 | `'get_active_orders'` | API Gateway | `order-service` | `{ branchId: string, tableId?: string }` | `Order[]` (các đơn chưa hoàn tất của bàn/chi nhánh) |
+| `'get_shift_summary'` | API Gateway | `order-service` | `{ branchId, cashierId?, fromDate?, toDate? }` | `ShiftSummaryResult` (`totalRevenue`, `totalCash`, `totalBankTransfer`, `totalOrders`, `recentOrders`) |
 | `'process_payment'` | API Gateway | `order-service` | `{ orderId, processPaymentDto }` | `Order` (`status: COMPLETED`, `payment`) |
 | `'pay_table_orders'` | API Gateway | `order-service` | `{ branchId, tableId, paymentMethod, amountPaid }` | `{ success: boolean, completedOrderIds: string[] }` |
 | `'delete_order'` | API Gateway | `order-service` | `id: string` | `{ success: boolean, message: string }` |

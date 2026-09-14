@@ -15,4 +15,7 @@ export class ProcessPaymentDto {
   @IsOptional()
   @IsNumber()
   finalAmount?: number;
+
+  @IsOptional()
+  cashierId?: string;
 }
