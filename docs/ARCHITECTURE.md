@@ -11,7 +11,7 @@ graph TB
     %% Client Layer
     subgraph Clients ["Lớp Ứng Dụng Người Dùng (Client Layer)"]
         CW["Customer Web (Mobile QR / Port 5174)<br/>- Auto-redirect Table URL<br/>- Tra cứu Món đã gọi tại bàn"]
-        POS["POS Web (Port 5175)<br/>- Thu ngân / Quản lý / Sơ đồ bàn<br/>- Chiết khấu & Thanh toán đa phương thức"]
+        POS["POS Web (Port 5175)<br/>- Thu ngân / Quản lý / Sơ đồ bàn<br/>- Menu tiện ích Dropdown & Chi tiền mặt<br/>- Chiết khấu & Đối soát két ca trực"]
         KDS["KDS Web (Port 5173)<br/>- Màn hình Bếp điều phối Realtime"]
     end
 
@@ -33,7 +33,7 @@ graph TB
     %% Microservices Layer
     subgraph Services ["Lớp Dịch Vụ Nghiệp Vụ (Microservices Layer)"]
         AS["Auth Service (Port 3001)<br/>(Bcrypt, JWT, RBAC)"]
-        OS["Order Service (Port 3004)<br/>- Order Lifecycle & Table Consolidate<br/>- Socket.IO Realtime Gateway"]
+        OS["Order Service (Port 3004)<br/>- Order Lifecycle & Table Consolidate<br/>- Quản lý Quỹ tiền mặt (Cash Flow & Shift Summary)<br/>- Socket.IO Realtime Gateway"]
         IS["Inventory Service<br/>- Recipe Management<br/>- Transactional Deduct Stock"]
         BS["Branch Service<br/>(Bàn ăn, Chi nhánh)"]
         PS["Product Service<br/>(Menu, Size, Topping)"]
@@ -139,3 +139,61 @@ API Gateway đóng vai trò chốt chặn kiểm soát truy cập (Single Entry 
    - `KITCHEN`: Nhân viên bếp thao tác cập nhật trạng thái món trên KDS Web.
    - `WAITER`: Nhân viên phục vụ hỗ trợ gọi món và chăm sóc khách tại bàn.
    - Nếu tài khoản không thuộc danh sách `@Roles(...)` được phép trên controller, Gateway trả về mã lỗi `403 Forbidden` ngay tức thì.
+
+---
+
+## 6. Cơ Chế Quản Lý Quỹ Tiền Mặt Vận Hành Tức Thời (Operational Cash Flow Architecture)
+
+Nhằm đáp ứng yêu cầu kiểm soát tài chính minh bạch, ngăn chặn thất thoát tiền mặt và hỗ trợ quy trình bàn giao ca trực tiếp tại quầy thu ngân (POS Cash Drawer Handover), hệ thống triển khai kiến trúc dòng tiền vận hành (Operational Cash Flow) tức thời tại `order-service` và `pos-web`:
+
+### 6.1. Sơ đồ Luân chuyển Dòng tiền tại Quầy (Cash In / Cash Out Flow)
+
+```mermaid
+flowchart TD
+    subgraph ShiftStart ["1. Mở Ca Làm Việc"]
+        SC["Thu ngân chọn ca: Ca 1 hoặc Ca 2"] --> IC["Nhập Tiền đầu ca nhận bàn giao: initialCash"]
+        IC --> SS["Lưu pos_shift vào LocalStorage & Quản lý State"]
+    end
+
+    subgraph Operations ["2. Vận Hành Trong Ca"]
+        SALE_CASH["Bán hàng Thu Tiền mặt"] -->|"Cash In (+totalCash)"| DRAWER[("Két Tiền Mặt Vật Lý Tại Quầy")]
+        SALE_BANK["Bán hàng Chuyển khoản VietQR (PayOS)"] -->|"Chuyển thẳng (+totalBankTransfer)"| BANK[("Tài Khoản Ngân Hàng Napas 247")]
+        EXP["Chi tiền mặt khẩn cấp (Mua đá, chanh, đồ dùng)"] -->|"Cash Out (-totalExpense)"| DRAWER
+        EXP -->|"POST /orders/expenses"| EXP_DB[("Bảng expenses trong Order DB")]
+    end
+
+    subgraph ShiftClose ["3. Báo Cáo Kết Ca & Bàn Giao"]
+        DRAWER -->|"Đối soát tiền két thực tế"| SUMMARY["ShiftSummaryModal"]
+        EXP_DB -->|"GET /orders/shift-summary"| SUMMARY
+        BANK -->|"Đối chiếu tổng chuyển khoản"| SUMMARY
+        
+        SUMMARY --> CALC["Chốt két: closingCash = initialCash + totalCash - totalExpense"]
+        SUMMARY --> REV["Doanh thu ca: totalRevenue = totalCash + totalBankTransfer"]
+        CALC --> PRINT["In Phiếu Bàn Giao Kết Ca 80mm qua Hidden Iframe"]
+    end
+
+    SS --> SALE_CASH
+    SS --> EXP
+```
+
+### 6.2. Các Nguyên Tắc Nghiệp Vụ Tài Chính Cốt Lõi
+1. **Tiền đầu ca nhận bàn giao (`initialCash` - Opening Cash):**
+   - Thu ngân nhận két từ ca trước với lượng tiền mặt lẻ nhất định dùng để thối lại cho khách.
+   - Số tiền này được nhập tại `ShiftSelectModal` qua bộ gõ Input Mask mượt mà và lưu vào phiên ca `pos_shift`.
+2. **Tính độc lập giữa Doanh thu và Dòng tiền két (Sales Revenue vs. Cash Drawer Balance):**
+   - **Doanh thu bán hàng ca trực:** $\text{totalRevenue} = \text{totalCash} + \text{totalBankTransfer}$. Doanh thu phản ánh đúng giá trị hàng hóa đã bán ra, tuyệt đối **không bị trừ** bởi các khoản chi tiêu vận hành.
+   - **Tiền mặt trong két thực tế bàn giao:** $\text{closingCash} = \text{initialCash} + \text{totalCash} - \text{totalExpense}$. Khoản chi tiền mặt (`totalExpense`) là chi phí vận hành (OPEX), trực tiếp làm giảm lượng tiền mặt vật lý nằm trong két nhưng không làm giảm doanh số bán hàng.
+3. **Quản lý Phiếu chi tiền mặt (`ExpenseModal.tsx` & `Expense` Entity):**
+   - Mọi khoản trích tiền mặt từ két (mua đá cây, nước ngọt, phụ phẩm khẩn cấp) đều phải được tạo phiếu chi với lý do và người nhận rõ ràng.
+   - Hỗ trợ in tức thời **Phiếu chi tiền mặt 80mm** (Cash Out Voucher) có đầy đủ chữ ký của Người nhận tiền và Người lập phiếu để kẹp vào két lưu trữ chứng từ đối soát.
+
+### 6.3. Luồng Tương tác UI trên `pos-web`
+1. **Nút Menu Tiện ích trên Header:**
+   - Được thiết kế dưới dạng nút icon vuông bo góc (`w-10 h-10`), đặt ở bên trái nút **"Bán hàng"**.
+   - Khi bấm sẽ mở Dropdown menu gom nhóm các tiện ích vận hành:
+     - 📋 **Lịch sử đơn hàng:** Tự động lọc phạm vi đơn hàng phát sinh từ thời điểm `openedAt` của ca hiện tại.
+     - 📊 **Báo cáo kết ca (`ShiftSummaryModal`):** Hiển thị các thẻ thống kê tài chính, thẻ Tiền chi trong ca (Màu Đỏ/Rose), bảng kê chi tiết các phiếu chi có nút In lại (Printer) và kích hoạt in Phiếu kết ca 80mm.
+     - 💸 **Tạo phiếu chi tiền mặt (`ExpenseModal`):** Biểu mẫu tạo phiếu chi kèm in hóa đơn nhiệt 80mm.
+     - Quản lý kho, Quản lý nhân viên (chỉ hiển thị cho tài khoản Quản lý/Admin).
+2. **Kỹ thuật In nhiệt 80mm qua Hidden Iframe:**
+   - Để tránh xung đột với các class ẩn của Single Page Application (`@media print { #root { display: none !important; } }`), các chức năng in (Phiếu chi, Phiếu kết ca) đều sử dụng một **thẻ iframe ẩn độc lập** được tạo động trong DOM, nạp HTML/CSS in nhiệt chuyên dụng khổ 80mm, kích hoạt lệnh `window.print()` và tự động hủy sau khi in xong. Giải pháp này đảm bảo tính ổn định tối đa trên mọi trình duyệt Chromium và máy in nhiệt POS thông dụng.

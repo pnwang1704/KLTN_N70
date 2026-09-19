@@ -228,3 +228,122 @@ sequenceDiagram
     end
     IS->>DB_I: Commit Transaction hoàn tất trừ kho
 ```
+
+---
+
+## 5. Luồng Tạo & In Phiếu Chi Tiền Mặt (Cash Out Workflow)
+
+Quy trình quản lý các khoản chi tiền mặt trực tiếp từ két tại quầy thu ngân (mua đá cây, nguyên liệu tươi đột xuất, vật dụng sửa chữa nhỏ khẩn cấp). Thu ngân lập phiếu chi trên giao diện, dữ liệu được ghi nhận vào cơ sở dữ liệu qua RabbitMQ và tự động kích hoạt in phiếu chi nhiệt 80mm qua iframe ẩn.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Cashier as Thu ngân tại quầy
+    participant POS as POS Web
+    participant GW as API Gateway (Port 3000)
+    participant OS as Order Service (Port 3004)
+    participant DB as Order DB
+    participant Iframe as Hidden Iframe
+    participant Printer as Máy in nhiệt 80mm
+
+    Note over Cashier, Printer: Giai đoạn 1: Lập Phiếu Chi Tiền Mặt Tại Quầy
+    Cashier->>POS: Bấm nút "Menu tiện ích" (Icon Menu trên Header)
+    POS->>POS: Bung mở Dropdown Menu
+    Cashier->>POS: Chọn "Tạo phiếu chi tiền mặt"
+    POS->>POS: Mở ExpenseModal (Form chi tiền)
+    Cashier->>POS: Nhập "Số tiền chi" (Input mask: 50.000 đ)
+    Cashier->>POS: Nhập "Lý do chi" (vd: Mua đá cây, chanh tươi)
+    Cashier->>POS: Nhập "Người nhận / Ghi chú" (vd: Tiệm tạp hóa cô Ba)
+    Cashier->>POS: Bấm "Lưu & In phiếu chi"
+
+    Note over POS, DB: Giai đoạn 2: Lưu Trữ Bản Ghi Chi Phí Qua RabbitMQ
+    POS->>GW: POST /orders/expenses (Header: Bearer Token, Body: { amount, reason, note })
+    GW->>GW: AuthGuard giải mã token -> Lấy cashierId & branchId
+    GW->>OS: RabbitMQ RPC: 'create_expense'
+    OS->>DB: INSERT INTO expenses (id, branchId, cashierId, amount, reason, note, createdAt)
+    DB-->>OS: Trả về bản ghi Expense vừa tạo
+    OS-->>GW: Expense DTO
+    GW-->>POS: HTTP 201 Created (Expense data)
+
+    Note over POS, Printer: Giai đoạn 3: In Phiếu Chi 80mm & Trích Két
+    POS->>Iframe: Tạo DOM iframe ẩn và nạp HTML hóa đơn 80mm
+    Iframe->>Printer: Kích hoạt iframe.contentWindow.print()
+    Printer-->>Cashier: Xuất phiếu chi nhiệt 80mm (Mã #EXP-..., Số tiền, Chữ ký)
+    Cashier->>Cashier: Mở két tiền mặt, lấy đúng 50.000 đ đưa người giao hàng
+    Cashier->>Cashier: Ký tên Người lập phiếu & Yêu cầu Người nhận ký tên lên phiếu chi
+    Cashier->>Cashier: Kẹp phiếu chi vào ngăn kéo két để phục vụ đối soát kết ca
+    POS->>POS: Tự động đóng ExpenseModal & Hiển thị thông báo thành công
+```
+
+---
+
+## 6. Luồng Vòng Đời Ca Làm Việc & Báo Cáo Kết Ca Bàn Giao (Work Shift Lifecycle & Handover)
+
+Quy trình quản lý dòng tiền vận hành khép kín xuyên suốt một ca trực của Thu ngân: từ khi mở ca khai báo số tiền nhận bàn giao ban đầu, thu tiền bán hàng, xuất tiền chi khẩn cấp, đến thời điểm chốt sổ đối chiếu 3 chiều và in phiếu bàn giao kết ca 80mm.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Cashier as Thu ngân ca trực
+    participant POS as POS Web (Port 5175)
+    participant GW as API Gateway (Port 3000)
+    participant OS as Order Service (Port 3004)
+    participant DB as Order DB
+    participant Printer as Máy in nhiệt 80mm
+
+    %% Giai đoạn 1: Mở ca & Khai báo tiền két
+    Note over Cashier, DB: Giai đoạn 1: Đăng Nhập & Khai Báo Tiền Đầu Ca (Opening Cash)
+    Cashier->>POS: Đăng nhập thành công vào POS Web
+    POS->>POS: Kiểm tra LocalStorage (chưa có phiên ca) -> Mở ShiftSelectModal
+    POS->>POS: Tự động gợi ý Ca 1 (06:00-14:00) hoặc Ca 2 (14:00-22:00) theo giờ hệ thống
+    Cashier->>POS: Nhập "Tiền trong két nhận bàn giao" (initialCash, vd: 1.000.000 đ)
+    Cashier->>POS: Bấm "Bắt đầu ca làm"
+    POS->>POS: Lưu phiên ca pos_shift vào LocalStorage (openedAt, initialCash, cashierName)
+    POS->>POS: Cập nhật Badge ca làm việc trên Header
+
+    %% Giai đoạn 2: Hoạt động trong ca
+    Note over Cashier, DB: Giai đoạn 2: Biến Động Quỹ Tiền Mặt Trong Ca Trực
+    rect rgb(240, 253, 244)
+        Note over Cashier, DB: 1. Bán hàng thu tiền mặt (Cash In): Tăng tổng tiền mặt thu (+totalCash)
+        Cashier->>POS: Bán hàng thu tiền mặt đơn #101 (200.000 đ)
+        POS->>GW: POST /orders/pay-table (paymentMethod: 'CASH')
+        GW->>OS: RabbitMQ RPC: 'pay_table_orders'
+        OS->>DB: Lưu Payment(amount: 200000, method: 'CASH')
+    end
+    rect rgb(239, 246, 255)
+        Note over Cashier, DB: 2. Bán hàng chuyển khoản VietQR: Tăng doanh thu ngân hàng (+totalBankTransfer)
+        Cashier->>POS: Khách quét mã VietQR PayOS đơn #102 (300.000 đ)
+        OS->>DB: Lưu Payment(amount: 300000, method: 'BANK_TRANSFER')
+    end
+    rect rgb(255, 241, 242)
+        Note over Cashier, DB: 3. Chi tiền mặt khẩn cấp (Cash Out): Giảm tiền mặt trong két (-totalExpense)
+        Cashier->>POS: Lập phiếu chi tiền mặt mua đá bi (50.000 đ)
+        POS->>GW: POST /orders/expenses
+        GW->>OS: RabbitMQ RPC: 'create_expense'
+        OS->>DB: Lưu Expense(amount: 50000)
+    end
+
+    %% Giai đoạn 3: Báo cáo kết ca & In phiếu bàn giao
+    Note over Cashier, Printer: Giai đoạn 3: Báo Cáo Kết Ca & In Phiếu Bàn Giao 80mm
+    Cashier->>POS: Hết ca trực: Bấm Menu tiện ích -> Chọn "Báo cáo kết ca"
+    POS->>POS: Mở ShiftSummaryModal
+    POS->>GW: GET /orders/shift-summary (branchId, cashierId, fromDate=openedAt, toDate=now)
+    GW->>OS: RabbitMQ RPC: 'get_shift_summary'
+    OS->>DB: SUM(amount) đơn CASH trong ca -> totalCash = 200.000 đ
+    OS->>DB: SUM(amount) đơn BANK trong ca -> totalBankTransfer = 300.000 đ
+    OS->>DB: SUM(amount) phiếu chi trong ca -> totalExpense = 50.000 đ
+    OS->>DB: SELECT * FROM expenses trong ca -> danh sách expenses
+    OS-->>GW: Trả về ShiftSummaryResult
+    GW-->>POS: HTTP 200 OK (Số liệu tổng kết ca)
+    
+    POS->>POS: Tính chốt két: closingCash = initialCash (1.000.000) + totalCash (200.000) - totalExpense (50.000) = 1.150.000 đ
+    POS->>POS: Tính doanh thu: totalRevenue = totalCash (200.000) + totalBankTransfer (300.000) = 500.000 đ
+    POS->>Cashier: Hiển thị bảng đối soát 3 chiều, thẻ chi phí đỏ và bảng kê phiếu chi (kèm nút in lại)
+    
+    Cashier->>Cashier: Đếm tiền mặt thực tế trong két: 1.150.000 đ (Khớp 100%)
+    Cashier->>POS: Bấm "In phiếu kết ca (80mm)"
+    POS->>Printer: Kích hoạt in Phiếu Bàn Giao Kết Ca khổ 80mm
+    Printer-->>Cashier: Xuất phiếu in đối soát két, doanh thu bán hàng và 2 ô ký tên bàn giao
+    Cashier->>Cashier: Thu ngân ký bàn giao & Thu ngân ca sau ký nhận két tiền
+```
+

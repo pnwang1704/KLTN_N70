@@ -6,9 +6,11 @@ import { Order, OrderStatus, OrderType } from './entities/order.entity';
 import { OrderItem, ItemStatus } from './entities/order-item.entity';
 import { OrderItemTopping } from './entities/order-item-topping.entity';
 import { Payment, PaymentMethod } from './entities/payment.entity';
+import { Expense } from './entities/expense.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateItemStatusDto } from './dto/update-item-status.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
+import { CreateExpenseDto } from './dto/create-expense.dto';
 import { EventsGateway } from '../events/events.gateway';
 
 @Injectable()
@@ -18,6 +20,8 @@ export class OrderService {
     private orderRepository: Repository<Order>,
     @InjectRepository(OrderItem)
     private orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(Expense)
+    private expenseRepository: Repository<Expense>,
     private eventsGateway: EventsGateway,
     @Inject('INVENTORY_SERVICE') private inventoryClient: ClientProxy,
   ) {}
@@ -440,6 +444,42 @@ export class OrderService {
     return { success: true, completedOrderIds: [order.id] };
   }
 
+  async createExpense(createExpenseDto: CreateExpenseDto): Promise<Expense> {
+    const expense = this.expenseRepository.create({
+      branchId: createExpenseDto.branchId,
+      cashierId: createExpenseDto.cashierId,
+      amount: createExpenseDto.amount,
+      reason: createExpenseDto.reason,
+      note: createExpenseDto.note,
+    });
+    return this.expenseRepository.save(expense);
+  }
+
+  async getExpenses(params: {
+    branchId: string;
+    cashierId?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<Expense[]> {
+    const { branchId, cashierId, fromDate, toDate } = params;
+    const query = this.expenseRepository
+      .createQueryBuilder('expense')
+      .where('expense.branchId = :branchId', { branchId })
+      .orderBy('expense.createdAt', 'DESC');
+
+    if (fromDate) {
+      query.andWhere('expense.createdAt >= :fromDate', { fromDate: new Date(fromDate) });
+    }
+    if (toDate) {
+      query.andWhere('expense.createdAt <= :toDate', { toDate: new Date(toDate) });
+    }
+    if (cashierId) {
+      query.andWhere('(expense.cashierId = :cashierId OR expense.cashierId IS NULL)', { cashierId });
+    }
+
+    return query.getMany();
+  }
+
   async getShiftSummary(params: {
     branchId: string;
     cashierId?: string;
@@ -449,9 +489,19 @@ export class OrderService {
     totalRevenue: number;
     totalCash: number;
     totalBankTransfer: number;
+    totalExpense: number;
     totalOrders: number;
     cashierId?: string;
     date: string;
+    expenses: Array<{
+      id: string;
+      branchId: string;
+      cashierId: string;
+      amount: number;
+      reason: string;
+      note?: string;
+      createdAt: Date;
+    }>;
     recentOrders: Array<{
       id: string;
       orderCode: number;
@@ -516,13 +566,38 @@ export class OrderService {
       }
     }
 
+    // Query expenses in the shift period
+    const expenseQuery = this.expenseRepository
+      .createQueryBuilder('expense')
+      .where('expense.branchId = :branchId', { branchId })
+      .andWhere('expense.createdAt >= :startDate', { startDate })
+      .andWhere('expense.createdAt <= :endDate', { endDate })
+      .orderBy('expense.createdAt', 'DESC');
+
+    if (cashierId) {
+      expenseQuery.andWhere('(expense.cashierId = :cashierId OR expense.cashierId IS NULL)', { cashierId });
+    }
+
+    const expenses = await expenseQuery.getMany();
+    const totalExpense = expenses.reduce((sum, exp) => sum + Number(exp.amount || 0), 0);
+
     return {
       totalRevenue,
       totalCash,
       totalBankTransfer,
+      totalExpense,
       totalOrders: orders.length,
       cashierId,
       date: new Date().toISOString().split('T')[0],
+      expenses: expenses.map(e => ({
+        id: e.id,
+        branchId: e.branchId,
+        cashierId: e.cashierId,
+        amount: Number(e.amount),
+        reason: e.reason,
+        note: e.note,
+        createdAt: e.createdAt,
+      })),
       recentOrders: orders.map(o => ({
         id: o.id,
         orderCode: o.orderCode,

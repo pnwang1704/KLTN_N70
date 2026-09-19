@@ -4,6 +4,7 @@ import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateItemStatusDto } from './dto/update-item-status.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
+import { CreateExpenseDto } from './dto/create-expense.dto';
 
 @Controller('orders')
 export class OrderController {
@@ -148,6 +149,35 @@ export class OrderController {
       fromDate,
       toDate,
     });
+  }
+
+  // Message Pattern for creating expense
+  @MessagePattern('create_expense')
+  async handleCreateExpense(@Payload() createExpenseDto: CreateExpenseDto) {
+    return this.orderService.createExpense(createExpenseDto);
+  }
+
+  // HTTP endpoint for creating expense
+  @Post('expenses')
+  async createExpenseHttp(@Body() createExpenseDto: CreateExpenseDto) {
+    return this.orderService.createExpense(createExpenseDto);
+  }
+
+  // Message Pattern for getting expenses
+  @MessagePattern('get_expenses')
+  async handleGetExpenses(@Payload() payload: { branchId: string; cashierId?: string; fromDate?: string; toDate?: string }) {
+    return this.orderService.getExpenses(payload);
+  }
+
+  // HTTP endpoint for getting expenses
+  @Get('expenses')
+  async getExpensesHttp(
+    @Query('branchId') branchId: string,
+    @Query('cashierId') cashierId?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    return this.orderService.getExpenses({ branchId: branchId || '1', cashierId, fromDate, toDate });
   }
 }
 

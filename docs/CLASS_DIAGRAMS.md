@@ -91,6 +91,16 @@ classDiagram
         +Date updatedAt
     }
 
+    class Expense {
+        +UUID id PK
+        +String branchId
+        +String cashierId
+        +Float amount
+        +String reason
+        +String note
+        +Date createdAt
+    }
+
     class OrderItem {
         +UUID id PK
         +UUID orderId FK
@@ -160,7 +170,7 @@ classDiagram
 
 > [!NOTE]
 > **Chuẩn hóa Kiểu Dữ liệu Số (`columnNumericTransformer`):**
-> Các cột lưu trữ số tiền (như `totalAmount`, `finalAmount` trong `Order`, `unitPrice` trong `OrderItem`, `price` trong `OrderItemTopping`, `amount` trong `Payment`) được cấu hình TypeORM `decimal` kèm bộ chuyển đổi `columnNumericTransformer`. Bộ chuyển đổi này tự động parse chuỗi số thập phân từ PostgreSQL thành kiểu số thực JavaScript `number`, ngăn chặn lỗi hiển thị chuỗi dư `.00` (ví dụ: `"40000.00"` -> `40000`) khi truyền về Client.
+> Các cột lưu trữ số tiền (như `totalAmount`, `finalAmount` trong `Order`, `unitPrice` trong `OrderItem`, `price` trong `OrderItemTopping`, `amount` trong `Payment`, và `amount` trong `Expense`) được cấu hình TypeORM `decimal` kèm bộ chuyển đổi `columnNumericTransformer`. Bộ chuyển đổi này tự động parse chuỗi số thập phân từ PostgreSQL thành kiểu số thực JavaScript `number`, ngăn chặn lỗi hiển thị chuỗi dư `.00` (ví dụ: `"40000.00"` -> `40000`) khi truyền về Client.
 
 ---
 
@@ -319,10 +329,11 @@ classDiagram
 | :--- | :--- | :--- |
 | **Auth** | `User` | Tài khoản nhân sự đăng nhập vào hệ thống POS / KDS. Thuộc về một chi nhánh và có một vai trò cụ thể. |
 | **Auth** | `Role` | Enum định nghĩa vai trò RBAC: `ADMIN` (Quản trị viên), `MANAGER` (Quản lý chi nhánh), `CASHIER` (Thu ngân), `KITCHEN` (Đầu bếp), `WAITER` (Nhân viên phục vụ bàn). |
-| **Order** | `Order` | Thực thể đơn hàng cốt lõi. Chứa thông tin tổng tiền tạm tính (`totalAmount`), số tiền thực thu sau chiết khấu (`finalAmount`), tỷ lệ chiết khấu (`discountPercent`), bàn số (`tableId`) và trạng thái đơn (`status`). |
+| **Order** | `Order` | Thực thể đơn hàng cốt lõi. Chứa thông tin tổng tiền tạm tính (`totalAmount`), số tiền thực thu sau chiết khấu (`finalAmount`), tỷ lệ chiết khấu (`discountPercent`), bàn số (`tableId`), thu ngân phụ trách (`cashierId`) và trạng thái đơn (`status`). |
 | **Order** | `OrderItem` | Chi tiết món ăn trong đơn, kích cỡ (Size), số lượng, đơn giá và ghi chú riêng của khách hàng. Có trạng thái chế biến riêng (`itemStatus`). |
 | **Order** | `OrderItemTopping` | Các món thêm (trân châu, thạch, phô mai...) gắn kèm với một món ăn cụ thể trong đơn. |
 | **Order** | `Payment` | Giao dịch tài chính gắn với đơn hàng. Lưu trữ phương thức thanh toán (`CASH`, `BANK_TRANSFER`), số tiền khách trả và thời điểm hoàn tất. |
+| **Order** | `Expense` | Phiếu chi tiền mặt phát sinh tại két thu ngân trong ca (mua đá cây, nguyên vật liệu tươi đột xuất, vật phẩm sửa chữa nhỏ). Chứa `amount`, `reason`, `note`, `cashierId`, `branchId` và thời điểm chi `createdAt`. |
 | **Inventory**| `Ingredient` | Danh mục nguyên vật liệu thô (Trà, sữa tươi, hạt cà phê, đường, bột kem béo...). |
 | **Inventory**| `BranchStock` | Quản lý khối lượng tồn kho thực tế của nguyên liệu tại từng chi nhánh cùng mức tồn kho an toàn (`minThreshold`). |
 | **Inventory**| `Recipe` | Bộ định lượng công thức pha chế cho từng món ăn tương ứng theo từng kích thước (Size). |

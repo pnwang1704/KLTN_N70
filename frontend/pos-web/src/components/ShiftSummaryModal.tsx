@@ -12,11 +12,14 @@ import {
   User, 
   Building2, 
   Clock,
-  ArrowRightLeft
+  ArrowRightLeft,
+  TrendingDown,
+  Receipt
 } from 'lucide-react';
 import api from '../lib/axios';
 import { formatCurrency, formatDate, formatDateTimeFull, formatPaymentMethod } from '../lib/utils';
 import type { ShiftSession } from './ShiftSelectModal';
+import { printExpenseReceipt } from './ExpenseModal';
 
 interface ShiftSummaryModalProps {
   isOpen: boolean;
@@ -38,6 +41,7 @@ export const printShiftReceipt = (params: {
   closedAt: string;
   initialCash: number;
   totalCash: number;
+  totalExpense?: number;
   closingCash: number;
   totalBankTransfer: number;
   totalRevenue: number;
@@ -51,6 +55,7 @@ export const printShiftReceipt = (params: {
     closedAt,
     initialCash,
     totalCash,
+    totalExpense = 0,
     closingCash,
     totalBankTransfer,
     totalRevenue,
@@ -201,12 +206,16 @@ export const printShiftReceipt = (params: {
     <div>
       <div class="section-title uppercase">ĐỐI SOÁT TIỀN MẶT TRONG KÉT</div>
       <div class="row">
-        <span>Tiền đầu ca nhận:</span>
+        <span>1. Tiền mặt đầu ca nhận:</span>
         <span class="font-bold">${formatCurrency(initialCash)}</span>
       </div>
       <div class="row">
-        <span>Tiền mặt thu trong ca:</span>
+        <span>2. (+) Tiền mặt thu trong ca:</span>
         <span class="font-bold">${formatCurrency(totalCash)}</span>
+      </div>
+      <div class="row">
+        <span>3. (-) Tiền mặt đã chi:</span>
+        <span class="font-bold">${formatCurrency(totalExpense)}</span>
       </div>
       <div class="solid"></div>
       <div class="row-total">
@@ -316,6 +325,14 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
     totalCash: number;
     totalBankTransfer: number;
     totalOrders: number;
+    totalExpense?: number;
+    expenses?: Array<{
+      id: string;
+      amount: number;
+      reason: string;
+      note?: string;
+      createdAt: string;
+    }>;
     date: string;
     recentOrders?: any[];
   } | null>(null);
@@ -381,7 +398,9 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
     return 0;
   })();
   const totalCash = Number(summaryData?.totalCash || 0);
-  const closingCash = initialCash + totalCash;
+  const totalExpense = Number(summaryData?.totalExpense || 0);
+  const expenses = summaryData?.expenses || [];
+  const closingCash = initialCash + totalCash - totalExpense;
   const totalBankTransfer = Number(summaryData?.totalBankTransfer || 0);
   const totalRevenue = Number(summaryData?.totalRevenue || 0);
   const totalOrders = Number(summaryData?.totalOrders || 0);
@@ -409,6 +428,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
       closedAt: now,
       initialCash,
       totalCash,
+      totalExpense,
       closingCash,
       totalBankTransfer,
       totalRevenue,
@@ -457,12 +477,16 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
               ĐỐI SOÁT TIỀN MẶT TRONG KÉT
             </div>
             <div className="flex justify-between items-center">
-              <span>Tiền đầu ca nhận:</span>
+              <span>1. Tiền mặt đầu ca nhận:</span>
               <span className="font-bold">{formatCurrency(initialCash)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span>Tiền mặt thu trong ca:</span>
+              <span>2. (+) Tiền mặt thu trong ca:</span>
               <span className="font-bold">{formatCurrency(totalCash)}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span>3. (-) Tiền mặt đã chi:</span>
+              <span className="font-bold">{formatCurrency(totalExpense)}</span>
             </div>
             <div className="border-b border-black my-1" />
             <div className="flex justify-between items-center font-black text-xs">
@@ -595,98 +619,200 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
               </div>
             </div>
 
-            {/* 4 Financial Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* 1. Cash Card - Highlight Cash Reconciliation with initialCash */}
-              <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-5 text-white shadow-lg shadow-emerald-600/20 relative overflow-hidden flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-1.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-emerald-100 flex items-center gap-1.5">
-                      💵 Tổng tiền mặt trong két
-                    </span>
-                    <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
-                      <Banknote size={20} className="text-white" />
+            {/* Financial Stat Cards */}
+            <div className="space-y-4">
+              {/* Row 1: Cash in Drawer & Cash Out Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* 1. Cash Card - Highlight Cash Reconciliation */}
+                <div className="bg-gradient-to-br from-emerald-600 to-teal-700 rounded-2xl p-5 text-white shadow-lg shadow-emerald-600/20 relative overflow-hidden flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-1.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-emerald-100 flex items-center gap-1.5">
+                        💵 Tổng tiền mặt trong két
+                      </span>
+                      <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                        <Banknote size={20} className="text-white" />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-black tracking-tight mt-0.5 text-white">
+                      {formatCurrency(closingCash)}
                     </div>
                   </div>
-                  <div className="text-2xl font-black tracking-tight mt-0.5 text-white">
-                    {formatCurrency(closingCash)}
+
+                  <div className="mt-3.5 pt-3 border-t border-emerald-500/50 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-emerald-100">
+                      <span>1. Tiền đầu ca nhận bàn giao:</span>
+                      <span className="font-bold text-white">{formatCurrency(initialCash)}</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-100">
+                      <span>2. (+) Tiền mặt thu trong ca:</span>
+                      <span className="font-bold text-white">+{formatCurrency(totalCash)}</span>
+                    </div>
+                    <div className="flex justify-between text-rose-200">
+                      <span>3. (-) Tiền mặt đã chi trong ca:</span>
+                      <span className="font-bold text-rose-200">-{formatCurrency(totalExpense)}</span>
+                    </div>
+                    <div className="flex justify-between text-emerald-200 font-bold pt-1.5 border-t border-emerald-500/30 text-xs">
+                      <span>Tổng tiền mặt trong két thực tế:</span>
+                      <span className="text-amber-300 font-black">{formatCurrency(closingCash)}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="mt-3.5 pt-3 border-t border-emerald-500/50 space-y-1.5 text-xs">
-                  <div className="flex justify-between text-emerald-100">
-                    <span>Tiền đầu ca nhận bàn giao:</span>
-                    <span className="font-bold text-white">{formatCurrency(initialCash)}</span>
+                {/* 2. Expense Card - Tiền chi trong ca (Rose/Red) */}
+                <div className="bg-gradient-to-br from-rose-600 to-red-700 rounded-2xl p-5 text-white shadow-lg shadow-rose-600/20 relative overflow-hidden flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-1.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-rose-100 flex items-center gap-1.5">
+                        💸 Tiền chi trong ca (Cash Out)
+                      </span>
+                      <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
+                        <TrendingDown size={20} className="text-white" />
+                      </div>
+                    </div>
+                    <div className="text-2xl font-black tracking-tight mt-0.5 text-white">
+                      {formatCurrency(totalExpense)}
+                    </div>
                   </div>
-                  <div className="flex justify-between text-emerald-100">
-                    <span>Tiền mặt phát sinh trong ca:</span>
-                    <span className="font-bold text-white">+{formatCurrency(totalCash)}</span>
-                  </div>
-                  <div className="flex justify-between text-emerald-200 font-bold pt-1.5 border-t border-emerald-500/30 text-xs">
-                    <span>Tổng tiền mặt trong két hiện tại:</span>
-                    <span className="text-amber-300 font-black">{formatCurrency(closingCash)}</span>
+
+                  <div className="mt-3.5 pt-3 border-t border-rose-500/50 space-y-1.5 text-xs">
+                    <div className="flex justify-between text-rose-100">
+                      <span>Số lượng phiếu chi:</span>
+                      <span className="font-bold text-white">{expenses.length} phiếu</span>
+                    </div>
+                    <p className="text-[11px] text-rose-100/90 pt-1">
+                      Các khoản tiền mặt trích từ két để mua nguyên vật liệu, đá, đồ dùng khẩn cấp.
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* 2. Bank Transfer Card */}
-              <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-5 text-white shadow-lg shadow-blue-500/15 relative overflow-hidden flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-blue-100">
-                      💳 Chuyển khoản (VietQR / PayOS)
-                    </span>
-                    <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl">
-                      <CreditCard size={20} className="text-white" />
+              {/* Row 2: Sales Breakdown Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {/* 3. Bank Transfer Card */}
+                <div className="bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl p-4 text-white shadow-lg shadow-blue-500/15 relative overflow-hidden flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-1.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-blue-100">
+                        💳 Chuyển khoản
+                      </span>
+                      <div className="p-1.5 bg-white/20 backdrop-blur-sm rounded-lg">
+                        <CreditCard size={18} className="text-white" />
+                      </div>
+                    </div>
+                    <div className="text-xl font-black tracking-tight mt-1">
+                      {formatCurrency(totalBankTransfer)}
                     </div>
                   </div>
-                  <div className="text-2xl font-black tracking-tight mt-1">
-                    {formatCurrency(totalBankTransfer)}
-                  </div>
+                  <p className="text-[10px] text-blue-100 mt-2 pt-2 border-t border-blue-500/40">
+                    VietQR / PayOS Napas 247
+                  </p>
                 </div>
-                <p className="text-[11px] text-blue-100 mt-3 pt-3 border-t border-blue-500/40">
-                  Tiền đã thanh toán qua tài khoản ngân hàng (Napas 247)
-                </p>
+
+                {/* 4. Total Revenue Card */}
+                <div className="bg-white border-2 border-orange-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-1.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                        💰 Doanh thu bán hàng
+                      </span>
+                      <div className="p-1.5 bg-orange-100 rounded-lg text-orange-600">
+                        <Coins size={18} />
+                      </div>
+                    </div>
+                    <div className="text-xl font-black text-orange-600 tracking-tight mt-1">
+                      {formatCurrency(totalRevenue)}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-2 pt-2 border-t border-zinc-100 truncate">
+                    Tiền mặt + Chuyển khoản
+                  </p>
+                </div>
+
+                {/* 5. Total Orders Served */}
+                <div className="bg-white border-2 border-zinc-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex justify-between items-start mb-1.5">
+                      <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
+                        📋 Đơn đã phục vụ
+                      </span>
+                      <div className="p-1.5 bg-purple-100 rounded-lg text-purple-600">
+                        <ClipboardList size={18} />
+                      </div>
+                    </div>
+                    <div className="text-xl font-black text-zinc-900 tracking-tight mt-1">
+                      {totalOrders} <span className="text-xs font-semibold text-zinc-500">đơn</span>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-400 mt-2 pt-2 border-t border-zinc-100">
+                    Đơn hoàn tất (COMPLETED)
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Expenses List Table with Reprint Receipt Button */}
+            <div className="bg-white rounded-2xl border border-zinc-200 overflow-hidden shadow-sm">
+              <div className="px-5 py-3.5 border-b border-zinc-200 bg-rose-50/50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Receipt size={16} className="text-rose-600" />
+                  <h4 className="font-bold text-xs uppercase tracking-wider text-rose-900">
+                    Bảng kê chi tiền mặt trong ca ({expenses.length})
+                  </h4>
+                </div>
+                <span className="text-xs text-rose-700 font-bold">Tổng chi: -{formatCurrency(totalExpense)}</span>
               </div>
 
-              {/* 3. Total Revenue Card */}
-              <div className="bg-white border-2 border-orange-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                      💰 Doanh thu bán hàng trong ca
-                    </span>
-                    <div className="p-2 bg-orange-100 rounded-xl text-orange-600">
-                      <Coins size={20} />
-                    </div>
+              <div className="max-h-48 overflow-y-auto">
+                {expenses.length === 0 ? (
+                  <div className="py-6 text-center text-xs text-zinc-400">
+                    Chưa có phiếu chi tiền mặt nào phát sinh trong ca này
                   </div>
-                  <div className="text-2xl font-black text-orange-600 tracking-tight mt-1">
-                    {formatCurrency(totalRevenue)}
-                  </div>
-                </div>
-                <p className="text-[11px] text-zinc-400 mt-3 pt-3 border-t border-zinc-100">
-                  = Tiền mặt ({formatCurrency(totalCash)}) + Chuyển khoản ({formatCurrency(totalBankTransfer)})
-                </p>
-              </div>
-
-              {/* 4. Total Orders Served */}
-              <div className="bg-white border-2 border-zinc-200 rounded-2xl p-5 shadow-sm flex flex-col justify-between">
-                <div>
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
-                      📋 Đơn hàng đã phục vụ
-                    </span>
-                    <div className="p-2 bg-purple-100 rounded-xl text-purple-600">
-                      <ClipboardList size={20} />
-                    </div>
-                  </div>
-                  <div className="text-2xl font-black text-zinc-900 tracking-tight mt-1">
-                    {totalOrders} <span className="text-sm font-semibold text-zinc-500">đơn</span>
-                  </div>
-                </div>
-                <p className="text-[11px] text-zinc-400 mt-3 pt-3 border-t border-zinc-100">
-                  Các đơn đã thanh toán hoàn tất (COMPLETED)
-                </p>
+                ) : (
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-zinc-100/60 text-zinc-500 font-semibold border-b border-zinc-200 sticky top-0">
+                      <tr>
+                        <th className="px-4 py-2.5">Thời gian</th>
+                        <th className="px-4 py-2.5">Lý do chi</th>
+                        <th className="px-4 py-2.5">Người nhận / Ghi chú</th>
+                        <th className="px-4 py-2.5 text-right">Số tiền chi</th>
+                        <th className="px-4 py-2.5 text-center">In lại</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-zinc-100">
+                      {expenses.map((exp) => (
+                        <tr key={exp.id} className="hover:bg-rose-50/30 transition-colors">
+                          <td className="px-4 py-2 text-zinc-600">{formatDate(exp.createdAt)}</td>
+                          <td className="px-4 py-2 font-semibold text-zinc-900">{exp.reason}</td>
+                          <td className="px-4 py-2 text-zinc-500">{exp.note || '-'}</td>
+                          <td className="px-4 py-2 font-black text-rose-600 text-right">
+                            -{formatCurrency(exp.amount)}
+                          </td>
+                          <td className="px-4 py-2 text-center">
+                            <button
+                              onClick={() => {
+                                printExpenseReceipt({
+                                  id: exp.id,
+                                  amount: exp.amount,
+                                  reason: exp.reason,
+                                  note: exp.note,
+                                  cashierName: cashierDisplayName,
+                                  shiftName: shortShiftName,
+                                  branchId: branchId || '1',
+                                  createdAt: exp.createdAt,
+                                });
+                              }}
+                              className="p-1.5 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold"
+                              title="In lại phiếu chi 80mm"
+                            >
+                              <Printer size={14} className="text-zinc-700" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
 

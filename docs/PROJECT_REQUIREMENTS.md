@@ -63,7 +63,10 @@
 | **UC16** | Bền vững hóa dữ liệu Docker Compose | Hạ tầng Devops | **ĐÃ HOÀN THÀNH** | Cấu hình Named Persistent Volumes cho RabbitMQ và 6 Database PostgreSQL, chống mất dữ liệu khi restart/rebuild container. |
 | **UC17** | Kiểm thử tự động (Unit Testing) | Toàn hệ thống | **ĐÃ HOÀN THÀNH** | Xây dựng bộ Jest Unit Tests toàn diện: kiểm thử phân quyền RBAC Guard (`roles.guard.spec.ts`) và kiểm thử tính toàn vẹn Transaction trừ kho/rollback khi thiếu nguyên liệu (`inventory.service.spec.ts`). |
 | **UC18** | Luồng Khách hàng Toàn diện & Realtime Sync | Customer / POS | **ĐÃ HOÀN THÀNH** | Quét QR tự nhận diện bàn, gọi nhiều đợt, xem danh sách "Món đã gọi", gộp hóa đơn tại POS khi thanh toán và tự động giải phóng bàn real-time qua sự kiện Socket.IO `table:completed`. |
-| **UC19** | Quản lý Ca làm việc & Báo cáo kết ca (Shift Summary) | POS Web / Order | **ĐÃ HOÀN THÀNH** | Thu ngân bắt buộc chọn ca (Ca 1 / Ca 2 tự động gợi ý theo giờ hệ thống) khi đăng nhập, hiển thị badge ca làm việc trên Header. Báo cáo kết ca vận hành tức thời từ `order-service` theo `branchId`, `cashierId`, và khoảng thời gian UTC `fromDate`-`toDate`. Thống kê chi tiết tiền mặt, chuyển khoản VietQR, tổng doanh thu, số đơn đã phục vụ, danh sách đơn trong ca và in phiếu kết ca nhiệt 80mm chuẩn chữ ký bàn giao. |
+| **UC19** | Quản lý Ca làm việc & Tiền két đầu ca | POS Web / Order | **ĐÃ HOÀN THÀNH** | Thu ngân bắt buộc chọn ca (`Ca 1 (06:00 - 14:00)` hoặc `Ca 2 (14:00 - 22:00)` tự động gợi ý theo giờ hệ thống) khi đăng nhập. Nhập số tiền trong két nhận bàn giao đầu ca (`initialCash`) qua bộ gõ Input Mask mượt mà (tự định dạng dấu chấm `1.000.000 đ`, hỗ trợ xóa Backspace tự nhiên) và lưu phiên ca `pos_shift` (`shiftCode`, `shiftName`, `openedAt`, `cashierName`, `initialCash`). Hiển thị badge ca làm việc trên Header. |
+| **UC20** | Quản lý Phiếu chi tiền mặt tại két (Cash Out) | POS / Order / Gateway | **ĐÃ HOÀN THÀNH** | Cho phép thu ngân tạo phiếu chi tiền mặt khẩn cấp (`POST /orders/expenses`): nhập số tiền chi, lý do, người nhận; lưu vào bảng `expenses` trong `order_db`. Hỗ trợ in tức thời **Phiếu chi nhiệt 80mm** có đầy đủ chữ ký người lập và người nhận qua iframe ẩn; tích hợp nút in lại (Printer) tại từng dòng trong báo cáo. |
+| **UC21** | Báo cáo kết ca & Đối soát tiền két 3 chiều | POS Web / Order | **ĐÃ HOÀN THÀNH** | Báo cáo vận hành tức thời (`GET /orders/shift-summary`) trả về `totalRevenue`, `totalCash`, `totalBankTransfer`, `totalExpense`, mảng `expenses` và `recentOrders`. Giao diện hiển thị thẻ chi phí màu Rose/Red, công thức chốt két vật lý: $\text{closingCash} = \text{initialCash} + \text{totalCash} - \text{totalExpense}$, và in **Phiếu bàn giao kết ca 80mm** chuẩn mẫu chữ ký 2 bên. |
+| **UC22** | Menu tiện ích Dropdown trên Header POS | POS Web | **ĐÃ HOÀN THÀNH** | Tối ưu không gian làm việc bằng nút icon Menu vuông bo góc (`w-10 h-10`) nằm bên trái nút "Bán hàng". Khi bấm bung mở Dropdown tiện ích: Lịch sử đơn hàng trong ca, Báo cáo kết ca, Tạo phiếu chi tiền mặt, Quản lý kho, Quản lý nhân viên; tự động đóng khi click ra ngoài. |
 
 ---
 
@@ -87,7 +90,7 @@
 ### Quyết định 4: Sử dụng TypeORM `columnNumericTransformer`
 * **Bối cảnh:** PostgreSQL lưu số tiền dạng `decimal(10,2)` trả về JavaScript dưới dạng chuỗi (ví dụ: `"40000.00"`).
 * **Vấn đề:** Giao diện POS bị lỗi hiển thị số tiền có đuôi `.00` ở ô nhập tiền khách đưa.
-* **Giải pháp:** Áp dụng bộ chuyển đổi số học tự động convert chuỗi decimal thành số nguyên/thực trong JavaScript ở toàn bộ các Entity liên quan (`Order`, `OrderItem`, `OrderItemTopping`, `Payment`).
+* **Giải pháp:** Áp dụng bộ chuyển đổi số học tự động convert chuỗi decimal thành số nguyên/thực trong JavaScript ở toàn bộ các Entity liên quan (`Order`, `OrderItem`, `OrderItemTopping`, `Payment`, `Expense`).
 
 ### Quyết định 5: Hợp nhất vật lý đơn gọi nhiều đợt khi thanh toán bàn (`processTablePayment`)
 * **Bối cảnh:** Khách tại bàn gọi nhiều đợt trong bữa ăn (đợt 1 gọi đồ uống, đợt 2 gọi thêm món ăn).
@@ -107,3 +110,23 @@
   2. Báo cáo kết ca được truy vấn trực tiếp từ `order-service` thông qua API Gateway với bộ lọc khoảng thời gian UTC `fromDate` (thời điểm mở ca thực tế) đến `toDate` (thời điểm kết ca).
   3. Ghi nhận `cashierId` đồng loạt vào toàn bộ các đơn của bàn khi thanh toán gộp bàn (`processTablePayment`) và cho phép truy vấn tương thích cả các đơn QR đặt tại bàn không gán thu ngân (`cashierId IS NULL`).
   4. Hỗ trợ xuất mẫu in nhiệt 80mm với đầy đủ thông tin chi nhánh, thu ngân, ca trực, giờ mở/đóng ca, phân tách doanh thu theo phương thức thanh toán và các dòng chữ ký xác nhận bàn giao.
+
+### Quyết định 8: Quản lý Dòng tiền Chi tiền mặt (Cash Out) và Công thức Chốt két 3 chiều
+* **Bối cảnh:** Trong thực tế vận hành quán cà phê/nhà hàng, nhân viên thu ngân thường xuyên phải trích tiền mặt từ két để thanh toán các khoản chi phí phát sinh khẩn cấp (mua thêm đá cây khi hết đá vào giờ cao điểm, mua chanh/sả tươi tại chợ lân cận, mua nước ngọt, trả phí giao hàng...).
+* **Vấn đề:** Nếu không có cơ chế ghi nhận tức thì trên phần mềm POS, đến cuối ca kiểm két sẽ bị hụt tiền mặt ("lệch két") so với tổng số tiền thu trên phần mềm, dẫn đến khó khăn trong đối soát và quy trách nhiệm giữa các ca.
+* **Giải pháp:**
+  1. Xây dựng Entity `Expense` và các endpoint `POST /orders/expenses`, `GET /orders/expenses` để ghi nhận phiếu chi kèm lý do và người nhận tiền.
+  2. Xây dựng modal `ExpenseModal.tsx` trên POS Web với bộ gõ Input Mask mượt mà và nút "Lưu & In phiếu chi" nhiệt 80mm để ký nhận và kẹp vào két.
+  3. Bổ sung bảng kê phiếu chi vào `ShiftSummaryModal.tsx` kèm nút in lại từng phiếu khi cần kiểm tra lại chứng từ.
+
+### Quyết định 9: Tính độc lập giữa Doanh thu Bán hàng (`totalRevenue`) và Kiểm kê Tiền két (`closingCash`)
+* **Bối cảnh:** Khi có khoản chi tiền mặt (`totalExpense`) lấy từ két, phát sinh câu hỏi: Doanh thu ca trực có bị trừ bớt khoản tiền chi này hay không?
+* **Quy chuẩn Kế toán:** Doanh thu bán hàng (Revenue) phản ánh tổng giá trị sản phẩm/dịch vụ mà quán đã bán ra cho khách hàng trong ca. Chi phí mua đá, nguyên liệu (Expenses) là chi phí vận hành (OPEX). Theo nguyên lý kế toán kép, chi phí không được cấn trừ trực tiếp vào doanh thu gộp khi chốt ca bán hàng.
+* **Giải pháp Kỹ thuật:**
+  - **Tổng doanh thu bán hàng trong ca:** $\text{totalRevenue} = \text{totalCash} + \text{totalBankTransfer}$ (Giữ nguyên vẹn, phản ánh chính xác kết quả kinh doanh).
+  - **Tổng tiền mặt trong két thực tế:** $\text{closingCash} = \text{initialCash} + \text{totalCash} - \text{totalExpense}$ (Trừ chính xác khoản tiền mặt đã trích ra khỏi két để đảm bảo số đếm tiền vật lý khớp 100% với số liệu chốt két).
+
+### Quyết định 10: Cơ chế In nhiệt 80mm bằng Hidden Iframe cho Phiếu chi và Phiếu kết ca
+* **Bối cảnh:** Trong các ứng dụng Web SPA (React/Vite), khi in hóa đơn thường sử dụng CSS `@media print` ẩn các phần tử giao diện (`#root { display: none !important; }`) và chỉ hiển thị khối in.
+* **Vấn đề:** Một số trình duyệt Chromium hoặc thư viện React Modal khi mở lớp phủ (`fixed inset-0`) có thể gây xung đột CSS print, khiến lệnh `window.print()` in ra trang trắng hoặc không mở được hộp thoại in.
+* **Giải pháp:** Áp dụng phương pháp tạo một thẻ `<iframe>` ẩn độc lập trong DOM (`document.createElement('iframe')`), ghi nội dung tài liệu in nhiệt 80mm tự thân (self-contained HTML với khổ `@page { size: 80mm auto; margin: 0; }`), kích hoạt lệnh `iframe.contentWindow.print()` và tự động tháo gỡ iframe khỏi DOM sau khi in. Phương pháp này hoạt động ổn định 100% trên tất cả các trình duyệt và máy in nhiệt POS thông dụng.
