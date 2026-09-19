@@ -95,5 +95,40 @@ export class OrderController {
     const cashierId = body.cashierId || req.user?.sub || req.user?.id;
     return this.orderClient.send('pay_table_orders', { ...body, cashierId });
   }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Post('expenses')
+  createExpense(@Body() body: any, @Req() req: any) {
+    const cashierId = body.cashierId || req.user?.sub || req.user?.id;
+    const branchId = body.branchId || req.user?.branchId || '1';
+    return this.orderClient.send('create_expense', {
+      ...body,
+      cashierId,
+      branchId,
+    });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Get('expenses')
+  getExpenses(
+    @Req() req: any,
+    @Query('branchId') queryBranchId?: string,
+    @Query('cashierId') queryCashierId?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    const branchId = queryBranchId || req.user?.branchId || '1';
+    const cashierId = queryCashierId !== undefined ? queryCashierId : (req.user?.sub || req.user?.id);
+    const startDate = fromDate || from;
+    const endDate = toDate || to;
+    return this.orderClient.send('get_expenses', {
+      branchId,
+      cashierId,
+      fromDate: startDate,
+      toDate: endDate,
+    });
+  }
 }
 
