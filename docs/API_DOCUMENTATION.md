@@ -13,7 +13,9 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `GET`  | `/auth/users` | `auth-service` | `ADMIN`, `MANAGER` | Lấy danh sách nhân viên (Hỗ trợ query `?branchId=`). Trả về danh sách user không chứa mật khẩu (`200 OK`). |
 | `PATCH`| `/auth/users/:id/status` | `auth-service` | `ADMIN`, `MANAGER` | Bật/Tắt trạng thái kích hoạt tài khoản (`isActive`: `true`/`false`) (`200 OK`, `404 Not Found`). |
 | `GET`  | `/orders` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách lịch sử đơn hàng (Hỗ trợ lọc theo `?branchId=&fromDate=&toDate=`) (`200 OK`). |
-| `GET`  | `/orders/shift-summary` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Báo cáo doanh thu và tổng kết ca của Thu ngân (`?branchId=&cashierId=&fromDate=&toDate=`) (`200 OK`). |
+| `GET`  | `/orders/shift-summary` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Báo cáo doanh thu, chi phí và đối soát két tiền mặt kết ca của Thu ngân (`?branchId=&cashierId=&fromDate=&toDate=`) (`200 OK`). |
+| `POST` | `/orders/expenses` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Tạo phiếu chi tiền mặt (Cash Out) từ két tiền thu ngân (`201 Created`, `400 Bad Request`). |
+| `GET`  | `/orders/expenses` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách phiếu chi tiền mặt trong ca/chi nhánh (`?branchId=&cashierId=&fromDate=&toDate=`) (`200 OK`). |
 | `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`) (`200 OK`). |
 | `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (Dine-in Post-pay) hoặc POS Web (`201 Created`, `400 Bad Request`). |
 | `DELETE`| `/orders/:id` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Hủy đơn hàng tạm khi đóng modal thanh toán mà chưa thanh toán. **Điều kiện chặn:** Chỉ xóa khi `status === PENDING`, chặn xóa đơn đã `COMPLETED` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
@@ -101,7 +103,10 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
   - `cashierId` (tùy chọn): ID thu ngân (nếu không truyền, tự động trích xuất từ JWT token `req.user.sub`).
   - `fromDate` (tùy chọn): Thời điểm bắt đầu ca (ISO 8601 string, ví dụ: `2026-09-14T06:00:00.000Z`).
   - `toDate` (tùy chọn): Thời điểm kết ca / thời điểm truy vấn (ISO 8601 string).
-* **Mục đích:** Cung cấp số liệu tài chính vận hành tức thời cho Thu ngân đối soát két tiền mặt và doanh thu ca trực, hỗ trợ in Phiếu kết ca nhiệt 80mm trước khi bàn giao.
+* **Mục đích:** Cung cấp số liệu tài chính vận hành tức thời cho Thu ngân đối soát quỹ tiền mặt và doanh thu ca trực, hỗ trợ in Phiếu kết ca nhiệt 80mm trước khi bàn giao.
+* **Quy chuẩn Kế toán Đối soát:**
+  - **Tổng doanh thu ca:** $\text{totalRevenue} = \text{totalCash} + \text{totalBankTransfer}$ (Doanh số bán hàng thực tế, không bị trừ chi phí).
+  - **Chốt tiền mặt trong két:** $\text{closingCash} = \text{initialCash} + \text{totalCash} - \text{totalExpense}$ (Kiểm kê tiền mặt bàn giao thực tế tại quầy).
 
 **Response (200 OK):**
 ```json
@@ -109,7 +114,19 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
   "totalRevenue": 1250000,
   "totalCash": 750000,
   "totalBankTransfer": 500000,
+  "totalExpense": 50000,
   "totalOrders": 15,
+  "expenses": [
+    {
+      "id": "061da6b9-8d85-4ced-8390-33cfc495057a",
+      "branchId": "1",
+      "cashierId": "380a9f0f-a691-4718-bcdb-99ea94d07d38",
+      "amount": 50000,
+      "reason": "Mua đá cây khẩn cấp",
+      "note": "Tiệm tạp hóa số 5",
+      "createdAt": "2026-09-19T06:56:50.979Z"
+    }
+  ],
   "recentOrders": [
     {
       "id": "e93bc4da-...",
@@ -124,6 +141,63 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
     }
   ]
 }
+```
+
+### 1.5. Tạo phiếu chi tiền mặt tại két (`POST /orders/expenses`)
+* **Endpoint:** `POST /orders/expenses`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Xác thực:** Gửi kèm Header `Authorization: Bearer <accessToken>`. Gateway tự động giải mã `req.user.sub` để gán `cashierId`, trích xuất `branchId` từ user profile hoặc payload.
+* **Mục đích:** Ghi nhận các khoản chi tiền mặt trực tiếp từ két tại quầy (mua đá cây, nguyên vật liệu khẩn cấp, đồ dùng vận hành) và hỗ trợ in Phiếu chi nhiệt 80mm.
+
+**Request Body (JSON):**
+```json
+{
+  "amount": 50000,
+  "reason": "Mua thêm đá bi và chanh tươi",
+  "note": "Tiệm tạp hóa cô Ba"
+}
+```
+
+**Ràng buộc DTO (`CreateExpenseDto`):**
+- `amount`: Số nguyên hoặc số thực dương (`IsNumber`, `Min(1)`).
+- `reason`: Chuỗi mô tả lý do chi, bắt buộc (`IsString`, `IsNotEmpty`).
+- `note`: Chuỗi ghi chú hoặc người nhận tiền, không bắt buộc (`IsString`, `IsOptional`).
+
+**Response (201 Created):**
+```json
+{
+  "id": "061da6b9-8d85-4ced-8390-33cfc495057a",
+  "branchId": "1",
+  "cashierId": "380a9f0f-a691-4718-bcdb-99ea94d07d38",
+  "amount": 50000,
+  "reason": "Mua thêm đá bi và chanh tươi",
+  "note": "Tiệm tạp hóa cô Ba",
+  "createdAt": "2026-09-19T06:56:50.979Z"
+}
+```
+
+### 1.6. Lấy danh sách phiếu chi tiền mặt (`GET /orders/expenses`)
+* **Endpoint:** `GET /orders/expenses`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Query Parameters:**
+  - `branchId` (bắt buộc): ID chi nhánh (ví dụ: `1`).
+  - `cashierId` (tùy chọn): ID thu ngân lập phiếu.
+  - `fromDate` (tùy chọn): Thời điểm bắt đầu lọc (ISO 8601 string).
+  - `toDate` (tùy chọn): Thời điểm kết thúc lọc (ISO 8601 string).
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": "061da6b9-8d85-4ced-8390-33cfc495057a",
+    "branchId": "1",
+    "cashierId": "380a9f0f-a691-4718-bcdb-99ea94d07d38",
+    "amount": 50000,
+    "reason": "Mua thêm đá bi và chanh tươi",
+    "note": "Tiệm tạp hóa cô Ba",
+    "createdAt": "2026-09-19T06:56:50.979Z"
+  }
+]
 ```
 
 ---
@@ -142,7 +216,9 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `'create_order'` | API Gateway | `order-service` | `CreateOrderDto` | `Order` mới tạo (`status: PENDING`) |
 | `'get_orders'` | API Gateway | `order-service` | `branchId: string` \| `{ branchId, fromDate?, toDate? }` | `Order[]` (kèm items & toppings) |
 | `'get_active_orders'` | API Gateway | `order-service` | `{ branchId: string, tableId?: string }` | `Order[]` (các đơn chưa hoàn tất của bàn/chi nhánh) |
-| `'get_shift_summary'` | API Gateway | `order-service` | `{ branchId, cashierId?, fromDate?, toDate? }` | `ShiftSummaryResult` (`totalRevenue`, `totalCash`, `totalBankTransfer`, `totalOrders`, `recentOrders`) |
+| `'get_shift_summary'` | API Gateway | `order-service` | `{ branchId, cashierId?, fromDate?, toDate? }` | `ShiftSummaryResult` (`totalRevenue`, `totalCash`, `totalBankTransfer`, `totalExpense`, `expenses`, `totalOrders`, `recentOrders`) |
+| `'create_expense'` | API Gateway | `order-service` | `CreateExpenseDto & { branchId, cashierId }` | `Expense` entity mới tạo trong cơ sở dữ liệu |
+| `'get_expenses'` | API Gateway | `order-service` | `{ branchId, cashierId?, fromDate?, toDate? }` | `Expense[]` danh sách các phiếu chi tiền mặt |
 | `'process_payment'` | API Gateway | `order-service` | `{ orderId, processPaymentDto }` | `Order` (`status: COMPLETED`, `payment`) |
 | `'pay_table_orders'` | API Gateway | `order-service` | `{ branchId, tableId, paymentMethod, amountPaid }` | `{ success: boolean, completedOrderIds: string[] }` |
 | `'delete_order'` | API Gateway | `order-service` | `id: string` | `{ success: boolean, message: string }` |
