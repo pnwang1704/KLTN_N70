@@ -10,6 +10,7 @@ import { InventoryManagement } from './components/InventoryManagement';
 import { StaffManagement } from './components/StaffManagement';
 import { ShiftSelectModal, type ShiftSession } from './components/ShiftSelectModal';
 import { ShiftSummaryModal } from './components/ShiftSummaryModal';
+import { ExpenseModal } from './components/ExpenseModal';
 import { useSocket } from './hooks/useSocket';
 import type { Product } from './types';
 
@@ -19,6 +20,7 @@ function App() {
   const [currentShift, setCurrentShift] = useState<ShiftSession | null>(null);
   const [showShiftSelect, setShowShiftSelect] = useState<boolean>(false);
   const [showShiftSummary, setShowShiftSummary] = useState<boolean>(false);
+  const [showExpenseModal, setShowExpenseModal] = useState<boolean>(false);
   
   useEffect(() => {
     // Check if user is already logged in
@@ -84,6 +86,7 @@ function App() {
         currentShift={currentShift}
         onOpenShiftSummary={() => setShowShiftSummary(true)}
         onOpenShiftSelect={() => setShowShiftSelect(true)}
+        onOpenExpenseModal={() => setShowExpenseModal(true)}
       />
       
       {activeTab === 'POS' && (
@@ -153,6 +156,14 @@ function App() {
           setShowShiftSummary(false);
           setShowShiftSelect(true);
         }}
+      />
+
+      {/* Expense Modal (Cash Out) */}
+      <ExpenseModal 
+        isOpen={showExpenseModal}
+        onClose={() => setShowExpenseModal(false)}
+        currentShift={currentShift}
+        branchId={branchId}
       />
 
       {/* Toast Notification for Realtime ITEM_READY */}

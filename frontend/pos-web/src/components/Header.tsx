@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wifi, WifiOff, LogOut, Bell, Check, Clock, FileText, X } from 'lucide-react';
+import { Wifi, WifiOff, LogOut, Bell, Clock, Menu, Store, History, BarChart3, Receipt, Package, Users, X, Check } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { NotificationItem } from '../hooks/useSocket';
 import type { ShiftSession } from './ShiftSelectModal';
@@ -15,6 +15,7 @@ interface HeaderProps {
   currentShift?: ShiftSession | null;
   onOpenShiftSummary?: () => void;
   onOpenShiftSelect?: () => void;
+  onOpenExpenseModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -28,10 +29,28 @@ export const Header: React.FC<HeaderProps> = ({
   currentShift,
   onOpenShiftSummary,
   onOpenShiftSelect,
+  onOpenExpenseModal,
 }) => {
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
+  const [showMenuDropdown, setShowMenuDropdown] = React.useState(false);
+  const menuRef = React.useRef<HTMLDivElement>(null);
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  // Handle click outside to close dropdown menu
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowMenuDropdown(false);
+      }
+    };
+    if (showMenuDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenuDropdown]);
 
   const handleConfirmLogout = () => {
     localStorage.removeItem('pos_token');
@@ -63,42 +82,139 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Menu Dropdown Button */}
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setShowMenuDropdown(!showMenuDropdown)}
+              className={cn(
+                "w-10 h-10 rounded-xl transition-all cursor-pointer flex items-center justify-center border shadow-xs",
+                showMenuDropdown || activeTab === 'HISTORY'
+                  ? "bg-orange-50 border-orange-300 text-orange-700 ring-2 ring-orange-200/50"
+                  : "bg-white border-zinc-200 text-zinc-700 hover:bg-zinc-50 hover:text-orange-600"
+              )}
+              title="Menu tiện ích"
+              aria-label="Menu tiện ích"
+            >
+              <Menu size={18} />
+            </button>
+
+            {showMenuDropdown && (
+              <div className="absolute left-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-zinc-200/90 py-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                {/* 1. Lịch sử đơn hàng */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('HISTORY');
+                    setShowMenuDropdown(false);
+                  }}
+                  className={cn(
+                    "w-full px-4 py-2.5 flex items-center gap-3 text-left text-xs transition-colors cursor-pointer",
+                    activeTab === 'HISTORY' ? "bg-orange-50 text-orange-700 font-bold" : "text-zinc-700 hover:bg-zinc-50 font-semibold"
+                  )}
+                >
+                  <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                    <History size={16} />
+                  </div>
+                  <div>
+                    <p className="font-bold">Lịch sử đơn hàng</p>
+                    <p className="text-[11px] font-normal text-zinc-400">Xem các đơn trong ca trực</p>
+                  </div>
+                </button>
+
+                {/* 2. Báo cáo kết ca */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMenuDropdown(false);
+                    onOpenShiftSummary?.();
+                  }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <BarChart3 size={16} />
+                  </div>
+                  <div>
+                    <p className="font-bold">Báo cáo kết ca</p>
+                    <p className="text-[11px] font-normal text-zinc-400">Đối soát tiền két & doanh thu</p>
+                  </div>
+                </button>
+
+                {/* 3. Tạo phiếu chi tiền mặt */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMenuDropdown(false);
+                    onOpenExpenseModal?.();
+                  }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                    <Receipt size={16} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-rose-700">Tạo phiếu chi tiền mặt</p>
+                    <p className="text-[11px] font-normal text-zinc-400">Chi tiền từ két & in phiếu 80mm</p>
+                  </div>
+                </button>
+
+                {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+                  <>
+                    <div className="border-t border-zinc-100 my-1.5" />
+                    <div className="px-4 py-1 text-[10px] font-bold text-zinc-400 uppercase tracking-wider">
+                      Quản trị hệ thống
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('INVENTORY');
+                        setShowMenuDropdown(false);
+                      }}
+                      className={cn(
+                        "w-full px-4 py-2 flex items-center gap-3 text-left text-xs transition-colors cursor-pointer",
+                        activeTab === 'INVENTORY' ? "bg-orange-50 text-orange-700 font-bold" : "text-zinc-700 hover:bg-zinc-50 font-semibold"
+                      )}
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-zinc-100 text-zinc-600 flex items-center justify-center shrink-0">
+                        <Package size={14} />
+                      </div>
+                      <span>Quản lý kho</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setActiveTab('STAFF');
+                        setShowMenuDropdown(false);
+                      }}
+                      className={cn(
+                        "w-full px-4 py-2 flex items-center gap-3 text-left text-xs transition-colors cursor-pointer",
+                        activeTab === 'STAFF' ? "bg-orange-50 text-orange-700 font-bold" : "text-zinc-700 hover:bg-zinc-50 font-semibold"
+                      )}
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-zinc-100 text-zinc-600 flex items-center justify-center shrink-0">
+                        <Users size={14} />
+                      </div>
+                      <span>Quản lý nhân viên</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Main POS button */}
           <button
             onClick={() => setActiveTab('POS')}
-            className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors cursor-pointer", activeTab === 'POS' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
+            className={cn(
+              "px-4 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-xs",
+              activeTab === 'POS' ? "bg-orange-100 text-orange-700 font-extrabold" : "text-zinc-600 hover:bg-zinc-100"
+            )}
           >
-            Bán hàng
+            <Store size={16} />
+            <span>Bán hàng</span>
           </button>
-          <button
-            onClick={() => setActiveTab('HISTORY')}
-            className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors cursor-pointer", activeTab === 'HISTORY' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
-          >
-            Lịch sử đơn
-          </button>
-          <button
-            onClick={onOpenShiftSummary}
-            className="px-3.5 py-2 rounded-xl text-sm font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
-            title="Báo cáo kết ca & Doanh thu trong ca"
-          >
-            <FileText size={16} className="text-amber-600" />
-            <span>Báo cáo ca</span>
-          </button>
-          {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
-            <>
-              <button
-                onClick={() => setActiveTab('INVENTORY')}
-                className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors cursor-pointer", activeTab === 'INVENTORY' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
-              >
-                Quản lý kho
-              </button>
-              <button
-                onClick={() => setActiveTab('STAFF')}
-                className={cn("px-4 py-2 rounded-xl text-sm font-bold transition-colors cursor-pointer", activeTab === 'STAFF' ? "bg-orange-100 text-orange-700" : "text-zinc-500 hover:bg-zinc-100")}
-              >
-                Nhân sự
-              </button>
-            </>
-          )}
         </div>
       </div>
 
