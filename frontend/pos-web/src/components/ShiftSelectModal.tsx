@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Clock, CheckCircle2, User, Building2, ArrowRight, Banknote, HelpCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Clock, CheckCircle2, User, Building2, ArrowRight, Banknote, HelpCircle, Loader2 } from 'lucide-react';
+import api from '../lib/axios';
 
 export interface ShiftSession {
   shiftName: string;
@@ -10,6 +11,18 @@ export interface ShiftSession {
   initialCash?: number;
 }
 
+export interface ShiftItem {
+  id?: string;
+  branchId?: string | null;
+  code: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  gracePeriodMinutes?: number;
+  isActive?: boolean;
+  description?: string;
+}
+
 interface ShiftSelectModalProps {
   user: any;
   currentShift: ShiftSession | null;
@@ -18,20 +31,52 @@ interface ShiftSelectModalProps {
   onClose?: () => void;
 }
 
-export const SHIFT_OPTIONS = [
+export const DEFAULT_SHIFTS: ShiftItem[] = [
   {
     code: 'CA_1',
     name: 'Ca 1 (06:00 - 14:00)',
-    timeRange: '06:00 - 14:00',
+    startTime: '06:00',
+    endTime: '14:00',
+    gracePeriodMinutes: 15,
     description: 'Ca sáng - Phục vụ bữa sáng & cà phê đầu ngày',
   },
   {
     code: 'CA_2',
     name: 'Ca 2 (14:00 - 22:00)',
-    timeRange: '14:00 - 22:00',
+    startTime: '14:00',
+    endTime: '22:00',
+    gracePeriodMinutes: 15,
     description: 'Ca chiều & tối - Giờ cao điểm & tổng kết ngày',
   },
 ];
+
+// Helper to determine which shift matches current time
+const getSuggestedShiftCode = (items: ShiftItem[]): string => {
+  if (!items || items.length === 0) return 'CA_1';
+  const now = new Date();
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+  for (const shift of items) {
+    if (!shift.startTime || !shift.endTime) continue;
+    const [startH, startM] = shift.startTime.split(':').map(Number);
+    const [endH, endM] = shift.endTime.split(':').map(Number);
+    const startTotal = startH * 60 + startM;
+    const endTotal = endH * 60 + endM;
+
+    // Handle shift crossing midnight (e.g. 22:00 -> 06:00)
+    if (endTotal <= startTotal) {
+      if (currentMinutes >= startTotal || currentMinutes < endTotal) {
+        return shift.code;
+      }
+    } else {
+      if (currentMinutes >= startTotal && currentMinutes < endTotal) {
+        return shift.code;
+      }
+    }
+  }
+
+  return items[0].code;
+};
 
 export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
   user,
@@ -40,12 +85,47 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
   canDismiss = false,
   onClose,
 }) => {
-  // Auto-detect shift based on current system hour
-  const currentHour = new Date().getHours();
-  const defaultCode = currentShift?.shiftCode || (currentHour >= 6 && currentHour < 14 ? 'CA_1' : 'CA_2');
-  const [selectedCode, setSelectedCode] = useState<string>(defaultCode);
+  const [shifts, setShifts] = useState<ShiftItem[]>(DEFAULT_SHIFTS);
+  const [loadingShifts, setLoadingShifts] = useState<boolean>(true);
 
-  // State: stores pure integer number in state as required
+  // Selected shift code
+  const [selectedCode, setSelectedCode] = useState<string>(() => {
+    return currentShift?.shiftCode || getSuggestedShiftCode(DEFAULT_SHIFTS);
+  });
+
+  // Fetch dynamic shifts from backend with fallback
+  useEffect(() => {
+    let isMounted = true;
+    api.get('/shifts', { params: { activeOnly: true, branchId: user?.branchId } })
+      .then((res) => {
+        if (!isMounted) return;
+        const data = res.data;
+        if (Array.isArray(data) && data.length > 0) {
+          setShifts(data);
+          if (!currentShift?.shiftCode) {
+            setSelectedCode(getSuggestedShiftCode(data));
+          } else {
+            // Check if current shift code is still in the active list
+            const found = data.some((s: ShiftItem) => s.code === currentShift.shiftCode);
+            if (!found) {
+              setSelectedCode(getSuggestedShiftCode(data));
+            }
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Không thể tải ca làm việc từ API, chuyển sang dùng ca mặc định (Fallback):', err.message);
+      })
+      .finally(() => {
+        if (isMounted) setLoadingShifts(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.branchId, currentShift?.shiftCode]);
+
+  // State: stores pure integer number in state
   const [initialCash, setInitialCash] = useState<number>(() => {
     if (currentShift?.initialCash !== undefined) return Number(currentShift.initialCash);
     return 1000000;
@@ -90,7 +170,6 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
       const { selectionStart, selectionEnd } = input;
       if (selectionStart !== null && selectionStart === selectionEnd) {
         const val = input.value;
-        // If cursor is placed at or after the ' đ' suffix
         if (selectionStart >= val.length - 2 && val.endsWith(' đ')) {
           e.preventDefault();
           const digits = val.slice(0, val.length - 2).replace(/\D/g, '');
@@ -119,7 +198,6 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
     const val = input.value;
     if (val.endsWith(' đ') && val.length >= 2) {
       const pos = val.length - 2;
-      // If cursor is at the very end (after 'đ'), move it before ' đ'
       if ((input.selectionStart || 0) > pos) {
         input.setSelectionRange(pos, pos);
       }
@@ -127,7 +205,7 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
   };
 
   const handleConfirm = () => {
-    const option = SHIFT_OPTIONS.find(s => s.code === selectedCode) || SHIFT_OPTIONS[0];
+    const option = shifts.find(s => s.code === selectedCode) || shifts[0] || DEFAULT_SHIFTS[0];
 
     const session: ShiftSession = {
       shiftName: option.name,
@@ -143,6 +221,8 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
     localStorage.setItem('pos_shift', JSON.stringify(session));
     onSelectShift(session);
   };
+
+  const suggestedCode = getSuggestedShiftCode(shifts);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -174,25 +254,35 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
 
           {/* Shift Selection List */}
           <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2">
-              1. Chọn ca làm việc hôm nay
-            </label>
-            <div className="space-y-2.5">
-              {SHIFT_OPTIONS.map((option) => {
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                1. Chọn ca làm việc hôm nay
+              </label>
+              {loadingShifts && (
+                <span className="flex items-center gap-1 text-[11px] text-zinc-400">
+                  <Loader2 size={11} className="animate-spin text-orange-500" />
+                  <span>Đang tải ca...</span>
+                </span>
+              )}
+            </div>
+
+            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-0.5">
+              {shifts.map((option) => {
                 const isSelected = selectedCode === option.code;
-                const isSuggested = (currentHour >= 6 && currentHour < 14 ? 'CA_1' : 'CA_2') === option.code;
+                const isSuggested = suggestedCode === option.code;
 
                 return (
                   <div
                     key={option.code}
                     onClick={() => setSelectedCode(option.code)}
-                    className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer relative flex items-start justify-between ${isSelected
+                    className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer relative flex items-start justify-between ${
+                      isSelected
                         ? 'border-orange-500 bg-orange-50/40 shadow-sm ring-2 ring-orange-200'
                         : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/50'
-                      }`}
+                    }`}
                   >
                     <div className="flex-1 pr-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <h4 className={`font-bold text-xs ${isSelected ? 'text-orange-950 font-black' : 'text-zinc-800'}`}>
                           {option.name}
                         </h4>
@@ -202,7 +292,9 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-zinc-500 mt-0.5">{option.description}</p>
+                      <p className="text-[11px] text-zinc-500 mt-0.5">
+                        {option.description || `${option.startTime} - ${option.endTime}${option.gracePeriodMinutes ? ` (Ân hạn ${option.gracePeriodMinutes}p)` : ''}`}
+                      </p>
                     </div>
 
                     <div className="pt-0.5">
