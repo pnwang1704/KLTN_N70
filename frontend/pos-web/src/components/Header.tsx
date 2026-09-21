@@ -16,6 +16,7 @@ interface HeaderProps {
   onOpenShiftSummary?: () => void;
   onOpenShiftSelect?: () => void;
   onOpenExpenseModal?: () => void;
+  onOpenShiftManagement?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -30,6 +31,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenShiftSummary,
   onOpenShiftSelect,
   onOpenExpenseModal,
+  onOpenShiftManagement,
 }) => {
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
@@ -197,6 +199,20 @@ export const Header: React.FC<HeaderProps> = ({
                         <Users size={14} />
                       </div>
                       <span>Quản lý nhân viên</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMenuDropdown(false);
+                        onOpenShiftManagement?.();
+                      }}
+                      className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs text-zinc-700 hover:bg-zinc-50 font-semibold transition-colors cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-200">
+                        <Clock size={14} />
+                      </div>
+                      <span>Quản lý ca làm việc</span>
                     </button>
                   </>
                 )}

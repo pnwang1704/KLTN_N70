@@ -16,6 +16,10 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `GET`  | `/orders/shift-summary` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Báo cáo doanh thu, chi phí và đối soát két tiền mặt kết ca của Thu ngân (`?branchId=&cashierId=&fromDate=&toDate=`) (`200 OK`). |
 | `POST` | `/orders/expenses` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Tạo phiếu chi tiền mặt (Cash Out) từ két tiền thu ngân (`201 Created`, `400 Bad Request`). |
 | `GET`  | `/orders/expenses` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách phiếu chi tiền mặt trong ca/chi nhánh (`?branchId=&cashierId=&fromDate=&toDate=`) (`200 OK`). |
+| `GET`  | `/shifts` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách ca làm việc (Hỗ trợ lọc theo `?branchId=&activeOnly=true`) (`200 OK`). |
+| `POST` | `/shifts` | `order-service` | `ADMIN`, `MANAGER` | Tạo mới ca làm việc (Mã ca, Tên ca, Khung giờ `startTime - endTime`, Ân hạn, Chi nhánh) (`201 Created`, `400 Bad Request`). |
+| `PUT`  | `/shifts/:id` | `order-service` | `ADMIN`, `MANAGER` | Cập nhật thông tin ca làm việc theo ID (`200 OK`, `400 Bad Request`, `404 Not Found`). |
+| `PATCH`| `/shifts/:id/toggle` | `order-service` | `ADMIN`, `MANAGER` | Bật/Tắt trạng thái hoạt động (`isActive`) của ca làm việc (`200 OK`, `404 Not Found`). |
 | `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`) (`200 OK`). |
 | `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (Dine-in Post-pay) hoặc POS Web (`201 Created`, `400 Bad Request`). |
 | `DELETE`| `/orders/:id` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Hủy đơn hàng tạm khi đóng modal thanh toán mà chưa thanh toán. **Điều kiện chặn:** Chỉ xóa khi `status === PENDING`, chặn xóa đơn đã `COMPLETED` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
@@ -200,6 +204,59 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 ]
 ```
 
+### 1.7. Phân hệ Quản lý Ca làm việc (Shift Management APIs)
+
+Hệ thống cho phép cấu hình linh hoạt các khung giờ ca chuẩn (toàn hệ thống hoặc theo chi nhánh), thời gian ân hạn đi trễ và trạng thái kích hoạt.
+
+#### Lấy danh sách ca làm việc (`GET /shifts`)
+* **Endpoint:** `GET /shifts`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Query Parameters:**
+  - `branchId` (tùy chọn): ID chi nhánh.
+  - `activeOnly` (tùy chọn): `true` (chỉ lấy các ca đang hoạt động để hiển thị trên màn hình chọn ca).
+* **Response (200 OK):**
+```json
+[
+  {
+    "id": "e6a71142-b355-430c-9f6d-752119e71b23",
+    "branchId": null,
+    "code": "CA_1",
+    "name": "Ca 1 (06:00 - 14:00)",
+    "startTime": "06:00",
+    "endTime": "14:00",
+    "gracePeriodMinutes": 15,
+    "isActive": true,
+    "createdAt": "2026-09-21T07:00:00.000Z",
+    "updatedAt": "2026-09-21T07:00:00.000Z"
+  }
+]
+```
+
+#### Tạo ca làm việc mới (`POST /shifts`)
+* **Endpoint:** `POST /shifts`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`
+* **Request Body (JSON):**
+```json
+{
+  "code": "CA_GAY",
+  "name": "Ca Gãy Giờ Cao Điểm",
+  "startTime": "11:00",
+  "endTime": "15:00",
+  "gracePeriodMinutes": 15,
+  "branchId": "1"
+}
+```
+
+#### Cập nhật ca làm việc (`PUT /shifts/:id`)
+* **Endpoint:** `PUT /shifts/:id`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`
+* **Request Body (JSON):** Các trường cần cập nhật (`name`, `startTime`, `endTime`, `gracePeriodMinutes`, `isActive`, `branchId`).
+
+#### Bật/Tắt trạng thái ca làm việc (`PATCH /shifts/:id/toggle`)
+* **Endpoint:** `PATCH /shifts/:id/toggle`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`
+* **Response (200 OK):** Trả về bản ghi `Shift` sau khi đã đảo trạng thái `isActive`.
+
 ---
 
 ## 2. Message Pattern RPC (Giao tiếp đồng bộ Request-Response qua RabbitMQ)
@@ -219,6 +276,10 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `'get_shift_summary'` | API Gateway | `order-service` | `{ branchId, cashierId?, fromDate?, toDate? }` | `ShiftSummaryResult` (`totalRevenue`, `totalCash`, `totalBankTransfer`, `totalExpense`, `expenses`, `totalOrders`, `recentOrders`) |
 | `'create_expense'` | API Gateway | `order-service` | `CreateExpenseDto & { branchId, cashierId }` | `Expense` entity mới tạo trong cơ sở dữ liệu |
 | `'get_expenses'` | API Gateway | `order-service` | `{ branchId, cashierId?, fromDate?, toDate? }` | `Expense[]` danh sách các phiếu chi tiền mặt |
+| `'get_shifts'` | API Gateway | `order-service` | `{ branchId?: string, activeOnly?: boolean }` | `Shift[]` danh sách ca làm việc |
+| `'create_shift'` | API Gateway | `order-service` | `CreateShiftDto` | `Shift` entity mới tạo |
+| `'update_shift'` | API Gateway | `order-service` | `{ id: string, dto: UpdateShiftDto }` | `Shift` entity đã cập nhật |
+| `'toggle_shift'` | API Gateway | `order-service` | `{ id: string }` | `Shift` entity sau khi đảo trạng thái `isActive` |
 | `'process_payment'` | API Gateway | `order-service` | `{ orderId, processPaymentDto }` | `Order` (`status: COMPLETED`, `payment`) |
 | `'pay_table_orders'` | API Gateway | `order-service` | `{ branchId, tableId, paymentMethod, amountPaid }` | `{ success: boolean, completedOrderIds: string[] }` |
 | `'delete_order'` | API Gateway | `order-service` | `id: string` | `{ success: boolean, message: string }` |
