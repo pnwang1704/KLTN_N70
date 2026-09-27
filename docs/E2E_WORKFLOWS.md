@@ -347,3 +347,150 @@ sequenceDiagram
     Cashier->>Cashier: Thu ngân ký bàn giao & Thu ngân ca sau ký nhận két tiền
 ```
 
+---
+
+## 6. Phân hệ Quản lý Nhân sự & Chấm công Sinh trắc học AI (Biometric Attendance)
+
+Nhằm tối ưu hóa chi phí vận hành và loại bỏ hoàn toàn tình trạng chấm công hộ (buddy punching) trong mô hình chuỗi F&B, hệ thống tích hợp công nghệ thị giác máy tính Client-side AI (`face-api.js`) để xác thực khuôn mặt 1:1 trực tiếp trên trình duyệt máy POS, đối chiếu với ca chuẩn tự động và lưu vết ảnh chụp kiểm toán.
+
+### 6.1. Quy trình Đăng ký Sinh trắc học khuôn mặt nhân viên (Face Enrollment)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Manager as Quản lý / Admin
+    actor Staff as Nhân viên cửa hàng
+    participant Client as POS Web (TimesheetModal)
+    participant AI as Client AI (face-api.js)
+    participant GW as API Gateway
+    participant OS as Order Service
+    participant DB as Order DB (employees table)
+
+    Note over Manager, DB: Giai đoạn 1: Đăng ký khuôn mặt mẫu
+    Manager->>Client: Mở Quản lý nhân sự & Bảng công (Tab Hồ sơ nhân viên)
+    Manager->>Client: Bấm "Đăng ký mặt" tại nhân viên cần nạp dữ liệu
+    Client->>Client: Mở Face Enrollment Submodal
+    alt Chụp trực tiếp từ Webcam
+        Client->>Staff: Bật Camera thiết bị, hướng mặt thẳng vào ống kính
+        Manager->>Client: Bấm "Chụp ảnh & Trích xuất khuôn mặt"
+        Client->>Client: Chụp frame hình ảnh thành Base64
+    else Tải file ảnh chân dung
+        Manager->>Client: Tải ảnh thẻ nhân viên (PNG/JPG)
+    end
+
+    Client->>AI: detectSingleFace(input).withFaceLandmarks().withFaceDescriptor()
+    AI->>AI: Trích xuất vector đặc trưng khuôn mặt (128 số thực float)
+    alt Không phát hiện mặt rõ ràng
+        AI-->>Client: null (Face not detected)
+        Client-->>Manager: Cảnh báo "Không phát hiện khuôn mặt rõ ràng, vui lòng thử lại"
+    else Phát hiện mặt thành công
+        AI-->>Client: Trả về vector 128 chiều (Float32Array[128])
+        Client->>Client: Hiển thị Badge "Đã trích xuất thành công vector 128 số"
+        Manager->>Client: Bấm "Lưu khuôn mặt nhân viên"
+        Client->>GW: PUT /employees/:id/face (descriptor: number[128], avatarBase64)
+        GW->>OS: RabbitMQ RPC: 'update_employee_face'
+        OS->>DB: UPDATE employees SET faceDescriptor = $1, avatarUrl = $2 WHERE id = $3
+        DB-->>OS: Cập nhật thành công
+        OS-->>GW: Trả về Employee entity mới
+        GW-->>Client: HTTP 200 OK
+        Client-->>Manager: Hiển thị Toast thông báo đăng ký thành công
+    end
+```
+
+---
+
+### 6.2. Quy trình Chấm công Kiosk AI tại quầy POS chống gian lận (Face Verification Check-in/out)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Staff as Nhân sự (Thu ngân / Pha chế / Phục vụ)
+    participant Kiosk as POS Kiosk (AttendanceKioskModal)
+    participant AI as Client AI (face-api.js)
+    participant GW as API Gateway
+    participant OS as Order Service
+    participant DB as Order DB (attendances & shifts)
+
+    Note over Staff, DB: Giai đoạn 1: Nhận diện & Xác thực khuôn mặt thời gian thực
+    Staff->>Kiosk: Bấm "Chấm công nhân viên (Kiosk)" trên thanh điều hướng
+    Kiosk->>Kiosk: Bật Webcam trực tiếp & tải danh sách nhân sự chi nhánh
+    Staff->>Kiosk: Chọn Mã NV / Họ tên của mình
+    Kiosk->>AI: Vòng lặp nhận diện video stream (200ms/lần)
+    AI->>AI: Trích xuất currentDescriptor (128D) từ khuôn mặt trước ống kính
+    AI->>AI: Tính khoảng cách Euclid d = sqrt( sum( (A_i - B_i)^2 ) )
+
+    alt Khoảng cách d < 0.50 (Xác thực chính chủ thành công)
+        AI-->>Kiosk: Trùng khớp chính chủ (Match = true)
+        Kiosk->>Kiosk: Vẽ khung xanh lá quanh mặt, hiển thị "✅ Xác thực chính chủ"
+        Kiosk->>Kiosk: MỞ KHÓA các nút hành động "Vào ca" và "Tan ca"
+    else Khoảng cách d >= 0.50 (Khuôn mặt không khớp)
+        AI-->>Kiosk: Không trùng khớp (Match = false)
+        Kiosk->>Kiosk: Vẽ khung đỏ quanh mặt, hiển thị "❌ Không khớp hồ sơ!"
+        Kiosk->>Kiosk: KHÓA các nút hành động (Chặn đứng chấm công hộ)
+    end
+
+    %% Hành động Vào ca
+    Note over Staff, DB: Giai đoạn 2: Vào ca (Check-in) & Tự động đối chiếu ca chuẩn
+    Staff->>Kiosk: Bấm "Vào ca (Check-in)"
+    Kiosk->>Kiosk: Chụp nhanh 1 frame video thành snapshotPhoto (Base64)
+    Kiosk->>GW: POST /attendances/check-in (employeeCode, branchId, snapshotPhoto, faceVerified: true)
+    GW->>OS: RabbitMQ RPC: 'attendance_check_in'
+    OS->>DB: Kiểm tra: Nhân viên có lượt vào ca nào chưa check-out không?
+    alt Đã vào ca và chưa check-out
+        OS-->>GW: Throw BadRequestException ("Nhân viên chưa hoàn tất tan ca")
+        GW-->>Kiosk: HTTP 400 Bad Request
+        Kiosk-->>Staff: Báo lỗi trên màn hình
+    else Chưa vào ca
+        OS->>DB: Lấy ca chuẩn đang diễn ra trong shifts (So khớp startTime & endTime)
+        OS->>OS: So sánh giờ vào ca với (shift.startTime + gracePeriodMinutes)
+        alt Đúng giờ (now <= startTime + gracePeriod)
+            OS->>OS: status = 'ON_TIME'
+        else Đi trễ (now > startTime + gracePeriod)
+            OS->>OS: status = 'LATE'
+        end
+        OS->>DB: INSERT INTO attendances (employeeId, branchId, shiftCode, checkInAt, checkInPhoto, status, isFaceVerified)
+        DB-->>OS: Bản ghi Attendance vừa tạo
+        OS-->>GW: Trả về Attendance data
+        GW-->>Kiosk: HTTP 201 Created
+        Kiosk-->>Staff: Toast thành công (Hiển thị Ca làm & Trạng thái Đúng giờ / Đi trễ)
+        Kiosk->>Kiosk: Tự động đóng modal sau 2.5 giây
+    end
+
+    %% Hành động Tan ca
+    Note over Staff, DB: Giai đoạn 3: Tan ca (Check-out) & Tính giờ làm việc thực tế
+    Staff->>Kiosk: Cuối ngày: Mở Kiosk -> Chọn Mã NV -> AI đối chiếu khuôn mặt chính chủ
+    Staff->>Kiosk: Bấm "Tan ca (Check-out)"
+    Kiosk->>Kiosk: Chụp snapshotPhoto tan ca
+    Kiosk->>GW: POST /attendances/check-out (employeeCode, branchId, snapshotPhoto, faceVerified: true)
+    GW->>OS: RabbitMQ RPC: 'attendance_check_out'
+    OS->>DB: Tìm bản ghi Attendance gần nhất có checkOutAt IS NULL
+    OS->>OS: workingHours = (checkOutAt - checkInAt) / 3600000 (làm tròn 2 chữ số thập phân)
+    OS->>DB: UPDATE attendances SET checkOutAt = now, checkOutPhoto = snapshotPhoto, workingHours = hours
+    DB-->>OS: Cập nhật thành công
+    OS-->>GW: Trả về Attendance data kèm workingHours
+    GW-->>Kiosk: HTTP 200 OK
+    Kiosk-->>Staff: Toast "Tan ca thành công - Tổng giờ làm: X.XX giờ"
+    Kiosk->>Kiosk: Tự động đóng modal sau 2.5 giây
+```
+
+---
+
+### 6.3. Giải pháp Kỹ thuật: Bù trừ Tọa độ Un-mirror Canvas & Cơ chế Fallback PIN khẩn cấp
+
+1. **Bù trừ Tọa độ Un-mirror Canvas trên Video Stream Lật gương:**
+   - **Vấn đề:** Để người dùng có trải nghiệm thị giác tự nhiên giống như soi gương, luồng video webcam được áp dụng CSS `transform: scaleX(-1)` (class `-scale-x-100`). Tuy nhiên, nếu vẽ trực tiếp khung nhận diện và chữ trạng thái lên canvas overlay đặt trên video này, toàn bộ nội dung văn bản (ví dụ: nhãn "Chính chủ (62% khớp)") sẽ bị lật ngược từ phải qua trái.
+   - **Thuật toán xử lý trên Canvas 2D:**
+     - Giữ nguyên video stream ở chế độ lật gương (`-scale-x-100`).
+     - Canvas vẽ overlay được đặt ở chế độ bình thường (không lật CSS).
+     - Trước khi vẽ khung nhận diện và nhãn text, hệ thống tính toán lại tọa độ trục hoành:
+       $$x_{\text{draw}} = \text{canvasWidth} - x_{\text{box}} - \text{width}_{\text{box}}$$
+     - Vẽ khung viền chữ nhật và nhãn thông tin tại tọa độ $x_{\text{draw}}$.
+     - **Kết quả:** Khung viền di chuyển đồng bộ 100% với khuôn mặt đã lật của người dùng trước ống kính, đồng thời chữ hiển thị xuôi chiều đọc tự nhiên từ trái sang phải mà không bị lộn ngược.
+
+2. **Cơ chế Dự phòng bằng Mã PIN khẩn cấp (Emergency PIN Fallback):**
+   - Trong trường hợp camera gặp sự cố kỹ thuật (hỏng webcam, phòng thiếu sáng nghiêm trọng hoặc nhân viên bị chấn thương khuôn mặt):
+     - Kiosk cung cấp tùy chọn "Nhập mã PIN xác thực" (Mã PIN mặc định: `1234`).
+     - Khi nhập đúng mã PIN được cấu hình trong bảng `employees`, hệ thống vẫn cho phép nhân viên bấm "Vào ca" hoặc "Tan ca" và đánh dấu cờ `isFaceVerified: false` kèm ảnh snapshot hiện tại để người quản lý dễ dàng hậu kiểm tra soát.
+
+
+

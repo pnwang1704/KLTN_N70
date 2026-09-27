@@ -7,22 +7,25 @@ import { PaymentModal } from './components/PaymentModal';
 import { LoginScreen } from './components/LoginScreen';
 import { OrderHistory } from './components/OrderHistory';
 import { InventoryManagement } from './components/InventoryManagement';
-import { StaffManagement } from './components/StaffManagement';
 import { ShiftSelectModal, type ShiftSession } from './components/ShiftSelectModal';
 import { ShiftSummaryModal } from './components/ShiftSummaryModal';
 import { ExpenseModal } from './components/ExpenseModal';
 import { ShiftManagementModal } from './components/ShiftManagementModal';
+import { AttendanceKioskModal } from './components/AttendanceKioskModal';
+import { TimesheetModal } from './components/TimesheetModal';
 import { useSocket } from './hooks/useSocket';
 import type { Product } from './types';
 
 function App() {
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'POS' | 'HISTORY' | 'INVENTORY' | 'STAFF'>('POS');
+  const [activeTab, setActiveTab] = useState<'POS' | 'HISTORY' | 'INVENTORY'>('POS');
   const [currentShift, setCurrentShift] = useState<ShiftSession | null>(null);
   const [showShiftSelect, setShowShiftSelect] = useState<boolean>(false);
   const [showShiftSummary, setShowShiftSummary] = useState<boolean>(false);
   const [showExpenseModal, setShowExpenseModal] = useState<boolean>(false);
   const [showShiftManagementModal, setShowShiftManagementModal] = useState<boolean>(false);
+  const [showAttendanceKiosk, setShowAttendanceKiosk] = useState<boolean>(false);
+  const [showTimesheetModal, setShowTimesheetModal] = useState<boolean>(false);
   
   useEffect(() => {
     // Check if user is already logged in
@@ -90,6 +93,8 @@ function App() {
         onOpenShiftSelect={() => setShowShiftSelect(true)}
         onOpenExpenseModal={() => setShowExpenseModal(true)}
         onOpenShiftManagement={() => setShowShiftManagementModal(true)}
+        onOpenAttendanceKiosk={() => setShowAttendanceKiosk(true)}
+        onOpenTimesheet={() => setShowTimesheetModal(true)}
       />
       
       {activeTab === 'POS' && (
@@ -110,10 +115,6 @@ function App() {
 
       {activeTab === 'INVENTORY' && (
         <InventoryManagement branchId={branchId} />
-      )}
-
-      {activeTab === 'STAFF' && (
-        <StaffManagement loggedInUser={user} />
       )}
 
       {/* Modals */}
@@ -173,6 +174,20 @@ function App() {
       <ShiftManagementModal 
         isOpen={showShiftManagementModal}
         onClose={() => setShowShiftManagementModal(false)}
+        user={user}
+      />
+
+      {/* Attendance Kiosk Modal (Face Verification Check-in/out) */}
+      <AttendanceKioskModal
+        isOpen={showAttendanceKiosk}
+        onClose={() => setShowAttendanceKiosk(false)}
+        branchId={branchId}
+      />
+
+      {/* Timesheet & Face Enrollment Modal (Admin/Manager) */}
+      <TimesheetModal
+        isOpen={showTimesheetModal}
+        onClose={() => setShowTimesheetModal(false)}
         user={user}
       />
 

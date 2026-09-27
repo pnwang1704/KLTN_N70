@@ -17,6 +17,8 @@ interface HeaderProps {
   onOpenShiftSelect?: () => void;
   onOpenExpenseModal?: () => void;
   onOpenShiftManagement?: () => void;
+  onOpenAttendanceKiosk?: () => void;
+  onOpenTimesheet?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -32,6 +34,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenShiftSelect,
   onOpenExpenseModal,
   onOpenShiftManagement,
+  onOpenAttendanceKiosk,
+  onOpenTimesheet,
 }) => {
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
@@ -160,6 +164,24 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 </button>
 
+                {/* 4. Chấm công nhân viên (Kiosk) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMenuDropdown(false);
+                    onOpenAttendanceKiosk?.();
+                  }}
+                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                >
+                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <Clock size={16} />
+                  </div>
+                  <div>
+                    <p className="font-bold text-emerald-800">Chấm công nhân viên (Kiosk)</p>
+                    <p className="text-[11px] font-normal text-zinc-400">Vào ca / Tan ca bằng AI khuôn mặt</p>
+                  </div>
+                </button>
+
                 {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
                   <>
                     <div className="border-t border-zinc-100 my-1.5" />
@@ -187,23 +209,6 @@ export const Header: React.FC<HeaderProps> = ({
                     <button
                       type="button"
                       onClick={() => {
-                        setActiveTab('STAFF');
-                        setShowMenuDropdown(false);
-                      }}
-                      className={cn(
-                        "w-full px-4 py-2 flex items-center gap-3 text-left text-xs transition-colors cursor-pointer",
-                        activeTab === 'STAFF' ? "bg-orange-50 text-orange-700 font-bold" : "text-zinc-700 hover:bg-zinc-50 font-semibold"
-                      )}
-                    >
-                      <div className="w-7 h-7 rounded-lg bg-zinc-100 text-zinc-600 flex items-center justify-center shrink-0">
-                        <Users size={14} />
-                      </div>
-                      <span>Quản lý nhân viên</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
                         setShowMenuDropdown(false);
                         onOpenShiftManagement?.();
                       }}
@@ -213,6 +218,20 @@ export const Header: React.FC<HeaderProps> = ({
                         <Clock size={14} />
                       </div>
                       <span>Quản lý ca làm việc</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMenuDropdown(false);
+                        onOpenTimesheet?.();
+                      }}
+                      className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs text-zinc-700 hover:bg-zinc-50 font-semibold transition-colors cursor-pointer"
+                    >
+                      <div className="w-7 h-7 rounded-lg bg-orange-50 text-orange-700 flex items-center justify-center shrink-0 border border-orange-200">
+                        <Users size={14} />
+                      </div>
+                      <span>Quản lý Nhân sự & Bảng Công</span>
                     </button>
                   </>
                 )}
