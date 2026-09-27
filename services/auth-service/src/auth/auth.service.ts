@@ -18,10 +18,10 @@ export class AuthService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    await this.seedAdminUser();
+    await this.seedDefaultUsers();
   }
 
-  private async seedAdminUser() {
+  private async seedDefaultUsers() {
     const adminExists = await this.userRepository.findOne({ where: { username: 'admin' } });
     if (!adminExists) {
       this.logger.log('Seeding default admin user...');
@@ -34,6 +34,25 @@ export class AuthService implements OnModuleInit {
       });
       await this.userRepository.save(admin);
       this.logger.log('Default admin seeded successfully (admin / admin123).');
+    }
+
+    const cashierExists = await this.userRepository.findOne({ where: { username: 'thungancn1' } });
+    if (!cashierExists) {
+      this.logger.log('Seeding default cashier user (thungancn1)...');
+      const hashedPassword = await bcrypt.hash('123456', 10);
+      const cashier = this.userRepository.create({
+        username: 'thungancn1',
+        password: hashedPassword,
+        fullName: 'Thu ngân Quầy 1',
+        role: UserRole.CASHIER,
+        branchId: '1',
+      });
+      await this.userRepository.save(cashier);
+      this.logger.log('Default cashier seeded successfully (thungancn1 / 123456).');
+    } else if (cashierExists.fullName === 'Nguyễn Văn A') {
+      cashierExists.fullName = 'Thu ngân Quầy 1';
+      await this.userRepository.save(cashierExists);
+      this.logger.log('Updated thungancn1 fullName to "Thu ngân Quầy 1".');
     }
   }
 

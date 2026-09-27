@@ -7,6 +7,8 @@ import { AuthController } from './auth.controller';
 import { InventoryController } from './inventory.controller';
 import { OrderController } from './order.controller';
 import { ShiftController } from './shift.controller';
+import { EmployeeController } from './employee.controller';
+import { AttendanceController } from './attendance.controller';
 import { PaymentController, WebhookController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { AppController } from './app.controller';
@@ -88,7 +90,17 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
       }
     ]),
   ],
-  controllers: [AppController, AuthController, InventoryController, OrderController, ShiftController, PaymentController, WebhookController],
+  controllers: [
+    AppController,
+    AuthController,
+    InventoryController,
+    OrderController,
+    ShiftController,
+    EmployeeController,
+    AttendanceController,
+    PaymentController,
+    WebhookController,
+  ],
   providers: [
     AppService,
     PaymentService,
