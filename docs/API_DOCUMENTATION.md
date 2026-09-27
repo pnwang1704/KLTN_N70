@@ -20,6 +20,13 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `POST` | `/shifts` | `order-service` | `ADMIN`, `MANAGER` | Tạo mới ca làm việc (Mã ca, Tên ca, Khung giờ `startTime - endTime`, Ân hạn, Chi nhánh) (`201 Created`, `400 Bad Request`). |
 | `PUT`  | `/shifts/:id` | `order-service` | `ADMIN`, `MANAGER` | Cập nhật thông tin ca làm việc theo ID (`200 OK`, `400 Bad Request`, `404 Not Found`). |
 | `PATCH`| `/shifts/:id/toggle` | `order-service` | `ADMIN`, `MANAGER` | Bật/Tắt trạng thái hoạt động (`isActive`) của ca làm việc (`200 OK`, `404 Not Found`). |
+| `GET`  | `/employees` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách nhân viên chi nhánh (`?branchId=&isActive=`) (`200 OK`). |
+| `POST` | `/employees` | `order-service` | `ADMIN`, `MANAGER` | Tạo hồ sơ nhân viên mới (`employeeCode`, `fullName`, `role`, `pinCode`, `branchId`) (`201 Created`, `400 Bad Request`). |
+| `PUT`  | `/employees/:id` | `order-service` | `ADMIN`, `MANAGER` | Cập nhật thông tin nhân viên (`fullName`, `role`, `pinCode`, `isActive`, `branchId`) (`200 OK`, `404 Not Found`). |
+| `PUT`  | `/employees/:id/face` | `order-service` | `ADMIN`, `MANAGER` | Đăng ký/Cập nhật vector sinh trắc học khuôn mặt 128 chiều (`descriptor`) và ảnh thẻ (`avatarBase64`) (`200 OK`, `400 Bad Request`). |
+| `POST` | `/attendances/check-in` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Chấm công vào ca tại Kiosk POS: so khớp AI khuôn mặt 1:1, tự động gán ca chuẩn (`Shift`), tính trạng thái `ON_TIME` / `LATE` và lưu ảnh snapshot (`201 Created`, `400 Bad Request`). |
+| `POST` | `/attendances/check-out` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Chấm công tan ca tại Kiosk POS: so khớp AI khuôn mặt, tự động tính số giờ làm việc `workingHours` và lưu snapshot đối soát (`200 OK`, `400 Bad Request`). |
+| `GET`  | `/attendances/timesheet` | `order-service` | `ADMIN`, `MANAGER` | Truy xuất bảng chấm công đối soát (`?branchId=&fromDate=&toDate=&employeeId=`) kèm ảnh chụp và giờ công (`200 OK`). |
 | `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`) (`200 OK`). |
 | `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (Dine-in Post-pay) hoặc POS Web (`201 Created`, `400 Bad Request`). |
 | `DELETE`| `/orders/:id` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Hủy đơn hàng tạm khi đóng modal thanh toán mà chưa thanh toán. **Điều kiện chặn:** Chỉ xóa khi `status === PENDING`, chặn xóa đơn đã `COMPLETED` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
@@ -259,6 +266,98 @@ Hệ thống cho phép cấu hình linh hoạt các khung giờ ca chuẩn (toà
 
 ---
 
+### 1.8. Phân hệ Quản lý Nhân sự & Chấm công Sinh trắc học (Employee & Attendance Module)
+
+#### Lấy danh sách nhân viên (`GET /employees`)
+* **Endpoint:** `GET /employees`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Query Parameters:**
+  * `branchId` (string, optional): Lọc theo chi nhánh cửa hàng.
+  * `isActive` (boolean, optional): `true` (chỉ lấy nhân viên đang hoạt động), `false` (tạm ngưng).
+* **Response (200 OK):** Mảng các đối tượng `Employee` (`id`, `branchId`, `employeeCode`, `fullName`, `role`, `pinCode`, `avatarUrl`, `faceDescriptor`, `isActive`, `createdAt`).
+
+#### Tạo hồ sơ nhân viên mới (`POST /employees`)
+* **Endpoint:** `POST /employees`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`
+* **Request Body (JSON):**
+  ```json
+  {
+    "branchId": "1",
+    "employeeCode": "NV04",
+    "fullName": "Phạm Quốc Cường",
+    "role": "BARISTA",
+    "pinCode": "1234"
+  }
+  ```
+* **Response (201 Created):** Bản ghi `Employee` vừa tạo.
+
+#### Cập nhật thông tin nhân viên (`PUT /employees/:id`)
+* **Endpoint:** `PUT /employees/:id`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`
+* **Request Body (JSON):** Các trường cần cập nhật (`fullName`, `role`, `pinCode`, `isActive`, `branchId`).
+
+#### Đăng ký / Cập nhật sinh trắc học khuôn mặt (`PUT /employees/:id/face`)
+* **Endpoint:** `PUT /employees/:id/face`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`
+* **Request Body (JSON):**
+  ```json
+  {
+    "descriptor": [0.123, -0.456, ..., 0.089],
+    "avatarBase64": "data:image/jpeg;base64,..."
+  }
+  ```
+  *(Mảng `descriptor` bắt buộc gồm đúng 128 số thực float trích xuất bởi mô hình AI `face-api.js` client-side).*
+* **Response (200 OK):** Bản ghi `Employee` với `faceDescriptor` và `avatarUrl` đã lưu.
+
+#### Chấm công vào ca tại Kiosk POS (`POST /attendances/check-in`)
+* **Endpoint:** `POST /attendances/check-in`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER` (mọi nhân sự dùng chung Kiosk tại quầy)
+* **Request Body (JSON):**
+  ```json
+  {
+    "employeeCode": "NV01",
+    "branchId": "1",
+    "snapshotPhoto": "data:image/jpeg;base64,...",
+    "faceVerified": true,
+    "pinCode": "1234"
+  }
+  ```
+* **Quy tắc nghiệp vụ:**
+  * Hệ thống tự động truy vấn ca làm việc chuẩn đang diễn ra trong bảng `shifts`.
+  * So sánh giờ vào ca với `shift.startTime` + `shift.gracePeriodMinutes`.
+  * Nếu vào ca trong thời gian cho phép: `status = 'ON_TIME'`. Nếu vượt quá thời gian ân hạn: `status = 'LATE'`.
+  * Chặn check-in nếu nhân viên đang có lượt vào ca chưa tan ca (chưa check-out).
+* **Response (201 Created):** Bản ghi `Attendance` mới khởi tạo.
+
+#### Chấm công tan ca tại Kiosk POS (`POST /attendances/check-out`)
+* **Endpoint:** `POST /attendances/check-out`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Request Body (JSON):**
+  ```json
+  {
+    "employeeCode": "NV01",
+    "branchId": "1",
+    "snapshotPhoto": "data:image/jpeg;base64,...",
+    "faceVerified": true
+  }
+  ```
+* **Quy tắc nghiệp vụ:**
+  * Tìm bản ghi vào ca gần nhất chưa có `checkOutAt` của nhân viên.
+  * Tự động tính số giờ làm việc thực tế: $\text{workingHours} = \frac{\text{checkOutAt} - \text{checkInAt}}{3600000}$ (làm tròn 2 chữ số thập phân).
+* **Response (200 OK):** Bản ghi `Attendance` với `checkOutAt`, `checkOutPhoto`, `workingHours`.
+
+#### Lấy bảng chấm công đối soát (`GET /attendances/timesheet`)
+* **Endpoint:** `GET /attendances/timesheet`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`
+* **Query Parameters:**
+  * `branchId` (string, optional)
+  * `fromDate` (string YYYY-MM-DD, optional)
+  * `toDate` (string YYYY-MM-DD, optional)
+  * `employeeId` (string UUID, optional)
+* **Response (200 OK):** Mảng các bản ghi `Attendance` kèm thông tin liên kết `employee` và ảnh chụp đối soát (`checkInPhoto`, `checkOutPhoto`).
+
+---
+
 ## 2. Message Pattern RPC (Giao tiếp đồng bộ Request-Response qua RabbitMQ)
 
 API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để gửi yêu cầu và đợi kết quả phản hồi từ các Microservices.
@@ -280,6 +379,14 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `'create_shift'` | API Gateway | `order-service` | `CreateShiftDto` | `Shift` entity mới tạo |
 | `'update_shift'` | API Gateway | `order-service` | `{ id: string, dto: UpdateShiftDto }` | `Shift` entity đã cập nhật |
 | `'toggle_shift'` | API Gateway | `order-service` | `{ id: string }` | `Shift` entity sau khi đảo trạng thái `isActive` |
+| `'get_employees'` | API Gateway | `order-service` | `{ branchId?: string, isActive?: boolean }` | `Employee[]` danh sách nhân sự chi nhánh |
+| `'get_employee'` | API Gateway | `order-service` | `{ id: string }` | `Employee` thông tin chi tiết nhân viên |
+| `'create_employee'` | API Gateway | `order-service` | `CreateEmployeeDto` | `Employee` entity mới tạo |
+| `'update_employee'` | API Gateway | `order-service` | `{ id: string, dto: UpdateEmployeeDto }` | `Employee` entity đã cập nhật |
+| `'update_employee_face'` | API Gateway | `order-service` | `{ id: string, descriptor: number[], avatarBase64?: string }` | `Employee` entity cập nhật vector khuôn mặt |
+| `'attendance_check_in'` | API Gateway | `order-service` | `CheckInDto` | `Attendance` bản ghi vào ca mới tạo |
+| `'attendance_check_out'` | API Gateway | `order-service` | `CheckOutDto` | `Attendance` bản ghi tan ca với workingHours |
+| `'get_timesheet'` | API Gateway | `order-service` | `GetTimesheetDto` | `Attendance[]` danh sách bảng chấm công |
 | `'process_payment'` | API Gateway | `order-service` | `{ orderId, processPaymentDto }` | `Order` (`status: COMPLETED`, `payment`) |
 | `'pay_table_orders'` | API Gateway | `order-service` | `{ branchId, tableId, paymentMethod, amountPaid }` | `{ success: boolean, completedOrderIds: string[] }` |
 | `'delete_order'` | API Gateway | `order-service` | `id: string` | `{ success: boolean, message: string }` |

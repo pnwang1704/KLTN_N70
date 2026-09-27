@@ -11,7 +11,7 @@ graph TB
     %% Client Layer
     subgraph Clients ["Lớp Ứng Dụng Người Dùng (Client Layer)"]
         CW["Customer Web (Mobile QR / Port 5174)<br/>- Auto-redirect Table URL<br/>- Tra cứu Món đã gọi tại bàn"]
-        POS["POS Web (Port 5175)<br/>- Thu ngân / Quản lý / Sơ đồ bàn<br/>- Menu tiện ích Dropdown & Chi tiền mặt<br/>- Chiết khấu & Đối soát két ca trực"]
+        POS["POS Web (Port 5175)<br/>- Thu ngân / Sơ đồ bàn / Chiết khấu<br/>- Ca làm việc động & Đối soát két<br/>- Kiosk Chấm công AI (@vladmandic/face-api)<br/>- Quản lý Nhân sự & Bảng công"]
         KDS["KDS Web (Port 5173)<br/>- Màn hình Bếp điều phối Realtime"]
     end
 
@@ -33,7 +33,7 @@ graph TB
     %% Microservices Layer
     subgraph Services ["Lớp Dịch Vụ Nghiệp Vụ (Microservices Layer)"]
         AS["Auth Service (Port 3001)<br/>(Bcrypt, JWT, RBAC)"]
-        OS["Order Service (Port 3004)<br/>- Order Lifecycle & Table Consolidate<br/>- Quản lý Quỹ tiền mặt (Cash Flow & Shift Summary)<br/>- Socket.IO Realtime Gateway"]
+        OS["Order Service (Port 3004)<br/>- Order Lifecycle & Table Consolidate<br/>- Quỹ tiền mặt (Cash Flow & Shift Summary)<br/>- Quản lý Ca động (Shift Management)<br/>- Nhân sự & Chấm công Sinh trắc học (Employee & Attendance)<br/>- Socket.IO Realtime Gateway"]
         IS["Inventory Service<br/>- Recipe Management<br/>- Transactional Deduct Stock"]
         BS["Branch Service<br/>(Bàn ăn, Chi nhánh)"]
         PS["Product Service<br/>(Menu, Size, Topping)"]
@@ -43,7 +43,7 @@ graph TB
     %% Database Layer
     subgraph Databases ["Lớp Dữ Liệu Bền Vững (Database-per-Service)"]
         DB1[("Auth DB<br/>(PostgreSQL 5432)")]
-        DB2[("Order DB<br/>(PostgreSQL 5435)")]
+        DB2[("Order DB<br/>(PostgreSQL 5435)<br/>Orders, Expenses, Shifts,<br/>Employees, Attendances")]
         DB3[("Inventory DB<br/>(PostgreSQL 5436)")]
         DB4[("Branch DB<br/>(PostgreSQL 5437)")]
         DB5[("Product DB<br/>(PostgreSQL 5434)")]
@@ -92,15 +92,15 @@ Hệ thống áp dụng triệt để nguyên lý **Database-per-Service**: mỗ
 ### Cơ chế Named Persistent Volumes trong Docker
 Nhằm giải quyết triệt để rủi ro mất dữ liệu khi container bị dừng hoặc dựng lại (`docker compose down` / `docker compose up -d --build`), toàn bộ cơ sở dữ liệu và message broker được gắn với các **Named Volumes** bền vững tại `docker-compose.yml`:
 
-| Dịch vụ Container | Cổng Host | Named Volume | Đường dẫn Mount trong Container |
-| :--- | :--- | :--- | :--- |
-| `fnb_postgres_auth` | `5432` | `postgres_auth_data` | `/var/lib/postgresql/data` |
-| `fnb_postgres_product`| `5434` | `postgres_product_data` | `/var/lib/postgresql/data` |
-| `fnb_postgres_order` | `5435` | `postgres_order_data` | `/var/lib/postgresql/data` |
-| `fnb_postgres_inventory`| `5436` | `postgres_inventory_data` | `/var/lib/postgresql/data` |
-| `fnb_postgres_branch` | `5437` | `postgres_branch_data` | `/var/lib/postgresql/data` |
-| `fnb_postgres_reporting`| `5438` | `postgres_reporting_data` | `/var/lib/postgresql/data` |
-| `fnb_rabbitmq` | `5672`, `15672`| `rabbitmq_data` | `/var/lib/rabbitmq` |
+| Dịch vụ Container | Cổng Host | Named Volume | Đường dẫn Mount trong Container | Thực thể chính (Core Entities) |
+| :--- | :--- | :--- | :--- | :--- |
+| `fnb_postgres_auth` | `5432` | `postgres_auth_data` | `/var/lib/postgresql/data` | `users` (credentials, roles, branchId) |
+| `fnb_postgres_product`| `5434` | `postgres_product_data` | `/var/lib/postgresql/data` | `products`, `categories`, `product_sizes`, `toppings`, `branch_product_availabilities` |
+| `fnb_postgres_order` | `5435` | `postgres_order_data` | `/var/lib/postgresql/data` | `orders`, `order_items`, `order_item_toppings`, `payments`, `expenses`, `shifts`, `employees` (face vectors 128D), `attendances` |
+| `fnb_postgres_inventory`| `5436` | `postgres_inventory_data` | `/var/lib/postgresql/data` | `ingredients`, `branch_stocks`, `recipes`, `recipe_items`, `stock_transactions` |
+| `fnb_postgres_branch` | `5437` | `postgres_branch_data` | `/var/lib/postgresql/data` | `branches`, `tables` |
+| `fnb_postgres_reporting`| `5438` | `postgres_reporting_data` | `/var/lib/postgresql/data` | `daily_reports`, `revenue_summaries` |
+| `fnb_rabbitmq` | `5672`, `15672`| `rabbitmq_data` | `/var/lib/rabbitmq` | Message queues, exchanges, bindings |
 
 ---
 
@@ -197,3 +197,79 @@ flowchart TD
      - Quản lý kho, Quản lý nhân viên (chỉ hiển thị cho tài khoản Quản lý/Admin).
 2. **Kỹ thuật In nhiệt 80mm qua Hidden Iframe:**
    - Để tránh xung đột với các class ẩn của Single Page Application (`@media print { #root { display: none !important; } }`), các chức năng in (Phiếu chi, Phiếu kết ca) đều sử dụng một **thẻ iframe ẩn độc lập** được tạo động trong DOM, nạp HTML/CSS in nhiệt chuyên dụng khổ 80mm, kích hoạt lệnh `window.print()` và tự động hủy sau khi in xong. Giải pháp này đảm bảo tính ổn định tối đa trên mọi trình duyệt Chromium và máy in nhiệt POS thông dụng.
+
+---
+
+## 7. Kiến Trúc Quản Lý Nhân Sự & Chấm Công Sinh Trắc Học AI (Biometric Attendance Architecture)
+
+Nhằm giải quyết triệt để vấn nạn chấm công hộ (buddy punching) và tự động hóa quy trình quản trị ca kíp tại quầy, hệ thống triển khai giải pháp thị giác máy tính Client-side AI kết hợp mô hình dữ liệu tập trung tại `order-service`.
+
+### 7.1. Sơ đồ Luồng Kiosk Chấm công Sinh trắc học Thời gian thực
+
+```mermaid
+flowchart TD
+    subgraph ClientPOS ["Kiosk POS Quầy (@vladmandic/face-api)"]
+        CAM["Webcam Stream (Lật gương scaleX(-1))"] --> DETECT["SSD MobileNet V1: Phát hiện khuôn mặt (200ms/frame)"]
+        DETECT --> LANDMARK["68 Face Landmarks: Căn chỉnh tọa độ mắt, mũi, miệng"]
+        LANDMARK --> EMBED["Face Recognition ResNet-34: Trích xuất vector đặc trưng 128D"]
+        
+        STAFF_SEL["Nhân viên chọn Mã NV (VD: NV01)"] --> CACHE_VEC["Nạp Vector Mẫu 128D từ Database"]
+        
+        EMBED --> MATCH{"Tính khoảng cách Euclid d = sqrt(sum((A_i - B_i)^2))"}
+        CACHE_VEC --> MATCH
+        
+        MATCH -->|"d < 0.500"| PASS["Xác thực chính chủ thành công<br/>- Vẽ khung XANH<br/>- Hiển thị nhãn xuôi chiều (Un-mirrored)<br/>- Mở khóa nút Vào ca / Tan ca"]
+        MATCH -->|"d >= 0.500"| FAIL["Khuôn mặt không khớp<br/>- Vẽ khung ĐỎ<br/>- Khóa nút Vào ca / Tan ca<br/>- Chặn đứng chấm công hộ"]
+        
+        PASS --> ACTION["Nhân viên bấm Vào ca (Check-in) hoặc Tan ca (Check-out)"]
+        ACTION --> CAPTURE["Chụp Snapshot Frame ảnh Base64 đối soát"]
+    end
+
+    subgraph BackendGateway ["API Gateway & Order Service"]
+        CAPTURE -->|"POST /attendances/check-in hoặc check-out"| GW["API Gateway (Port 3000)"]
+        GW -->|"RabbitMQ RPC: attendance_check_in / attendance_check_out"| OS["Order Service (Port 3004)"]
+        
+        OS --> CHECK_SHIFT{"Truy vấn ca chuẩn (Shift) đang diễn ra"}
+        CHECK_SHIFT --> CALC_STATUS["So sánh giờ vào ca với (startTime + gracePeriodMinutes)<br/>-> Trạng thái ON_TIME hoặc LATE"]
+        CHECK_SHIFT --> CALC_HOURS["Tan ca: workingHours = (checkOutAt - checkInAt) / 3.6e6"]
+        
+        CALC_STATUS --> SAVE_ATT[("Lưu bảng attendances trong order_db")]
+        CALC_HOURS --> SAVE_ATT
+    end
+```
+
+### 7.2. Vị trí Lưu trữ Vector Sinh trắc học & Snapshot Đối soát trong `order_db`
+- **Vector khuôn mặt 128 chiều (`Employee.faceDescriptor`):**
+  - Lưu trữ dưới dạng cột kiểu `jsonb` trong bảng `employees` của `order_db`.
+  - Chứa đúng 128 số thực float tương ứng với biểu diễn toán học chuẩn của không gian Euclid từ ResNet-34.
+  - Khi ứng dụng POS khởi động hoặc mở Kiosk, danh sách nhân viên cùng vector này được nạp vào bộ nhớ RAM của trình duyệt, cho phép so khớp 1:1 tức thời mà không cần gọi API tính toán lên server.
+- **Snapshot ảnh chụp đối soát (`Attendance.checkInPhoto`, `Attendance.checkOutPhoto`):**
+  - Chụp tự động ngay tại khoảnh khắc bấm nút Check-in/Check-out với độ phân giải nén vừa phải (Base64 JPEG).
+  - Lưu trực tiếp vào cột `text` trong bảng `attendances`, phục vụ quản lý đối chiếu trực quan tại Tab "Bảng chấm công" của `TimesheetModal.tsx`.
+
+### 7.3. Kỹ thuật Hiển thị Un-mirror Canvas trên Video Stream Lật gương
+- **Vấn đề quang học:** Khi người dùng nhìn vào màn hình Kiosk chấm công, video camera bắt buộc phải lật gương (`transform: scaleX(-1)`) để hành vi chuyển động giống hệt khi soi gương. Tuy nhiên, nếu vẽ trực tiếp khung nhận diện và chữ (ví dụ: "✅ Xác thực chính chủ (65% khớp)") lên canvas cùng lớp biến đổi này, toàn bộ text sẽ bị lật ngược từ phải sang trái.
+- **Giải pháp xử lý:**
+  1. Giữ nguyên video element với class `-scale-x-100`.
+  2. Canvas vẽ overlay được đặt đè lên video với kích thước pixel 1:1.
+  3. Để khung viền và chữ bám sát mặt đã lật mà chữ vẫn đọc xuôi chiều:
+     - Tọa độ $X$ của khung nhận diện được đảo ngược theo chiều rộng canvas:
+       $$x_{\text{draw}} = \text{canvasWidth} - x_{\text{box}} - \text{width}_{\text{box}}$$
+     - Nhãn văn bản (Text Label) được vẽ trực tiếp tại tọa độ $x_{\text{draw}}$ trên ngữ cảnh 2D không bị lật gương. Nhờ đó, khung viền di chuyển chuẩn xác theo cử động người dùng và các dòng trạng thái hiển thị rõ ràng, chuyên nghiệp.
+
+### 7.4. Architectural Decision Record (ADR): Gộp Bảng `employees` và `attendances` vào `order_db`
+* **Trạng thái:** ĐÃ PHÊ DUYỆT & TRIỂN KHAI.
+* **Bối cảnh:** Cần quyết định nơi lưu trữ các thực thể quản lý nhân viên quầy (`Employee`), ca làm việc (`Shift`) và nhật ký chấm công (`Attendance`). Có 3 phương án được cân nhắc:
+  1. *Phương án A:* Tách một service mới độc lập (`hr-service` với `hr_db`).
+  2. *Phương án B:* Đưa vào `auth-service` / `auth_db`.
+  3. *Phương án C (Được chọn):* Tích hợp vào `order-service` / `order_db` (Cơ sở dữ liệu vận hành quầy).
+* **Lý do lựa chọn Phương án C:**
+  1. **Tính trọn vẹn của Giao dịch Vận hành quầy (ACID Transactions):**
+     - Tại quầy thu ngân, phiên ca làm việc (`pos_shift`), ca làm việc chuẩn (`Shift`), thu ngân lập phiếu (`cashierId`) và các hóa đơn bán hàng/phiếu chi tiền mặt có mối quan hệ phụ thuộc lẫn nhau rất chặt chẽ.
+     - Khi xuất báo cáo kết ca (`ShiftSummaryModal`), hệ thống cần tính toán đồng bộ giữa giờ vào ca thực tế của thu ngân trong `attendances`, doanh số bán hàng và các phiếu chi phát sinh. Lưu chung trong `order_db` cho phép thực thi truy vấn SQL gộp tốc độ cao mà không cần đến Distributed Transactions (SAGA / 2PC).
+  2. **Độ trễ thấp tối đa cho Kiosk Điểm danh quầy (< 50ms):**
+     - Trạm Kiosk POS phục vụ cho toàn bộ nhân sự quầy đổi ca dồn dập vào giờ cao điểm. Việc gom chung vào `order-service` giúp giảm thiểu 1 bước RPC mạng phân tán, đảm bảo thao tác chấm công hoàn tất ngay lập tức.
+  3. **Phân định ranh giới trách nhiệm (Bounded Context) rõ ràng:**
+     - `auth-service` tập trung 100% vào việc xác thực bảo mật tài khoản hệ thống (User credentials, Bcrypt, JWT Token).
+     - `order-service` đảm nhiệm toàn bộ thực thể "Vận hành Vật lý tại cửa hàng" (Physical Store Operations: Bàn ăn, Đơn hàng, Ca kíp, Nhân sự quầy, Chấm công, Quỹ tiền mặt).
+

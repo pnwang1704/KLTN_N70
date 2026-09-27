@@ -18,9 +18,14 @@ classDiagram
     class Product
     class Order
     class Ingredient
+    class Employee
+    class Shift
+    class Attendance
     
     %% Relationships
-    Branch "1" -- "*" User : has staffs
+    Branch "1" -- "*" User : has accounts
+    Branch "1" -- "*" Employee : employs
+    Branch "1" -- "*" Shift : defines
     Branch "1" -- "*" Order : receives
     Branch "1" -- "*" Product : sells
     Branch "1" -- "*" Ingredient : stocks
@@ -28,6 +33,8 @@ classDiagram
     Order "*" -- "*" Product : contains
     Product "1" -- "*" Ingredient : made of (Recipe)
     User "1" -- "*" Order : creates (Cashier)
+    Employee "1" -- "*" Attendance : logs
+    Shift "1" -- "*" Attendance : scheduled in
 ```
 
 ---
@@ -114,6 +121,36 @@ classDiagram
         +Date updatedAt
     }
 
+    class Employee {
+        +UUID id PK
+        +String branchId
+        +String employeeCode
+        +String fullName
+        +String role
+        +String pinCode
+        +String avatarUrl
+        +FloatArray128 faceDescriptor
+        +Boolean isActive
+        +Date createdAt
+        +Date updatedAt
+    }
+
+    class Attendance {
+        +UUID id PK
+        +UUID employeeId FK
+        +String branchId
+        +String shiftId FK
+        +String shiftCode
+        +Date checkInAt
+        +String checkInPhoto
+        +Date checkOutAt
+        +String checkOutPhoto
+        +Float workingHours
+        +String status
+        +Boolean isFaceVerified
+        +Date createdAt
+    }
+
     class OrderItem {
         +UUID id PK
         +UUID orderId FK
@@ -179,6 +216,8 @@ classDiagram
     Order "*" --> "1" OrderType : is of type
     OrderItem "*" --> "1" OrderItemStatus : has status
     Payment "*" --> "1" PaymentMethod : uses
+    Employee "1" -- "*" Attendance : logs
+    Shift "1" -- "*" Attendance : scheduled in
 ```
 
 > [!NOTE]
@@ -348,6 +387,8 @@ classDiagram
 | **Order** | `Payment` | Giao dịch tài chính gắn với đơn hàng. Lưu trữ phương thức thanh toán (`CASH`, `BANK_TRANSFER`), số tiền khách trả và thời điểm hoàn tất. |
 | **Order** | `Expense` | Phiếu chi tiền mặt phát sinh tại két thu ngân trong ca (mua đá cây, nguyên vật liệu tươi đột xuất, vật phẩm sửa chữa nhỏ). Chứa `amount`, `reason`, `note`, `cashierId`, `branchId` và thời điểm chi `createdAt`. |
 | **Order** | `Shift` | Cấu hình khung giờ ca làm việc chuẩn tại hệ thống/chi nhánh (`code`, `name`, `startTime`, `endTime`, `gracePeriodMinutes`, `isActive`). Cung cấp dữ liệu ca động cho thu ngân mở ca và đối soát báo cáo kết ca. |
+| **Order** | `Employee` | Hồ sơ nhân viên phục vụ tại quầy/chi nhánh (`employeeCode`, `fullName`, `role`, `pinCode`, `faceDescriptor`, `avatarUrl`, `isActive`). Phục vụ nhận diện khuôn mặt sinh trắc học và chấm công Kiosk. |
+| **Order** | `Attendance` | Bản ghi chấm công vào/tan ca của nhân sự (`checkInAt`, `checkInPhoto`, `checkOutAt`, `checkOutPhoto`, `workingHours`, `status`, `isFaceVerified`). Gắn liền với ca chuẩn (`Shift`) và nhân viên (`Employee`). |
 | **Inventory**| `Ingredient` | Danh mục nguyên vật liệu thô (Trà, sữa tươi, hạt cà phê, đường, bột kem béo...). |
 | **Inventory**| `BranchStock` | Quản lý khối lượng tồn kho thực tế của nguyên liệu tại từng chi nhánh cùng mức tồn kho an toàn (`minThreshold`). |
 | **Inventory**| `Recipe` | Bộ định lượng công thức pha chế cho từng món ăn tương ứng theo từng kích thước (Size). |
