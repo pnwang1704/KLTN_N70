@@ -5,9 +5,9 @@ export class CreateEmployeeDto {
   @IsNotEmpty()
   branchId: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  employeeCode: string;
+  employeeCode?: string;
 
   @IsString()
   @IsNotEmpty()

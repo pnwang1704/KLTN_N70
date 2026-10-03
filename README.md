@@ -21,12 +21,18 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 - [x] **Phân hệ Quản lý Nhân sự & Chấm công Sinh trắc học AI (Employee & Attendance Module):**
   - Entity `Employee`: Quản lý hồ sơ nhân sự quầy (`employeeCode`, `fullName`, `role`, `pinCode`, vector khuôn mặt 128 chiều `faceDescriptor` JSONB).
   - Entity `Attendance`: Ghi nhận nhật ký chấm công (`checkInAt`, `checkInPhoto`, `checkOutAt`, `checkOutPhoto`, số giờ thực tế `workingHours`, trạng thái `ON_TIME` hoặc `LATE` theo thời gian ân hạn `gracePeriodMinutes`).
+  - **Tự động sinh mã nhân viên (Auto-increment Employee Code):** Backend `services/order-service` tự động truy vấn tìm mã lớn nhất và sinh mã tăng dần chuẩn định dạng `NVxx` (`NV01`, `NV02`, `NV03`, `NV04`...), cung cấp qua endpoint `GET /employees/next-code` và khóa `readOnly` trên form tạo mới để tránh trùng lặp.
   - **AI Thị giác máy tính Client-side (`@vladmandic/face-api`):** Trích xuất vector đặc trưng 128 chiều (SSD MobileNet V1, 68 landmarks, Face Recognition 128D) trực tiếp trên trình duyệt, so khớp khoảng cách Euclid 1:1 ($d < 0.500$) loại bỏ 100% tình trạng chấm công hộ (buddy punching).
-  - **Kiosk POS chấm công dùng chung tại quầy (`AttendanceKioskModal`):** Cho phép toàn bộ nhân viên (Thu ngân, Pha chế, Phục vụ, Quản lý) chấm công nhanh; tích hợp giải pháp **Un-mirror Text trên Video Canvas** (giữ video soi gương tự nhiên nhưng chữ và khung nhận diện hiển thị chuẩn từ trái sang phải).
+  - **Chấm công Kiosk độc lập ngay từ Màn hình Đăng nhập (Login Kiosk Flow):** Bổ sung nút nổi bật *"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"* ngay dưới form đăng nhập tại `LoginScreen.tsx`. API Gateway gắn `@Public()` cho `POST /attendances/check-in`, `check-out` và `GET /employees` (mặc định `branchId = '1'`), cho phép nhân viên toàn quầy điểm danh trước khi thu ngân đăng nhập vào ca.
+  - **Kiosk 1-chạm trên Header bán hàng:** Bố trí nút *"⏰ Chấm công Kiosk"* trực tiếp cạnh thông tin Thu ngân & đồng hồ ca làm việc, hỗ trợ thao tác nhanh khi giao nhận ca mà không cần mở menu.
+  - **Giải pháp Un-mirror Text trên Video Canvas:** Giữ video soi gương tự nhiên (`scaleX(-1)`) nhưng nghịch đảo tọa độ bounding box và label tag trên Canvas để chữ hiển thị chuẩn từ trái sang phải, không bị lật chữ.
 - [x] **Hợp nhất Trung tâm Quản trị Nhân sự (`TimesheetModal.tsx`):**
   - **Tab 1: 🕒 Bảng chấm công (Timesheet):** Tra cứu lịch sử vào/tan ca theo ngày/tháng/nhân viên kèm ảnh snapshot đối soát trực quan.
-  - **Tab 2: 👥 Hồ sơ Nhân viên & Sinh trắc học (Face Enrollment):** Quản lý danh sách nhân sự, chụp webcam trực tiếp hoặc tải ảnh chân dung để trích xuất và lưu vector khuôn mặt mẫu 128D.
-  - **Tab 3: 🔐 Tài khoản hệ thống (Users & Roles):** Hiển thị danh sách tài khoản đăng nhập POS/Admin với "Tên hiển thị" (Display Name), phân quyền và thao tác khóa/mở khóa.
+  - **Tab 2: 👥 Hồ sơ Nhân viên & Sinh trắc học (Face Enrollment):** Quản lý danh sách nhân sự, mã nhân viên tự động sinh kèm badge "Tự động sinh", chụp webcam trực tiếp hoặc tải ảnh chân dung để trích xuất và lưu vector khuôn mặt mẫu 128D.
+  - **Tab 3: 🔐 Tài khoản hệ thống (Users & Roles):** Hiển thị danh sách tài khoản đăng nhập POS/Admin với "TÊN HIỂN THỊ" chuẩn hóa, form tạo tài khoản với "Tên hiển thị *", "Tên đăng nhập *", "Phân quyền", "Chi nhánh", và thao tác khóa/mở khóa.
+- [x] **Tinh chỉnh Giao diện Quầy & Menu Tiện ích (UX Refinements):**
+  - **Dropdown Menu trên Header:** Loại bỏ các dòng mô tả phụ màu xám, chuẩn hóa layout thành 1 hàng ngang (Flex Row căn giữa icon và nhãn chức năng), đồng bộ phong cách với nhóm "Quản trị hệ thống".
+  - **Phiếu Chi Tiền Mặt (`ExpenseModal.tsx`):** Loại bỏ toàn bộ placeholder gợi ý ở ô Lý do chi và Người nhận/ghi chú, tự động làm sạch form mỗi khi mở.
 - [x] **Thanh toán Đa phương thức:** Tiền mặt (tính tiền thối nhanh) và PayOS VietQR động (Webhook & Polling xác nhận tiền vào tài khoản tự động).
 - [x] **Giải phóng bàn Real-time:** Socket.IO sự kiện `table:completed` đồng bộ hai chiều giữa POS và Customer Web ngay khi thanh toán xong.
 - [x] **Trừ kho tự động theo công thức (SAGA Pattern):** Lắng nghe sự kiện `order_completed` qua RabbitMQ, trừ nguyên vật liệu bằng TypeORM Transaction, tự động rollback nếu thiếu hàng.
@@ -125,10 +131,18 @@ Toàn bộ nhân sự tại quầy dùng chung Kiosk chấm công tại máy POS
 | **`NV03`** | Lê Hoàng Long | Phục vụ bàn (`WAITER`) | `1234` | Sẵn sàng đăng ký qua Webcam |
 
 > [!TIP]
-> **Thao tác thử nghiệm chấm công:**
-> 1. Đăng nhập POS (`admin` hoặc `thungancn1`).
-> 2. Mở "Quản lý Nhân sự & Bảng Công" -> Chọn Tab **"Hồ sơ Nhân viên & Sinh trắc học"** -> Bấm **"Đăng ký mặt"** cho `NV01`, mở camera chụp khuôn mặt của bạn và lưu lại.
-> 3. Bấm nút **"Chấm công (Kiosk)"** trên thanh Header: Chọn `NV01`, nhìn vào camera. Khung nhận diện sẽ lập tức chuyển sang màu xanh lá **"✅ Xác thực chính chủ"** (khoảng cách Euclid $< 0.500$). Bấm **"Vào ca"** để hoàn tất chấm công có lưu snapshot đối soát.
+> **Thao tác thử nghiệm chấm công sinh trắc học AI:**
+> 1. **Cách 1 - Chấm công trực tiếp từ Màn hình Đăng nhập (Không cần login):**
+>    - Truy cập POS Web (`http://localhost:5175`).
+>    - Nhấp nút viền cam **"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"** bên dưới form đăng nhập.
+>    - Kiosk mở camera nhận diện: Chọn nhân viên `NV01`, nhìn vào camera để xác thực khuôn mặt (hoặc nhập PIN `1234`), bấm **"Vào ca"** / **"Tan ca"**. Modal tự động lưu ảnh snapshot và đóng lại, quay về form login.
+> 2. **Cách 2 - Chấm công 1-chạm từ màn hình Thu ngân bán hàng:**
+>    - Đăng nhập POS (`admin` hoặc `thungancn1`).
+>    - Nhấp nút **"⏰ Chấm công Kiosk"** trực tiếp trên thanh Header (nằm cạnh tên Thu ngân).
+> 3. **Đăng ký khuôn mặt mới:**
+>    - Bấm Menu tiện ích -> "Quản lý Nhân sự & Bảng Công" -> Chọn Tab **"👥 Hồ sơ Nhân viên & Sinh trắc học"**.
+>    - Khi bấm "Thêm nhân viên", hệ thống tự động sinh mã `NV04` (khóa read-only).
+>    - Bấm nút **"Đăng ký mặt"** cho nhân viên, mở camera chụp khuôn mặt để hệ thống trích xuất vector 128 chiều và lưu trữ.
 
 ---
 

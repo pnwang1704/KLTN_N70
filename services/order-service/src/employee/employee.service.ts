@@ -90,17 +90,43 @@ export class EmployeeService implements OnApplicationBootstrap {
     return query.getOne();
   }
 
+  async getNextEmployeeCode(branchId?: string): Promise<string> {
+    const query = this.employeeRepository.createQueryBuilder('employee')
+      .select('employee.employeeCode', 'employeeCode');
+
+    const employees = await query.getRawMany();
+    let maxNum = 0;
+    for (const emp of employees) {
+      const code = emp.employeeCode?.trim() || '';
+      const match = code.match(/^NV(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+
+    const nextNum = maxNum + 1;
+    return `NV${String(nextNum).padStart(2, '0')}`;
+  }
+
   async create(dto: CreateEmployeeDto): Promise<Employee> {
+    let code = dto.employeeCode ? dto.employeeCode.trim().toUpperCase() : '';
+    if (!code) {
+      code = await this.getNextEmployeeCode(dto.branchId);
+    }
+
     const existing = await this.employeeRepository.findOne({
-      where: { employeeCode: dto.employeeCode },
+      where: { employeeCode: code },
     });
     if (existing) {
-      throw new BadRequestException(`Employee code "${dto.employeeCode}" already exists`);
+      throw new BadRequestException(`Employee code "${code}" already exists`);
     }
 
     const employee = new Employee();
     employee.branchId = dto.branchId;
-    employee.employeeCode = dto.employeeCode.toUpperCase();
+    employee.employeeCode = code;
     employee.fullName = dto.fullName;
     employee.role = dto.role || 'WAITER';
     employee.pinCode = dto.pinCode || '1234';

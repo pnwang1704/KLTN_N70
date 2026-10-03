@@ -21,6 +21,7 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `PUT`  | `/shifts/:id` | `order-service` | `ADMIN`, `MANAGER` | Cập nhật thông tin ca làm việc theo ID (`200 OK`, `400 Bad Request`, `404 Not Found`). |
 | `PATCH`| `/shifts/:id/toggle` | `order-service` | `ADMIN`, `MANAGER` | Bật/Tắt trạng thái hoạt động (`isActive`) của ca làm việc (`200 OK`, `404 Not Found`). |
 | `GET`  | `/employees` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách nhân viên chi nhánh (`?branchId=&isActive=`) (`200 OK`). |
+| `GET`  | `/employees/next-code` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy mã nhân viên tự động tăng tiếp theo (VD: `NV04`) (`?branchId=`) (`200 OK`). |
 | `POST` | `/employees` | `order-service` | `ADMIN`, `MANAGER` | Tạo hồ sơ nhân viên mới (`employeeCode`, `fullName`, `role`, `pinCode`, `branchId`) (`201 Created`, `400 Bad Request`). |
 | `PUT`  | `/employees/:id` | `order-service` | `ADMIN`, `MANAGER` | Cập nhật thông tin nhân viên (`fullName`, `role`, `pinCode`, `isActive`, `branchId`) (`200 OK`, `404 Not Found`). |
 | `PUT`  | `/employees/:id/face` | `order-service` | `ADMIN`, `MANAGER` | Đăng ký/Cập nhật vector sinh trắc học khuôn mặt 128 chiều (`descriptor`) và ảnh thẻ (`avatarBase64`) (`200 OK`, `400 Bad Request`). |
@@ -270,11 +271,24 @@ Hệ thống cho phép cấu hình linh hoạt các khung giờ ca chuẩn (toà
 
 #### Lấy danh sách nhân viên (`GET /employees`)
 * **Endpoint:** `GET /employees`
-* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Quyền thực thi (Roles):** Public (Không bắt buộc JWT, hỗ trợ tải danh sách nhân sự tại màn hình Kiosk chấm công trước khi thu ngân đăng nhập).
 * **Query Parameters:**
-  * `branchId` (string, optional): Lọc theo chi nhánh cửa hàng.
+  * `branchId` (string, optional, mặc định là `"1"` nếu không truyền): Lọc theo chi nhánh cửa hàng.
   * `isActive` (boolean, optional): `true` (chỉ lấy nhân viên đang hoạt động), `false` (tạm ngưng).
 * **Response (200 OK):** Mảng các đối tượng `Employee` (`id`, `branchId`, `employeeCode`, `fullName`, `role`, `pinCode`, `avatarUrl`, `faceDescriptor`, `isActive`, `createdAt`).
+
+#### Lấy mã nhân viên gợi ý tự động tăng (`GET /employees/next-code`)
+* **Endpoint:** `GET /employees/next-code`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Query Parameters:**
+  * `branchId` (string, optional): ID chi nhánh.
+* **Mục đích:** Tự động tìm số thứ tự lớn nhất trong các mã `NV%`, tăng thêm 1 và format dạng 2 chữ số (VD: `NV01`, `NV02`, `NV03` -> `NV04`), phục vụ hiển thị tự động trên form thêm nhân viên quầy.
+* **Response (200 OK):**
+  ```json
+  {
+    "nextCode": "NV04"
+  }
+  ```
 
 #### Tạo hồ sơ nhân viên mới (`POST /employees`)
 * **Endpoint:** `POST /employees`
@@ -311,7 +325,7 @@ Hệ thống cho phép cấu hình linh hoạt các khung giờ ca chuẩn (toà
 
 #### Chấm công vào ca tại Kiosk POS (`POST /attendances/check-in`)
 * **Endpoint:** `POST /attendances/check-in`
-* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER` (mọi nhân sự dùng chung Kiosk tại quầy)
+* **Quyền thực thi (Roles):** Public (Không bắt buộc JWT, hỗ trợ nhân viên chấm công ngay từ màn hình Đăng nhập; luồng được bảo vệ bằng AI Face Verification và mã PIN cá nhân).
 * **Request Body (JSON):**
   ```json
   {
@@ -331,7 +345,7 @@ Hệ thống cho phép cấu hình linh hoạt các khung giờ ca chuẩn (toà
 
 #### Chấm công tan ca tại Kiosk POS (`POST /attendances/check-out`)
 * **Endpoint:** `POST /attendances/check-out`
-* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Quyền thực thi (Roles):** Public (Không bắt buộc JWT, hỗ trợ nhân viên chấm công tan ca trực tiếp tại Kiosk; luồng được bảo vệ bằng AI Face Verification và mã PIN cá nhân).
 * **Request Body (JSON):**
   ```json
   {
@@ -380,6 +394,7 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `'update_shift'` | API Gateway | `order-service` | `{ id: string, dto: UpdateShiftDto }` | `Shift` entity đã cập nhật |
 | `'toggle_shift'` | API Gateway | `order-service` | `{ id: string }` | `Shift` entity sau khi đảo trạng thái `isActive` |
 | `'get_employees'` | API Gateway | `order-service` | `{ branchId?: string, isActive?: boolean }` | `Employee[]` danh sách nhân sự chi nhánh |
+| `'get_next_employee_code'` | API Gateway | `order-service` | `{ branchId?: string }` | `{ nextCode: string }` mã nhân viên tăng tiếp theo |
 | `'get_employee'` | API Gateway | `order-service` | `{ id: string }` | `Employee` thông tin chi tiết nhân viên |
 | `'create_employee'` | API Gateway | `order-service` | `CreateEmployeeDto` | `Employee` entity mới tạo |
 | `'update_employee'` | API Gateway | `order-service` | `{ id: string, dto: UpdateEmployeeDto }` | `Employee` entity đã cập nhật |

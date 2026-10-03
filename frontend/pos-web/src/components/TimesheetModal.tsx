@@ -114,6 +114,8 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
   // Create / Edit Employee Form State
   const [isEmployeeFormOpen, setIsEmployeeFormOpen] = useState<boolean>(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
+  const [nextEmployeeCode, setNextEmployeeCode] = useState<string>('NV01');
+  const [loadingNextCode, setLoadingNextCode] = useState<boolean>(false);
   const [employeeFormData, setEmployeeFormData] = useState({
     employeeCode: '',
     fullName: '',
@@ -215,11 +217,43 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
       .finally(() => setLoadingUsers(false));
   };
 
+  // Fetch Next Employee Code
+  const fetchNextEmployeeCode = async (): Promise<string> => {
+    setLoadingNextCode(true);
+    try {
+      const res = await api.get('/employees/next-code', {
+        params: { branchId: user?.branchId || '1' },
+      });
+      if (res.data?.nextCode) {
+        setNextEmployeeCode(res.data.nextCode);
+        return res.data.nextCode;
+      }
+    } catch (err) {
+      console.warn('Không thể lấy mã nhân viên tự động từ server, tính toán cục bộ:', err);
+    } finally {
+      setLoadingNextCode(false);
+    }
+
+    // Fallback: Compute from current loaded employees
+    let maxNum = 0;
+    employees.forEach(emp => {
+      const match = emp.employeeCode?.trim().match(/^NV(\d+)$/i);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    });
+    const fallbackCode = `NV${String(maxNum + 1).padStart(2, '0')}`;
+    setNextEmployeeCode(fallbackCode);
+    return fallbackCode;
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     fetchAttendances();
     fetchEmployees();
     fetchUsers();
+    fetchNextEmployeeCode();
   }, [isOpen, filterFromDate, filterToDate, filterEmployeeId]);
 
   // Handle Create System User
@@ -289,17 +323,24 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
     e.preventDefault();
     setSavingEmployee(true);
 
+    const targetCode = employeeFormData.employeeCode || (!editingEmployeeId ? nextEmployeeCode : '');
+    const payload = {
+      ...employeeFormData,
+      employeeCode: targetCode,
+    };
+
     try {
       if (editingEmployeeId) {
-        await api.put(`/employees/${editingEmployeeId}`, employeeFormData);
+        await api.put(`/employees/${editingEmployeeId}`, payload);
         showToast('Cập nhật nhân viên thành công');
       } else {
-        await api.post('/employees', employeeFormData);
+        await api.post('/employees', payload);
         showToast('Tạo nhân viên mới thành công');
       }
       setIsEmployeeFormOpen(false);
       setEditingEmployeeId(null);
       fetchEmployees();
+      fetchNextEmployeeCode();
     } catch (err: any) {
       const msg = err.response?.data?.message || err.message || 'Lỗi lưu thông tin nhân viên';
       showToast(msg, 'error');
@@ -776,10 +817,11 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   setEditingEmployeeId(null);
+                  const code = await fetchNextEmployeeCode();
                   setEmployeeFormData({
-                    employeeCode: '',
+                    employeeCode: code,
                     fullName: '',
                     role: 'WAITER',
                     pinCode: '1234',
@@ -815,17 +857,36 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                   <div>
-                    <label className="block font-bold text-zinc-700 mb-1">Mã nhân viên *</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="VD: NV01, NV02"
-                      value={employeeFormData.employeeCode}
-                      onChange={e =>
-                        setEmployeeFormData({ ...employeeFormData, employeeCode: e.target.value })
-                      }
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold uppercase text-zinc-800 focus:outline-none focus:border-orange-500"
-                    />
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block font-bold text-zinc-700">Mã nhân viên *</label>
+                      {!editingEmployeeId && (
+                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-md">
+                          Tự động sinh
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        required
+                        readOnly={!editingEmployeeId}
+                        placeholder={loadingNextCode ? 'Đang lấy mã...' : 'Tự động sinh (VD: NV04)'}
+                        value={employeeFormData.employeeCode || (!editingEmployeeId ? nextEmployeeCode : '')}
+                        onChange={e =>
+                          setEmployeeFormData({ ...employeeFormData, employeeCode: e.target.value })
+                        }
+                        className={`w-full px-3 py-1.5 border rounded-xl font-mono font-bold text-xs uppercase focus:outline-none transition-all ${
+                          !editingEmployeeId
+                            ? 'bg-zinc-100/80 border-zinc-200 text-zinc-600 cursor-not-allowed select-none'
+                            : 'bg-white border-zinc-200 text-zinc-800 focus:border-orange-500'
+                        }`}
+                      />
+                      {!editingEmployeeId && (
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none">
+                          <Lock size={12} />
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div>
@@ -1076,12 +1137,12 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                   <div>
                     <label className="block font-bold text-zinc-700 mb-1">
-                      Tên hiển thị (VD: Thu ngân Quầy 1, Quản trị viên...) *
+                      Tên hiển thị *
                     </label>
                     <input
                       type="text"
                       required
-                      placeholder="VD: Thu ngân Quầy 1"
+                      placeholder="VD: Thu ngân Quầy 1, Quản trị viên..."
                       value={userFormData.fullName}
                       onChange={e => setUserFormData({ ...userFormData, fullName: e.target.value })}
                       className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-orange-500"
@@ -1089,7 +1150,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-zinc-700 mb-1">Tên đăng nhập (Username) *</label>
+                    <label className="block font-bold text-zinc-700 mb-1">Tên đăng nhập *</label>
                     <input
                       type="text"
                       required
@@ -1113,7 +1174,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block font-bold text-zinc-700 mb-1">Phân quyền (Role)</label>
+                    <label className="block font-bold text-zinc-700 mb-1">Phân quyền</label>
                     <select
                       value={userFormData.role}
                       onChange={e => setUserFormData({ ...userFormData, role: e.target.value })}
@@ -1177,7 +1238,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-bold uppercase tracking-wider text-[10px]">
-                      <th className="py-3 px-4">Tên hiển thị (Display Name)</th>
+                      <th className="py-3 px-4">TÊN HIỂN THỊ</th>
                       <th className="py-3 px-4">Tài khoản</th>
                       <th className="py-3 px-4">Phân quyền</th>
                       <th className="py-3 px-4">Chi nhánh</th>

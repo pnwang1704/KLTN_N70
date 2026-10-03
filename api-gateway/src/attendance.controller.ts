@@ -1,6 +1,7 @@
 import { Controller, Post, Get, Body, Query, Inject, Req } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Roles } from './common/decorators/roles.decorator';
+import { Public } from './common/decorators/public.decorator';
 
 @Controller('attendances')
 export class AttendanceController {
@@ -8,20 +9,20 @@ export class AttendanceController {
     @Inject('ORDER_SERVICE') private readonly orderClient: ClientProxy,
   ) {}
 
-  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Public()
   @Post('check-in')
   checkIn(@Body() dto: any, @Req() req: any) {
-    const branchId = dto.branchId !== undefined ? dto.branchId : req.user?.branchId;
+    const branchId = dto.branchId !== undefined && dto.branchId !== '' ? dto.branchId : (req.user?.branchId || '1');
     return this.orderClient.send('attendance_check_in', {
       ...dto,
       branchId,
     });
   }
 
-  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Public()
   @Post('check-out')
   checkOut(@Body() dto: any, @Req() req: any) {
-    const branchId = dto.branchId !== undefined ? dto.branchId : req.user?.branchId;
+    const branchId = dto.branchId !== undefined && dto.branchId !== '' ? dto.branchId : (req.user?.branchId || '1');
     return this.orderClient.send('attendance_check_out', {
       ...dto,
       branchId,

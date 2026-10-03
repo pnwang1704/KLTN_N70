@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Body, Param, Query, Inject, Req } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Roles } from './common/decorators/roles.decorator';
+import { Public } from './common/decorators/public.decorator';
 
 @Controller('employees')
 export class EmployeeController {
@@ -8,18 +9,28 @@ export class EmployeeController {
     @Inject('ORDER_SERVICE') private readonly orderClient: ClientProxy,
   ) {}
 
-  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Public()
   @Get()
   getEmployees(
     @Req() req: any,
     @Query('branchId') queryBranchId?: string,
     @Query('isActive') isActive?: string,
   ) {
-    const branchId = queryBranchId || req.user?.branchId;
+    const branchId = queryBranchId || req.user?.branchId || '1';
     return this.orderClient.send('get_employees', {
       branchId,
       isActive: isActive !== undefined ? isActive === 'true' || isActive === '1' : undefined,
     });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Get('next-code')
+  getNextEmployeeCode(
+    @Req() req: any,
+    @Query('branchId') queryBranchId?: string,
+  ) {
+    const branchId = queryBranchId || req.user?.branchId;
+    return this.orderClient.send('get_next_employee_code', { branchId });
   }
 
   @Roles('ADMIN', 'MANAGER')

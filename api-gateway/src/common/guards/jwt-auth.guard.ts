@@ -13,6 +13,18 @@ export class JwtAuthGuard implements CanActivate {
       context.getClass(),
     ]);
     if (isPublic) {
+      const request = context.switchToHttp().getRequest();
+      const token = this.extractTokenFromHeader(request);
+      if (token) {
+        try {
+          const payload = await this.jwtService.verifyAsync(token, {
+            secret: 'SECRET_KEY_FOR_JWT_KLTN'
+          });
+          request['user'] = payload;
+        } catch {
+          // Token is optional on public endpoints
+        }
+      }
       return true;
     }
 

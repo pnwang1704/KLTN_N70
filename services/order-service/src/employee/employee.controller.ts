@@ -20,6 +20,12 @@ export class EmployeeController {
     return this.employeeService.findOne(data.id);
   }
 
+  @MessagePattern('get_next_employee_code')
+  async getNextEmployeeCodeMsg(@Payload() data?: { branchId?: string }) {
+    const nextCode = await this.employeeService.getNextEmployeeCode(data?.branchId);
+    return { nextCode };
+  }
+
   @MessagePattern('create_employee')
   async createEmployeeMsg(@Payload() dto: CreateEmployeeDto) {
     return this.employeeService.create(dto);
@@ -45,6 +51,12 @@ export class EmployeeController {
       branchId,
       isActive: isActive !== undefined ? isActive === 'true' || isActive === '1' : undefined,
     });
+  }
+
+  @Get('next-code')
+  async getNextEmployeeCode(@Query('branchId') branchId?: string) {
+    const nextCode = await this.employeeService.getNextEmployeeCode(branchId);
+    return { nextCode };
   }
 
   @Get(':id')

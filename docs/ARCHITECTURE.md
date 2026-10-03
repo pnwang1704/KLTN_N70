@@ -131,14 +131,15 @@ Order Service tổ chức một WebSocket Server độc lập lắng nghe tại 
 ## 5. Mô Hình Bảo Mật: Stateless JWT & Phân Quyền Vai Trò (RBAC)
 
 API Gateway đóng vai trò chốt chặn kiểm soát truy cập (Single Entry Guard):
-1. **Xác thực Stateless JWT:** Mọi request (trừ các endpoint `@Public`) đều phải gửi kèm Header `Authorization: Bearer <token>`. Gateway ủy quyền giải mã token sang `auth-service` qua RabbitMQ pattern `{ cmd: 'validate_token' }`.
+1. **Xác thực Stateless JWT & Các Endpoint Công cộng (@Public):** Mọi request (trừ các endpoint `@Public`) đều phải gửi kèm Header `Authorization: Bearer <token>`. Gateway ủy quyền giải mã token sang `auth-service` qua RabbitMQ pattern `{ cmd: 'validate_token' }`.
+   - **Cơ chế Ngoại lệ cho Kiosk Chấm công (@Public):** Các endpoint `POST /attendances/check-in`, `POST /attendances/check-out` và `GET /employees` được gắn decorator `@Public()`. `JwtAuthGuard` và `RolesGuard` cho phép các luồng này thực thi tự do mà không bắt buộc có Bearer Token, giúp nhân viên có thể chấm công sinh trắc học ngay từ Màn hình Đăng nhập (Login Screen). Nếu client có truyền token (khi đã login), Guard vẫn tự động trích xuất thông tin người dùng (`req.user`) để lấy `branchId` và `role`.
 2. **Phân quyền dựa trên vai trò (RBAC RolesGuard):** Hệ thống phân định 5 nhóm vai trò cụ thể:
    - `ADMIN`: Toàn quyền quản trị hệ thống, chuỗi chi nhánh và tài khoản.
    - `MANAGER`: Quản lý kho, nhân sự và đơn hàng trong phạm vi chi nhánh phụ trách.
    - `CASHIER`: Thu ngân tại quầy POS, xử lý tạo đơn, chiết khấu và hoàn tất thanh toán.
    - `KITCHEN`: Nhân viên bếp thao tác cập nhật trạng thái món trên KDS Web.
    - `WAITER`: Nhân viên phục vụ hỗ trợ gọi món và chăm sóc khách tại bàn.
-   - Nếu tài khoản không thuộc danh sách `@Roles(...)` được phép trên controller, Gateway trả về mã lỗi `403 Forbidden` ngay tức thì.
+   - Nếu tài khoản không thuộc danh sách `@Roles(...)` được phép trên controller, Gateway trả về mã lỗi `403 Forbidden` ngay tức thì (bỏ qua kiểm tra nếu endpoint là `@Public`).
 
 ---
 
@@ -190,11 +191,12 @@ flowchart TD
 ### 6.3. Luồng Tương tác UI trên `pos-web`
 1. **Nút Menu Tiện ích trên Header:**
    - Được thiết kế dưới dạng nút icon vuông bo góc (`w-10 h-10`), đặt ở bên trái nút **"Bán hàng"**.
-   - Khi bấm sẽ mở Dropdown menu gom nhóm các tiện ích vận hành:
+   - Khi bấm sẽ mở Dropdown menu gom nhóm các tiện ích vận hành được thiết kế đồng nhất theo cấu trúc 1 hàng ngang (Flex Row căn giữa icon và nhãn chức năng, padding `py-2 px-4`):
      - 📋 **Lịch sử đơn hàng:** Tự động lọc phạm vi đơn hàng phát sinh từ thời điểm `openedAt` của ca hiện tại.
      - 📊 **Báo cáo kết ca (`ShiftSummaryModal`):** Hiển thị các thẻ thống kê tài chính, thẻ Tiền chi trong ca (Màu Đỏ/Rose), bảng kê chi tiết các phiếu chi có nút In lại (Printer) và kích hoạt in Phiếu kết ca 80mm.
-     - 💸 **Tạo phiếu chi tiền mặt (`ExpenseModal`):** Biểu mẫu tạo phiếu chi kèm in hóa đơn nhiệt 80mm.
-     - Quản lý kho, Quản lý nhân viên (chỉ hiển thị cho tài khoản Quản lý/Admin).
+     - 💸 **Tạo phiếu chi tiền mặt (`ExpenseModal`):** Biểu mẫu tạo phiếu chi kèm in hóa đơn nhiệt 80mm. Giao diện được tối giản hoàn toàn, loại bỏ placeholder dư thừa và tự động làm sạch form mỗi lần mở.
+     - ⏰ **Chấm công nhân viên (Kiosk):** Kích hoạt camera Kiosk nhận diện khuôn mặt trực tiếp từ menu.
+     - Nhóm **Quản trị hệ thống** (Quản lý kho, Quản lý ca làm việc, Quản lý Nhân sự & Bảng Công) với phân quyền `ADMIN` và `MANAGER`.
 2. **Kỹ thuật In nhiệt 80mm qua Hidden Iframe:**
    - Để tránh xung đột với các class ẩn của Single Page Application (`@media print { #root { display: none !important; } }`), các chức năng in (Phiếu chi, Phiếu kết ca) đều sử dụng một **thẻ iframe ẩn độc lập** được tạo động trong DOM, nạp HTML/CSS in nhiệt chuyên dụng khổ 80mm, kích hoạt lệnh `window.print()` và tự động hủy sau khi in xong. Giải pháp này đảm bảo tính ổn định tối đa trên mọi trình duyệt Chromium và máy in nhiệt POS thông dụng.
 
@@ -272,4 +274,30 @@ flowchart TD
   3. **Phân định ranh giới trách nhiệm (Bounded Context) rõ ràng:**
      - `auth-service` tập trung 100% vào việc xác thực bảo mật tài khoản hệ thống (User credentials, Bcrypt, JWT Token).
      - `order-service` đảm nhiệm toàn bộ thực thể "Vận hành Vật lý tại cửa hàng" (Physical Store Operations: Bàn ăn, Đơn hàng, Ca kíp, Nhân sự quầy, Chấm công, Quỹ tiền mặt).
+
+### 7.5. Cơ Chế Sinh Mã Nhân Viên Tự Động (Auto-increment Employee Code Architecture)
+Nhằm ngăn chặn xung đột trùng lặp mã nhân sự do nhập tay và tối ưu hóa trải nghiệm người dùng:
+1. **Thuật toán sinh mã tại Backend (`order-service`):**
+   - Phương thức `getNextEmployeeCode(branchId?: string)` truy vấn toàn bộ mã nhân viên có tiền tố `NV%` trong bảng `employees`.
+   - Trích xuất phần số thứ tự bằng biểu thức chính quy (`regex /^NV(\d+)$/i`), xác định giá trị số lớn nhất hiện tại ($N_{\max}$).
+   - Mã tiếp theo được tự động tính: $N_{\text{next}} = N_{\max} + 1$, và format định dạng chuẩn 2 chữ số: `NV${String(N_next).padStart(2, '0')}` (VD: `NV01`, `NV02`, `NV03` -> `NV04`).
+2. **Cơ chế RPC & REST Gateway:**
+   - Pattern RabbitMQ RPC: `'get_next_employee_code'`.
+   - REST API: `GET /employees/next-code` (phân quyền `ADMIN`, `MANAGER`, `CASHIER`).
+3. **Cơ chế bảo vệ & hiển thị trên POS UI (`TimesheetModal.tsx`):**
+   - Khi mở modal thêm nhân viên, form tự động gọi API lấy mã tiếp theo và điền sẵn vào ô nhập liệu.
+   - Ô nhập mã nhân viên được khóa ở chế độ `readOnly` kèm huy hiệu *"Tự động sinh"* và biểu tượng khóa `<Lock />`, ngăn ngừa lỗi người dùng can thiệp.
+   - Có cơ chế Fallback tính toán cục bộ trên RAM nếu tạm thời mất mạng. Sau khi tạo nhân viên thành công, mã được tự động refresh cho lượt tiếp theo.
+
+### 7.6. Kiến Trúc Chấm Công Kiosk Độc Lập Hai Cấp (Dual-Access Kiosk Architecture)
+Nhằm phục vụ linh hoạt cho toàn bộ nhân sự đổi ca trong ngày mà không phụ thuộc vào trạng thái đăng nhập của thu ngân:
+1. **Cấp 1 - Chấm công Công cộng tại Màn hình Đăng nhập (Unauthenticated Login Kiosk):**
+   - Đặt nút bấm nổi bật *"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"* ngay bên dưới form đăng nhập tại `LoginScreen.tsx`.
+   - Nhân viên ca sáng/chiều có thể điểm danh trước khi thu ngân quầy mở máy và đăng nhập tài khoản.
+   - API Gateway mở quyền `@Public()` cho `POST /attendances/check-in`, `POST /attendances/check-out` và `GET /employees`, loại bỏ hoàn toàn rào cản mã lỗi `401 Unauthorized`.
+   - Luồng vẫn đảm bảo tính an toàn tuyệt đối nhờ cơ chế xác thực kép: **Client-side AI Face Recognition** (so khớp vector 128D) kết hợp **Mã PIN cá nhân 4 số**.
+   - Sau khi hoàn tất (hoặc hủy), modal tự động đóng và bảo lưu nguyên vẹn form đăng nhập ban đầu.
+2. **Cấp 2 - Chấm công 1-Chạm trên Thanh Header Thu ngân (Authenticated 1-Touch Header Kiosk):**
+   - Đưa nút *"⏰ Chấm công Kiosk"* trực tiếp ra thanh Header tại `Header.tsx` (ngay cạnh thông tin thu ngân và đồng hồ ca trực).
+   - Cho phép nhân viên đổi ca giữa ngày bấm 1 chạm bật ngay camera điểm danh mà không cần thao tác qua dropdown menu.
 
