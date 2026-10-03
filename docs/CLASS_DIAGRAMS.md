@@ -387,7 +387,7 @@ classDiagram
 | **Order** | `Payment` | Giao dịch tài chính gắn với đơn hàng. Lưu trữ phương thức thanh toán (`CASH`, `BANK_TRANSFER`), số tiền khách trả và thời điểm hoàn tất. |
 | **Order** | `Expense` | Phiếu chi tiền mặt phát sinh tại két thu ngân trong ca (mua đá cây, nguyên vật liệu tươi đột xuất, vật phẩm sửa chữa nhỏ). Chứa `amount`, `reason`, `note`, `cashierId`, `branchId` và thời điểm chi `createdAt`. |
 | **Order** | `Shift` | Cấu hình khung giờ ca làm việc chuẩn tại hệ thống/chi nhánh (`code`, `name`, `startTime`, `endTime`, `gracePeriodMinutes`, `isActive`). Cung cấp dữ liệu ca động cho thu ngân mở ca và đối soát báo cáo kết ca. |
-| **Order** | `Employee` | Hồ sơ nhân viên phục vụ tại quầy/chi nhánh (`employeeCode`, `fullName`, `role`, `pinCode`, `faceDescriptor`, `avatarUrl`, `isActive`). Phục vụ nhận diện khuôn mặt sinh trắc học và chấm công Kiosk. |
+| **Order** | `Employee` | Hồ sơ nhân viên phục vụ tại quầy/chi nhánh (`employeeCode` chuẩn hóa `NVxx` tự động sinh tăng dần, `fullName`, `role`, `pinCode`, `faceDescriptor`, `avatarUrl`, `isActive`). Phục vụ nhận diện khuôn mặt sinh trắc học và chấm công Kiosk. |
 | **Order** | `Attendance` | Bản ghi chấm công vào/tan ca của nhân sự (`checkInAt`, `checkInPhoto`, `checkOutAt`, `checkOutPhoto`, `workingHours`, `status`, `isFaceVerified`). Gắn liền với ca chuẩn (`Shift`) và nhân viên (`Employee`). |
 | **Inventory**| `Ingredient` | Danh mục nguyên vật liệu thô (Trà, sữa tươi, hạt cà phê, đường, bột kem béo...). |
 | **Inventory**| `BranchStock` | Quản lý khối lượng tồn kho thực tế của nguyên liệu tại từng chi nhánh cùng mức tồn kho an toàn (`minThreshold`). |

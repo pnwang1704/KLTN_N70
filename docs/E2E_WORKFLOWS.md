@@ -349,11 +349,11 @@ sequenceDiagram
 
 ---
 
-## 6. Phân hệ Quản lý Nhân sự & Chấm công Sinh trắc học AI (Biometric Attendance)
+## 7. Phân hệ Quản lý Nhân sự & Chấm công Sinh trắc học AI (Biometric Attendance)
 
 Nhằm tối ưu hóa chi phí vận hành và loại bỏ hoàn toàn tình trạng chấm công hộ (buddy punching) trong mô hình chuỗi F&B, hệ thống tích hợp công nghệ thị giác máy tính Client-side AI (`face-api.js`) để xác thực khuôn mặt 1:1 trực tiếp trên trình duyệt máy POS, đối chiếu với ca chuẩn tự động và lưu vết ảnh chụp kiểm toán.
 
-### 6.1. Quy trình Đăng ký Sinh trắc học khuôn mặt nhân viên (Face Enrollment)
+### 7.1. Quy trình Đăng ký Sinh trắc học khuôn mặt nhân viên (Face Enrollment)
 
 ```mermaid
 sequenceDiagram
@@ -399,7 +399,11 @@ sequenceDiagram
 
 ---
 
-### 6.2. Quy trình Chấm công Kiosk AI tại quầy POS chống gian lận (Face Verification Check-in/out)
+### 7.2. Quy trình Chấm công Kiosk AI tại quầy POS chống gian lận (Face Verification Check-in/out)
+
+Hệ thống hỗ trợ 2 lối vào Kiosk linh hoạt:
+1. **Lối vào 1 - Màn hình Đăng nhập (Login Screen):** Nhân viên bấm nút *"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"* ngay bên dưới form login để điểm danh trước khi thu ngân đăng nhập vào ca.
+2. **Lối vào 2 - Thanh Header Thu ngân:** Thu ngân hoặc nhân viên giao ca bấm nút *"⏰ Chấm công Kiosk"* trực tiếp trên Header để mở camera 1-chạm mà không cần duyệt menu.
 
 ```mermaid
 sequenceDiagram
@@ -407,13 +411,19 @@ sequenceDiagram
     actor Staff as Nhân sự (Thu ngân / Pha chế / Phục vụ)
     participant Kiosk as POS Kiosk (AttendanceKioskModal)
     participant AI as Client AI (face-api.js)
-    participant GW as API Gateway
+    participant GW as API Gateway (Public Route)
     participant OS as Order Service
     participant DB as Order DB (attendances & shifts)
 
     Note over Staff, DB: Giai đoạn 1: Nhận diện & Xác thực khuôn mặt thời gian thực
-    Staff->>Kiosk: Bấm "Chấm công nhân viên (Kiosk)" trên thanh điều hướng
-    Kiosk->>Kiosk: Bật Webcam trực tiếp & tải danh sách nhân sự chi nhánh
+    Staff->>Kiosk: Bấm "Chấm công Kiosk" (tại màn hình Login hoặc Header)
+    Kiosk->>GW: GET /employees?branchId=1&isActive=true (Public, không cần Token)
+    GW->>OS: RabbitMQ RPC: 'get_employees'
+    OS->>DB: Truy vấn nhân viên đang hoạt động kèm faceDescriptor 128D
+    DB-->>OS: Danh sách nhân viên
+    OS-->>GW: Employees list
+    GW-->>Kiosk: HTTP 200 OK
+    Kiosk->>Kiosk: Bật Webcam (lật gương) & nạp vector mẫu vào RAM
     Staff->>Kiosk: Chọn Mã NV / Họ tên của mình
     Kiosk->>AI: Vòng lặp nhận diện video stream (200ms/lần)
     AI->>AI: Trích xuất currentDescriptor (128D) từ khuôn mặt trước ống kính
@@ -421,11 +431,11 @@ sequenceDiagram
 
     alt Khoảng cách d < 0.50 (Xác thực chính chủ thành công)
         AI-->>Kiosk: Trùng khớp chính chủ (Match = true)
-        Kiosk->>Kiosk: Vẽ khung xanh lá quanh mặt, hiển thị "✅ Xác thực chính chủ"
+        Kiosk->>Kiosk: Vẽ khung xanh lá quanh mặt, hiển thị nhãn xuôi "✅ Xác thực chính chủ"
         Kiosk->>Kiosk: MỞ KHÓA các nút hành động "Vào ca" và "Tan ca"
     else Khoảng cách d >= 0.50 (Khuôn mặt không khớp)
         AI-->>Kiosk: Không trùng khớp (Match = false)
-        Kiosk->>Kiosk: Vẽ khung đỏ quanh mặt, hiển thị "❌ Không khớp hồ sơ!"
+        Kiosk->>Kiosk: Vẽ khung đỏ quanh mặt, hiển thị nhãn xuôi "❌ Không khớp hồ sơ!"
         Kiosk->>Kiosk: KHÓA các nút hành động (Chặn đứng chấm công hộ)
     end
 
@@ -433,7 +443,7 @@ sequenceDiagram
     Note over Staff, DB: Giai đoạn 2: Vào ca (Check-in) & Tự động đối chiếu ca chuẩn
     Staff->>Kiosk: Bấm "Vào ca (Check-in)"
     Kiosk->>Kiosk: Chụp nhanh 1 frame video thành snapshotPhoto (Base64)
-    Kiosk->>GW: POST /attendances/check-in (employeeCode, branchId, snapshotPhoto, faceVerified: true)
+    Kiosk->>GW: POST /attendances/check-in (Public, employeeCode, branchId, snapshotPhoto, faceVerified: true)
     GW->>OS: RabbitMQ RPC: 'attendance_check_in'
     OS->>DB: Kiểm tra: Nhân viên có lượt vào ca nào chưa check-out không?
     alt Đã vào ca và chưa check-out
@@ -453,7 +463,7 @@ sequenceDiagram
         OS-->>GW: Trả về Attendance data
         GW-->>Kiosk: HTTP 201 Created
         Kiosk-->>Staff: Toast thành công (Hiển thị Ca làm & Trạng thái Đúng giờ / Đi trễ)
-        Kiosk->>Kiosk: Tự động đóng modal sau 2.5 giây
+        Kiosk->>Kiosk: Tự động đóng modal sau 2.5 giây (Quay lại màn hình ban đầu)
     end
 
     %% Hành động Tan ca
@@ -461,7 +471,7 @@ sequenceDiagram
     Staff->>Kiosk: Cuối ngày: Mở Kiosk -> Chọn Mã NV -> AI đối chiếu khuôn mặt chính chủ
     Staff->>Kiosk: Bấm "Tan ca (Check-out)"
     Kiosk->>Kiosk: Chụp snapshotPhoto tan ca
-    Kiosk->>GW: POST /attendances/check-out (employeeCode, branchId, snapshotPhoto, faceVerified: true)
+    Kiosk->>GW: POST /attendances/check-out (Public, employeeCode, branchId, snapshotPhoto, faceVerified: true)
     GW->>OS: RabbitMQ RPC: 'attendance_check_out'
     OS->>DB: Tìm bản ghi Attendance gần nhất có checkOutAt IS NULL
     OS->>OS: workingHours = (checkOutAt - checkInAt) / 3600000 (làm tròn 2 chữ số thập phân)
@@ -470,12 +480,12 @@ sequenceDiagram
     OS-->>GW: Trả về Attendance data kèm workingHours
     GW-->>Kiosk: HTTP 200 OK
     Kiosk-->>Staff: Toast "Tan ca thành công - Tổng giờ làm: X.XX giờ"
-    Kiosk->>Kiosk: Tự động đóng modal sau 2.5 giây
+    Kiosk->>Kiosk: Tự động đóng modal sau 2.5 giây (Quay lại màn hình ban đầu)
 ```
 
 ---
 
-### 6.3. Giải pháp Kỹ thuật: Bù trừ Tọa độ Un-mirror Canvas & Cơ chế Fallback PIN khẩn cấp
+### 7.3. Giải pháp Kỹ thuật: Bù trừ Tọa độ Un-mirror Canvas & Cơ chế Fallback PIN khẩn cấp
 
 1. **Bù trừ Tọa độ Un-mirror Canvas trên Video Stream Lật gương:**
    - **Vấn đề:** Để người dùng có trải nghiệm thị giác tự nhiên giống như soi gương, luồng video webcam được áp dụng CSS `transform: scaleX(-1)` (class `-scale-x-100`). Tuy nhiên, nếu vẽ trực tiếp khung nhận diện và chữ trạng thái lên canvas overlay đặt trên video này, toàn bộ nội dung văn bản (ví dụ: nhãn "Chính chủ (62% khớp)") sẽ bị lật ngược từ phải qua trái.
@@ -491,6 +501,52 @@ sequenceDiagram
    - Trong trường hợp camera gặp sự cố kỹ thuật (hỏng webcam, phòng thiếu sáng nghiêm trọng hoặc nhân viên bị chấn thương khuôn mặt):
      - Kiosk cung cấp tùy chọn "Nhập mã PIN xác thực" (Mã PIN mặc định: `1234`).
      - Khi nhập đúng mã PIN được cấu hình trong bảng `employees`, hệ thống vẫn cho phép nhân viên bấm "Vào ca" hoặc "Tan ca" và đánh dấu cờ `isFaceVerified: false` kèm ảnh snapshot hiện tại để người quản lý dễ dàng hậu kiểm tra soát.
+
+---
+
+### 7.4. Quy trình Tự động Sinh Mã Nhân viên Mới Tăng Dần (Auto-increment Employee Code)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as Quản lý / Admin
+    participant POS as POS Web (TimesheetModal)
+    participant GW as API Gateway
+    participant OS as Order Service (employee.service.ts)
+    participant DB as Order DB (employees table)
+
+    Admin->>POS: Bấm "Thêm nhân viên" tại Tab 2 "Hồ sơ Nhân viên"
+    POS->>GW: GET /employees/next-code?branchId=1
+    GW->>OS: RabbitMQ RPC: 'get_next_employee_code'
+    OS->>DB: Truy vấn SELECT employeeCode FROM employees WHERE employeeCode LIKE 'NV%'
+    DB-->>OS: Danh sách mã hiện có ['NV01', 'NV02', 'NV03']
+    OS->>OS: Regex tìm số thứ tự lớn nhất maxNum = 3 -> nextNum = 4
+    OS->>OS: Format chuẩn NV + padStart(2, '0') -> 'NV04'
+    OS-->>GW: Trả về { nextCode: 'NV04' }
+    GW-->>POS: HTTP 200 OK (nextCode: 'NV04')
+    POS->>POS: Điền 'NV04' vào ô Mã nhân viên, bật badge 'Tự động sinh' và khóa readOnly
+    Admin->>POS: Nhập Họ tên, Chức vụ, PIN -> Bấm "Tạo nhân viên"
+    POS->>GW: POST /employees (employeeCode: 'NV04', fullName, role, pinCode)
+    GW->>OS: RabbitMQ RPC: 'create_employee'
+    OS->>DB: INSERT INTO employees ...
+    DB-->>OS: Employee entity mới
+    OS-->>GW: Trả về Employee mới
+    GW-->>POS: HTTP 201 Created
+    POS->>POS: Toast thành công, đóng form và tự động nạp mã kế tiếp cho lượt sau
+```
+
+---
+
+### 7.5. Luồng Chấm công Kiosk Độc lập từ Màn hình Đăng nhập (Login Kiosk Attendance Flow)
+
+Quy trình cho phép nhân viên toàn quầy (Pha chế, Phục vụ, Thu ngân ca kế tiếp) hoàn tất điểm danh sinh trắc học ngay cả khi quầy POS chưa được đăng nhập tài khoản thu ngân:
+
+1. **Khởi động:** Nhân viên đứng trước màn hình máy POS đang ở trạng thái Đăng nhập (`LoginScreen.tsx`).
+2. **Kích hoạt Kiosk:** Nhấp vào nút nổi bật **"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"** (thiết kế viền cam nét đứt).
+3. **Mở modal Kiosk độc lập:** Component `AttendanceKioskModal` mở ra, tự động gọi API `GET /employees?branchId=1&isActive=true` (không cần Bearer Token) để nạp danh sách nhân sự chi nhánh 1 kèm vector khuôn mặt 128D.
+4. **Xác thực khuôn mặt thời gian thực:** Nhân viên chọn tên mình, nhìn vào camera webcam. Mô hình AI client-side tính khoảng cách Euclid. Khi $d < 0.50$, hệ thống nhận diện chính chủ và mở khóa nút chấm công.
+5. **Gửi kết quả:** Bấm "Vào ca" hoặc "Tan ca". Request gửi tới `POST /attendances/check-in` hoặc `check-out` (Public endpoint). Server lưu snapshot và giờ làm việc.
+6. **Tự động đóng và khôi phục:** Modal hiển thị Toast kết quả chấm công trong 2.5 giây, sau đó tự động đóng lại. Màn hình quay về form đăng nhập ban đầu mà không làm gián đoạn hay ảnh hưởng đến phiên làm việc của hệ thống.
 
 
 
