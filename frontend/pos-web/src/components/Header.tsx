@@ -68,7 +68,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-zinc-200">
       <div className="flex items-center gap-10">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-orange-600 tracking-tight">N70 POS</h1>
           <div className="flex items-center text-sm font-medium text-zinc-500 bg-zinc-100 px-3 py-1.5 rounded-full gap-2">
             <span>Chi nhánh {user?.branchId || 1}</span>
@@ -85,6 +85,17 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             )}
           </div>
+
+          {/* Quick 1-touch Attendance Kiosk Button */}
+          <button 
+            type="button"
+            onClick={onOpenAttendanceKiosk}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 text-orange-800 border border-orange-300/80 rounded-full text-xs font-bold transition-all shadow-xs cursor-pointer hover:border-orange-400 active:scale-95"
+            title="Chấm công Kiosk (Nhận diện khuôn mặt)"
+          >
+            <span className="text-sm leading-none">⏰</span>
+            <span>Chấm công Kiosk</span>
+          </button>
         </div>
 
         <div className="flex items-center gap-2">
@@ -115,17 +126,14 @@ export const Header: React.FC<HeaderProps> = ({
                     setShowMenuDropdown(false);
                   }}
                   className={cn(
-                    "w-full px-4 py-2.5 flex items-center gap-3 text-left text-xs transition-colors cursor-pointer",
+                    "w-full px-4 py-2 flex items-center gap-3 text-left text-xs transition-colors cursor-pointer",
                     activeTab === 'HISTORY' ? "bg-orange-50 text-orange-700 font-bold" : "text-zinc-700 hover:bg-zinc-50 font-semibold"
                   )}
                 >
-                  <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
-                    <History size={16} />
+                  <div className="w-7 h-7 rounded-lg bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+                    <History size={14} />
                   </div>
-                  <div>
-                    <p className="font-bold">Lịch sử đơn hàng</p>
-                    <p className="text-[11px] font-normal text-zinc-400">Xem các đơn trong ca trực</p>
-                  </div>
+                  <span>Lịch sử đơn hàng</span>
                 </button>
 
                 {/* 2. Báo cáo kết ca */}
@@ -135,15 +143,12 @@ export const Header: React.FC<HeaderProps> = ({
                     setShowMenuDropdown(false);
                     onOpenShiftSummary?.();
                   }}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                  className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs text-zinc-700 hover:bg-zinc-50 font-semibold transition-colors cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                    <BarChart3 size={16} />
+                  <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <BarChart3 size={14} />
                   </div>
-                  <div>
-                    <p className="font-bold">Báo cáo kết ca</p>
-                    <p className="text-[11px] font-normal text-zinc-400">Đối soát tiền két & doanh thu</p>
-                  </div>
+                  <span>Báo cáo kết ca</span>
                 </button>
 
                 {/* 3. Tạo phiếu chi tiền mặt */}
@@ -153,15 +158,12 @@ export const Header: React.FC<HeaderProps> = ({
                     setShowMenuDropdown(false);
                     onOpenExpenseModal?.();
                   }}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                  className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs text-zinc-700 hover:bg-zinc-50 font-semibold transition-colors cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                    <Receipt size={16} />
+                  <div className="w-7 h-7 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                    <Receipt size={14} />
                   </div>
-                  <div>
-                    <p className="font-bold text-rose-700">Tạo phiếu chi tiền mặt</p>
-                    <p className="text-[11px] font-normal text-zinc-400">Chi tiền từ két & in phiếu 80mm</p>
-                  </div>
+                  <span>Tạo phiếu chi tiền mặt</span>
                 </button>
 
                 {/* 4. Chấm công nhân viên (Kiosk) */}
@@ -171,15 +173,12 @@ export const Header: React.FC<HeaderProps> = ({
                     setShowMenuDropdown(false);
                     onOpenAttendanceKiosk?.();
                   }}
-                  className="w-full px-4 py-2.5 flex items-center gap-3 text-left text-xs font-semibold text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                  className="w-full px-4 py-2 flex items-center gap-3 text-left text-xs text-zinc-700 hover:bg-zinc-50 font-semibold transition-colors cursor-pointer"
                 >
-                  <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
-                    <Clock size={16} />
+                  <div className="w-7 h-7 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <Clock size={14} />
                   </div>
-                  <div>
-                    <p className="font-bold text-emerald-800">Chấm công nhân viên (Kiosk)</p>
-                    <p className="text-[11px] font-normal text-zinc-400">Vào ca / Tan ca bằng AI khuôn mặt</p>
-                  </div>
+                  <span>Chấm công nhân viên (Kiosk)</span>
                 </button>
 
                 {(user?.role === 'ADMIN' || user?.role === 'MANAGER') && (

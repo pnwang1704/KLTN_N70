@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { AttendanceKioskModal } from './AttendanceKioskModal';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: any, token: string) => void;
@@ -10,6 +11,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   const [password, setPassword] = useState('admin123');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showKiosk, setShowKiosk] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,12 +76,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           <button 
             type="submit"
             disabled={isLoading}
-            className="w-full bg-orange-600 text-white font-bold py-3.5 rounded-xl active:scale-95 transition-transform disabled:opacity-70 flex justify-center"
+            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3.5 rounded-xl active:scale-95 transition-all shadow-md shadow-orange-600/20 disabled:opacity-70 flex justify-center cursor-pointer"
           >
             {isLoading ? 'Đang xác thực...' : 'Đăng nhập vào Ca'}
           </button>
+
+          <div className="relative flex py-4 items-center">
+            <div className="flex-grow border-t border-zinc-200"></div>
+            <span className="flex-shrink mx-3 text-zinc-400 text-xs font-semibold uppercase tracking-wider">hoặc</span>
+            <div className="flex-grow border-t border-zinc-200"></div>
+          </div>
+
+          {/* Nút Chấm công Kiosk nổi bật */}
+          <button
+            type="button"
+            onClick={() => setShowKiosk(true)}
+            className="w-full py-3.5 px-4 bg-orange-50/80 hover:bg-orange-100 text-orange-700 border-2 border-dashed border-orange-300 hover:border-orange-400 font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-xs group"
+          >
+            <span className="text-xl group-hover:scale-110 transition-transform">⏰</span>
+            <span className="text-sm">Chấm công Kiosk (Nhận diện khuôn mặt)</span>
+          </button>
         </form>
       </div>
+
+      {/* Modal Chấm công Kiosk ngay tại màn hình Đăng nhập */}
+      {showKiosk && (
+        <AttendanceKioskModal
+          isOpen={showKiosk}
+          onClose={() => setShowKiosk(false)}
+          branchId="1"
+        />
+      )}
     </div>
   );
 };

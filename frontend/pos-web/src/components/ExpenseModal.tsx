@@ -264,6 +264,16 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
 
+  React.useEffect(() => {
+    if (isOpen) {
+      setReason('');
+      setNote('');
+      setErrorMsg('');
+      setAmount(50000);
+      setAmountStr('50.000 đ');
+    }
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   // Handle typing numbers smoothly without cursor jumps
@@ -450,7 +460,6 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              placeholder="Ví dụ: Mua 2 bao đá viên, mua thêm sữa tươi TH..."
               className="w-full px-4 py-3 bg-zinc-50 border-2 border-zinc-200 focus:border-rose-500 focus:bg-white rounded-2xl text-sm font-semibold text-zinc-900 focus:outline-none transition-all shadow-inner"
             />
           </div>
@@ -465,7 +474,6 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Ví dụ: Anh Ba giao đá (0901234567), Hóa đơn số 012..."
               className="w-full px-4 py-2.5 bg-zinc-50 border-2 border-zinc-200 focus:border-rose-500 focus:bg-white rounded-2xl text-sm font-medium text-zinc-800 focus:outline-none transition-all shadow-inner"
             />
           </div>
