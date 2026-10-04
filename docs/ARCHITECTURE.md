@@ -189,16 +189,73 @@ flowchart TD
    - Hỗ trợ in tức thời **Phiếu chi tiền mặt 80mm** (Cash Out Voucher) có đầy đủ chữ ký của Người nhận tiền và Người lập phiếu để kẹp vào két lưu trữ chứng từ đối soát.
 
 ### 6.3. Luồng Tương tác UI trên `pos-web`
-1. **Nút Menu Tiện ích trên Header:**
-   - Được thiết kế dưới dạng nút icon vuông bo góc (`w-10 h-10`), đặt ở bên trái nút **"Bán hàng"**.
-   - Khi bấm sẽ mở Dropdown menu gom nhóm các tiện ích vận hành được thiết kế đồng nhất theo cấu trúc 1 hàng ngang (Flex Row căn giữa icon và nhãn chức năng, padding `py-2 px-4`):
-     - 📋 **Lịch sử đơn hàng:** Tự động lọc phạm vi đơn hàng phát sinh từ thời điểm `openedAt` của ca hiện tại.
-     - 📊 **Báo cáo kết ca (`ShiftSummaryModal`):** Hiển thị các thẻ thống kê tài chính, thẻ Tiền chi trong ca (Màu Đỏ/Rose), bảng kê chi tiết các phiếu chi có nút In lại (Printer) và kích hoạt in Phiếu kết ca 80mm.
-     - 💸 **Tạo phiếu chi tiền mặt (`ExpenseModal`):** Biểu mẫu tạo phiếu chi kèm in hóa đơn nhiệt 80mm. Giao diện được tối giản hoàn toàn, loại bỏ placeholder dư thừa và tự động làm sạch form mỗi lần mở.
-     - ⏰ **Chấm công nhân viên (Kiosk):** Kích hoạt camera Kiosk nhận diện khuôn mặt trực tiếp từ menu.
-     - Nhóm **Quản trị hệ thống** (Quản lý kho, Quản lý ca làm việc, Quản lý Nhân sự & Bảng Công) với phân quyền `ADMIN` và `MANAGER`.
-2. **Kỹ thuật In nhiệt 80mm qua Hidden Iframe:**
+1. **Top Header Siêu Tinh Gọn:**
+   - Xóa bỏ hoàn toàn chữ logo "N70 POS", đưa nút menu ☰, tab "Bán hàng" và nút Badge "Đơn tạm tính" lên vị trí khởi đầu góc trái.
+   - Nút Badge "Đơn tạm tính" hiển thị số lượng hóa đơn lưu tạm hiện tại; khi có đơn ($N > 0$), badge số tự động kích hoạt hiệu ứng `animate-pulse` trên nền xanh dương đậm `bg-blue-600 text-white` để nhắc nhở nhân viên.
+   - Chuyển toàn bộ thông tin chi nhánh, tên người dùng và badge ca trực ra khỏi Top Header vào Side Drawer, giúp thanh Top Header thoáng đãng và giảm tải nhận thức cho thu ngân.
+   - Góc phải duy trì: Nút 1-chạm *"⏰ Chấm công Kiosk"*, Trạng thái mạng *"Connected"*, Chuông thông báo bếp và Nút Đăng xuất.
+2. **Thanh Trượt Side Menu Drawer (`SideMenuDrawer`):**
+   - Được kích hoạt từ nút icon menu vuông bo góc (`w-10 h-10`) ở góc trái Header, trượt mượt mà từ mép trái màn hình (`w-80`, backdrop mờ, phím Escape đóng nhanh):
+     - **Profile & Session Card (Header Drawer):** Thiết kế nổi bật trên nền gradient xanh CukCuk `from-blue-600 via-blue-700 to-sky-600`, nút đóng `[✕]`, avatar tròn, tên hiển thị in đậm, chi nhánh hoạt động và badge ca trực hiện tại kèm icon đồng hồ (hỗ trợ nhấp để đổi ca làm việc).
+     - **Thân Drawer (Body):**
+       - 📋 **Lịch sử đơn hàng:** Xem các đơn hàng trong ca trực hiện tại.
+       - 📄 **Hóa đơn tạm tính:** Xem và quản lý các đơn đang lưu tạm; hiển thị badge số lượng đơn.
+       - 📊 **Báo cáo kết ca (`ShiftSummaryModal`):** Hiển thị thống kê tài chính, tiền chi, bảng kê phiếu chi và in Phiếu kết ca 80mm.
+       - 💸 **Tạo phiếu chi tiền mặt (`ExpenseModal`):** Tạo phiếu chi kèm in hóa đơn nhiệt 80mm; biểu mẫu trắng sạch không placeholder gây nhiễu.
+       - ⏰ **Chấm công nhân viên (Kiosk):** Kích hoạt Kiosk nhận diện khuôn mặt trực tiếp từ Drawer.
+       - Nhóm **Quản trị hệ thống** (Quản lý kho, Quản lý ca làm việc, Quản lý Nhân sự & Bảng Công) với phân quyền `ADMIN` và `MANAGER`.
+     - **Footer Drawer:** Nút Đăng xuất hệ thống an toàn và thông tin phiên bản `N70 POS v1.0`.
+3. **Kỹ thuật In nhiệt 80mm qua Hidden Iframe:**
    - Để tránh xung đột với các class ẩn của Single Page Application (`@media print { #root { display: none !important; } }`), các chức năng in (Phiếu chi, Phiếu kết ca) đều sử dụng một **thẻ iframe ẩn độc lập** được tạo động trong DOM, nạp HTML/CSS in nhiệt chuyên dụng khổ 80mm, kích hoạt lệnh `window.print()` và tự động hủy sau khi in xong. Giải pháp này đảm bảo tính ổn định tối đa trên mọi trình duyệt Chromium và máy in nhiệt POS thông dụng.
+
+### 6.4. Kiến Trúc Quản Lý Hóa Đơn Tạm Tính (Hold / Draft Orders Architecture)
+
+Nhằm giải tỏa áp lực hàng đợi tại quầy thu ngân trong giờ cao điểm khi khách hàng chưa quyết định xong giỏ hàng, hệ thống xây dựng cơ chế quản lý hóa đơn tạm tính chạy độc lập phía Client (Local State Persistence):
+
+```mermaid
+graph LR
+    subgraph OrderPanel ["OrderPanel.tsx (Chân Giỏ Hàng)"]
+        BTN_HOLD["Nút [💾 Lưu tạm]<br/>(Disabled khi giỏ rỗng)"]
+    end
+
+    subgraph StateManagement ["Tầng Context & Local Storage"]
+        H_CTX["HeldOrdersContext.tsx<br/>- generateCode: #TAM-01, #TAM-02...<br/>- saveHeldOrder()<br/>- removeHeldOrder()<br/>- clearAllHeldOrders()"]
+        LOCAL_STORAGE[("localStorage<br/>pos_held_orders")]
+        CART_CTX["CartContext.tsx<br/>- loadOrderToCart()<br/>- clearCart()"]
+    end
+
+    subgraph HeaderUI ["Top Header & Drawer"]
+        BADGE["Header.tsx<br/>[📄 Đơn tạm tính (N)]<br/>(animate-pulse khi N > 0)"]
+        DRAWER["HeldOrdersDrawer.tsx<br/>(Slide-over từ cạnh phải w-96)<br/>- Chi tiết món & Tổng tiền xanh<br/>- Nút [↩ Phục hồi đơn]<br/>- Nút [🗑 Xóa đơn] / [Hủy tất cả]"]
+    end
+
+    BTN_HOLD -->|"Bấm Lưu tạm"| H_CTX
+    H_CTX -->|"Snapshot & Tăng mã"| LOCAL_STORAGE
+    H_CTX -->|"Làm sạch giỏ"| CART_CTX
+    H_CTX -.->|"Cập nhật N"| BADGE
+    BADGE -->|"Bấm mở"| DRAWER
+    DRAWER -->|"Xác nhận Phục hồi"| CART_CTX
+    DRAWER -->|"Xóa đơn sau phục hồi"| H_CTX
+```
+
+1. **Thành phần Dữ liệu Đơn Tạm (`HeldOrder` Interface):**
+   - `id`: Chuỗi UUID duy nhất nhận diện phiên lưu tạm.
+   - `code`: Mã định danh ngắn gọn dạng `#TAM-01`, `#TAM-02` tự động tăng dần theo ngày.
+   - `createdAt`: Chuỗi thời gian lưu tạm định dạng `HH:mm:ss`.
+   - `orderType`: Loại đơn hàng (`DINE_IN` hoặc `TAKE_AWAY`).
+   - `tableId`: Số bàn (nếu là đơn tại bàn).
+   - `items`: Mảng snapshot chi tiết toàn bộ món trong giỏ (`productId`, `productName`, `size`, `quantity`, `price`, `toppings`, `note`).
+   - `subtotal`: Tổng tiền tạm tính trước chiết khấu.
+   - `discountType`: Kiểu chiết khấu (`PERCENT` hoặc `AMOUNT`).
+   - `discountInput`: Giá trị người dùng nhập vào ô chiết khấu.
+   - `discountAmount`: Số tiền giảm trừ thực tế.
+   - `finalTotal`: Số tiền thanh toán cuối cùng sau chiết khấu.
+   - `note`: Ghi chú chung của đơn hàng.
+
+2. **Cơ chế Bảo vệ Giỏ hàng Khi Phục hồi (Safe Cart Overwrite Protection):**
+   - Khi thu ngân bấm `[ ↩ Phục hồi đơn ]`, component `HeldOrdersDrawer` kiểm tra xem giỏ hàng hiện tại có chứa món hay không (`cart.items.length > 0`).
+   - Nếu có, hệ thống bật modal xác nhận cảnh báo: *"Giỏ hàng hiện tại đang có món. Bạn có chắc chắn muốn ghi đè bằng đơn tạm này?"*.
+   - Chỉ khi người dùng xác nhận "Đồng ý", `CartContext.loadOrderToCart()` mới ghi đè giỏ hàng và đồng thời `HeldOrdersContext.removeHeldOrder()` loại bỏ đơn tạm đó khỏi danh sách chờ, tránh tình trạng mất đơn hoặc trùng lặp dữ liệu ngoài ý muốn.
 
 ---
 
@@ -292,12 +349,69 @@ Nhằm ngăn chặn xung đột trùng lặp mã nhân sự do nhập tay và t�
 ### 7.6. Kiến Trúc Chấm Công Kiosk Độc Lập Hai Cấp (Dual-Access Kiosk Architecture)
 Nhằm phục vụ linh hoạt cho toàn bộ nhân sự đổi ca trong ngày mà không phụ thuộc vào trạng thái đăng nhập của thu ngân:
 1. **Cấp 1 - Chấm công Công cộng tại Màn hình Đăng nhập (Unauthenticated Login Kiosk):**
-   - Đặt nút bấm nổi bật *"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"* ngay bên dưới form đăng nhập tại `LoginScreen.tsx`.
+   - Đặt nút bấm nổi bật *"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"* (viền xanh nét đứt `bg-blue-50/80 text-blue-700 border-2 border-dashed border-blue-300`) ngay bên dưới form đăng nhập tại `LoginScreen.tsx`.
    - Nhân viên ca sáng/chiều có thể điểm danh trước khi thu ngân quầy mở máy và đăng nhập tài khoản.
    - API Gateway mở quyền `@Public()` cho `POST /attendances/check-in`, `POST /attendances/check-out` và `GET /employees`, loại bỏ hoàn toàn rào cản mã lỗi `401 Unauthorized`.
    - Luồng vẫn đảm bảo tính an toàn tuyệt đối nhờ cơ chế xác thực kép: **Client-side AI Face Recognition** (so khớp vector 128D) kết hợp **Mã PIN cá nhân 4 số**.
    - Sau khi hoàn tất (hoặc hủy), modal tự động đóng và bảo lưu nguyên vẹn form đăng nhập ban đầu.
 2. **Cấp 2 - Chấm công 1-Chạm trên Thanh Header Thu ngân (Authenticated 1-Touch Header Kiosk):**
-   - Đưa nút *"⏰ Chấm công Kiosk"* trực tiếp ra thanh Header tại `Header.tsx` (ngay cạnh thông tin thu ngân và đồng hồ ca trực).
-   - Cho phép nhân viên đổi ca giữa ngày bấm 1 chạm bật ngay camera điểm danh mà không cần thao tác qua dropdown menu.
+   - Đưa nút *"⏰ Chấm công Kiosk"* (viền xanh tinh tế, nền gradient `from-blue-50 to-sky-50 text-blue-800 border-blue-300`) trực tiếp ra thanh Top Header tại `Header.tsx` (nằm ở cụm điều khiển bên phải cạnh trạng thái mạng, chuông thông báo và đăng xuất).
+   - Cho phép nhân viên đổi ca giữa ngày bấm 1 chạm bật ngay camera điểm danh mà không cần mở menu Drawer.
+
+---
+
+## 8. Kiến Trúc Kiểm Soát Phân Quyền & Xử Lý Ngoại Lệ RBAC RolesGuard
+
+Hệ thống bảo vệ tài nguyên API bằng mô hình Role-Based Access Control (RBAC) chặt chẽ tại tầng API Gateway:
+
+```mermaid
+flowchart TD
+    REQ["Incoming HTTP Request"] --> JWT_GUARD["JwtAuthGuard (Passport-JWT)"]
+    JWT_GUARD --> IS_PUB{"Endpoint có decorator @Public()?"}
+    IS_PUB -->|"Có"| PASS_REQ["Bỏ qua xác thực JWT & Cho phép Request"]
+    IS_PUB -->|"Không"| VERIFY_TOKEN["Xác thực JWT Token trong Header"]
+    VERIFY_TOKEN --> EXTRACT_USER["Trích xuất payload vào request.user"]
+    
+    EXTRACT_USER --> ROLES_GUARD["RolesGuard (canActivate)"]
+    ROLES_GUARD --> CHECK_META{"Endpoint có khai báo @Roles()?"}
+    CHECK_META -->|"Không"| ALLOW["Cho phép truy cập"]
+    CHECK_META -->|"Có"| CHECK_USER{"request.user & role có tồn tại?"}
+    
+    CHECK_USER -->|"Không"| ERR_NO_ROLE["throw ForbiddenException('No role found')"]
+    CHECK_USER -->|"Có"| MATCH_ROLE{"user.role có nằm trong requiredRoles?"}
+    
+    MATCH_ROLE -->|"Có"| ALLOW
+    MATCH_ROLE -->|"Không"| ERR_FORBIDDEN["throw ForbiddenException('User does not have the required role')"]
+```
+
+### Nguyên Lý Thiết Kế Xử Lý Ngoại Lệ (Exception Handling Pattern)
+- Trong các phiên bản NestJS tiêu chuẩn, việc trả về `return false` bên trong phương thức `canActivate` có thể khiến framework xử lý theo cơ chế mặc định mà không ném đúng ngoại lệ chuẩn `ForbiddenException` khi chạy trong ngữ cảnh kiểm thử độc lập (Jest Isolation Context).
+- Do đó, `RolesGuard` được thiết kế chủ động ném ngoại lệ tường minh:
+  ```typescript
+  if (!user || !user.role) {
+    throw new ForbiddenException('No role found');
+  }
+  const hasRole = requiredRoles.includes(user.role);
+  if (!hasRole) {
+    throw new ForbiddenException('User does not have the required role');
+  }
+  return true;
+  ```
+- Giải pháp này vừa đảm bảo tính an toàn nghiêm ngặt cho API Gateway trong môi trường thực tế, vừa giúp bộ kiểm thử đơn vị (`roles.guard.spec.ts`) đạt tỷ lệ Pass 100% (10/10 test case).
+
+---
+
+## 9. Hệ Thống Thiết Kế & Chuẩn Hóa Bảng Màu CukCuk POS (Design System)
+
+Nhằm tối ưu hóa công thái học thị giác (visual ergonomics) và giảm thiểu căng thẳng cho nhân viên vận hành trong ca làm việc dài, toàn bộ giao diện `frontend/pos-web` được quy chuẩn đồng nhất theo tông màu **Xanh dương CukCuk & Trắng sáng**:
+
+| Token Màu Sắc | Mã Màu HEX / Tailwind CSS | Mục Đích Sử Dụng trong Giao Diện |
+| :--- | :--- | :--- |
+| **Primary Brand** | `#0070ba` / `blue-600` (`#2563eb`) | Nút hành động chính (Thanh toán, Xác nhận, Đơn tạm tính Active, Tab Đang chọn). |
+| **Primary Dark / Hover** | `blue-700` (`#1d4ed8`) | Trạng thái hover/active của các nút hành động, gradient nền của Header Drawer. |
+| **Primary Light / Soft** | `blue-50` (`#eff6ff`) / `sky-50` | Nền các badge trạng thái, thẻ được chọn, viền nhạt `border-blue-200`. |
+| **Drawer Header Gradient**| `from-blue-600 via-blue-700 to-sky-600` | Header của Side Menu Drawer (Profile & Session card ca trực). |
+| **Neutral Background** | `bg-white` & `bg-zinc-50` / `bg-slate-50` | Nền trang tổng thể, nền thẻ món, nền modal popup. |
+| **Neutral Border** | `border-zinc-200` / `border-slate-200` | Đường phân cách danh mục, viền ô nhập liệu, đường chia giỏ hàng. |
+| **Text Primary & Muted** | `text-zinc-900` / `text-zinc-500` | Chữ tiêu đề đậm và chữ phụ chú rõ ràng, tương phản cao trên nền trắng. |
 

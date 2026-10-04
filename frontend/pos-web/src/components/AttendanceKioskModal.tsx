@@ -415,7 +415,7 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-4xl rounded-3xl overflow-hidden shadow-2xl border border-zinc-200 flex flex-col max-h-[95vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-700 p-4 sm:p-5 text-white flex items-center justify-between shrink-0 shadow-md">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-sky-600 p-4 sm:p-5 text-white flex items-center justify-between shrink-0 shadow-md">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner">
               <Clock size={24} className="text-white" />
@@ -427,7 +427,7 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
                   AI Face Match 1:1
                 </span>
               </div>
-              <p className="text-orange-100 text-xs mt-0.5 flex items-center gap-2">
+              <p className="text-blue-100 text-xs mt-0.5 flex items-center gap-2">
                 <span>Chi nhánh {branchId}</span>
                 <span>•</span>
                 <span className="font-mono font-bold">
@@ -468,7 +468,7 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
               {/* Loading / Error States */}
               {!cameraActive && !cameraError && (
                 <div className="absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center gap-3 text-zinc-400">
-                  <Loader2 size={32} className="animate-spin text-orange-500" />
+                  <Loader2 size={32} className="animate-spin text-blue-500" />
                   <span className="text-xs font-semibold">Đang kích hoạt Camera & Tải AI...</span>
                 </div>
               )}
@@ -562,13 +562,13 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
               {/* Employee Selection */}
               <div>
                 <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-                  <User size={14} className="text-orange-600" />
+                  <User size={14} className="text-blue-600" />
                   <span>1. Chọn nhân sự chấm công</span>
                 </label>
                 <select
                   value={selectedCode}
                   onChange={e => handleSelectCode(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl font-bold text-sm text-zinc-800 focus:outline-none focus:border-orange-500 focus:bg-white transition-all cursor-pointer"
+                  className="w-full px-3.5 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl font-bold text-sm text-zinc-800 focus:outline-none focus:border-blue-500 focus:bg-white transition-all cursor-pointer"
                 >
                   {employees.map(emp => (
                     <option key={emp.id} value={emp.employeeCode}>
@@ -580,8 +580,8 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
 
               {/* Selected Employee Card */}
               {selectedEmployee && (
-                <div className="bg-orange-50/60 border border-orange-200/80 rounded-2xl p-3.5 flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-orange-100 border border-orange-200 flex items-center justify-center font-bold text-orange-700 text-sm overflow-hidden shrink-0 shadow-2xs">
+                <div className="bg-blue-50/60 border border-blue-200/80 rounded-2xl p-3.5 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 border border-blue-200 flex items-center justify-center font-bold text-blue-700 text-sm overflow-hidden shrink-0 shadow-2xs">
                     {selectedEmployee.avatarUrl ? (
                       <img
                         src={selectedEmployee.avatarUrl}
@@ -597,7 +597,7 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
                       <span className="font-black text-zinc-900 text-sm truncate">
                         {selectedEmployee.fullName}
                       </span>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-orange-100 text-orange-800 border border-orange-200">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 border border-blue-200">
                         {selectedEmployee.employeeCode}
                       </span>
                     </div>
@@ -635,7 +635,7 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
                     placeholder="Nhập mã PIN 4 số"
                     value={pinCode}
                     onChange={e => setPinCode(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl font-mono font-bold text-sm tracking-widest text-zinc-800 focus:outline-none focus:border-orange-500"
+                    className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl font-mono font-bold text-sm tracking-widest text-zinc-800 focus:outline-none focus:border-blue-500"
                   />
                   <p className="text-[10px] text-zinc-400">
                     Nhân viên chưa đăng ký khuôn mặt vui lòng nhập mã PIN cá nhân
@@ -673,7 +673,7 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
                   type="button"
                   disabled={!canPerformAction}
                   onClick={handleCheckIn}
-                  className="py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 transition-all cursor-pointer"
+                  className="py-3 px-4 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all cursor-pointer"
                 >
                   {submitting ? (
                     <Loader2 size={16} className="animate-spin" />
@@ -688,7 +688,7 @@ export const AttendanceKioskModal: React.FC<AttendanceKioskModalProps> = ({
                   type="button"
                   disabled={!canPerformAction}
                   onClick={handleCheckOut}
-                  className="py-3 px-4 bg-amber-600 hover:bg-amber-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition-all cursor-pointer"
+                  className="py-3 px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-slate-900/20 transition-all cursor-pointer"
                 >
                   {submitting ? (
                     <Loader2 size={16} className="animate-spin" />

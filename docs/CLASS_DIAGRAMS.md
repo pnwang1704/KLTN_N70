@@ -375,6 +375,59 @@ classDiagram
 
 ---
 
+### 2.6. Phân hệ Giao diện Thu ngân & Hóa đơn Tạm tính (POS Web Client-Side State)
+
+Mô hình cấu trúc dữ liệu lưu trữ cục bộ tại trình duyệt máy POS (`localStorage.pos_held_orders`), phục vụ tính năng lưu tạm hóa đơn khi hàng đợi đông:
+
+```mermaid
+classDiagram
+    direction TB
+
+    class HeldOrder {
+        +String id PK
+        +String code
+        +String createdAt
+        +OrderType orderType
+        +String tableId
+        +CartItem[] items
+        +Float subtotal
+        +DiscountType discountType
+        +String discountInput
+        +Float discountAmount
+        +Float finalTotal
+        +String note
+    }
+
+    class CartItem {
+        +String productId
+        +String productName
+        +String size
+        +Float unitPrice
+        +Integer quantity
+        +String note
+        +CartItemTopping[] toppings
+    }
+
+    class CartItemTopping {
+        +String toppingId
+        +String toppingName
+        +Float price
+        +Integer quantity
+    }
+
+    class DiscountType {
+        <<enumeration>>
+        PERCENT
+        AMOUNT
+    }
+
+    HeldOrder "1" *-- "*" CartItem : stores snapshot
+    CartItem "1" *-- "*" CartItemTopping : includes
+    HeldOrder --> DiscountType : calculates via
+```
+
+---
+
 ## 3. Từ điển Dữ liệu & Ý nghĩa Thực thể (Data Dictionary)
 
 | Phân hệ | Thực thể (Class) | Ý nghĩa / Vai trò trong Hệ thống |
@@ -389,6 +442,7 @@ classDiagram
 | **Order** | `Shift` | Cấu hình khung giờ ca làm việc chuẩn tại hệ thống/chi nhánh (`code`, `name`, `startTime`, `endTime`, `gracePeriodMinutes`, `isActive`). Cung cấp dữ liệu ca động cho thu ngân mở ca và đối soát báo cáo kết ca. |
 | **Order** | `Employee` | Hồ sơ nhân viên phục vụ tại quầy/chi nhánh (`employeeCode` chuẩn hóa `NVxx` tự động sinh tăng dần, `fullName`, `role`, `pinCode`, `faceDescriptor`, `avatarUrl`, `isActive`). Phục vụ nhận diện khuôn mặt sinh trắc học và chấm công Kiosk. |
 | **Order** | `Attendance` | Bản ghi chấm công vào/tan ca của nhân sự (`checkInAt`, `checkInPhoto`, `checkOutAt`, `checkOutPhoto`, `workingHours`, `status`, `isFaceVerified`). Gắn liền với ca chuẩn (`Shift`) và nhân viên (`Employee`). |
+| **POS Web (Client)** | `HeldOrder` | Đối tượng hóa đơn lưu tạm cục bộ tại trình duyệt máy POS (`localStorage.pos_held_orders`). Lưu snapshot trọn vẹn giỏ hàng, mã tự tăng `#TAM-xx`, giờ lưu, chiết khấu và tổng tiền để phục hồi hoặc xóa an toàn. |
 | **Inventory**| `Ingredient` | Danh mục nguyên vật liệu thô (Trà, sữa tươi, hạt cà phê, đường, bột kem béo...). |
 | **Inventory**| `BranchStock` | Quản lý khối lượng tồn kho thực tế của nguyên liệu tại từng chi nhánh cùng mức tồn kho an toàn (`minThreshold`). |
 | **Inventory**| `Recipe` | Bộ định lượng công thức pha chế cho từng món ăn tương ứng theo từng kích thước (Size). |

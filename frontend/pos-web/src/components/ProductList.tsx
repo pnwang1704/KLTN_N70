@@ -28,7 +28,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
             placeholder="Tìm kiếm món ăn..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-100 border-none rounded-xl focus:ring-2 focus:ring-orange-500 focus:outline-none text-sm"
+            className="w-full pl-10 pr-4 py-2.5 bg-zinc-100 border-none rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm"
           />
         </div>
 
@@ -41,7 +41,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
                 className={cn(
                   "whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold transition-colors",
                   activeCategory === cat.id 
-                    ? "bg-orange-100 text-orange-600 border border-orange-200" 
+                    ? "bg-blue-50 text-blue-700 border border-blue-200" 
                     : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
                 )}
               >
@@ -59,14 +59,14 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
             <div 
               key={product.id}
               onClick={() => onSelectProduct(product)}
-              className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-orange-500 hover:shadow-md transition-all cursor-pointer group flex flex-col"
+              className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group flex flex-col"
             >
               <div className="aspect-square bg-zinc-100 relative overflow-hidden">
                 <img src={product.imageUrl} alt={product.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
               </div>
               <div className="p-3 flex flex-col flex-1">
                 <h3 className="font-semibold text-zinc-900 text-sm line-clamp-2 mb-1">{product.name}</h3>
-                <span className="mt-auto text-orange-600 font-bold text-sm">
+                <span className="mt-auto text-blue-700 font-bold text-sm">
                   {formatCurrency(product.basePrice)}
                 </span>
               </div>

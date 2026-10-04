@@ -91,8 +91,8 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
               <span className="flex items-center gap-1.5 font-medium text-zinc-600">
                 <span className="w-3 h-3 rounded-full bg-white border border-zinc-300"></span> Bàn trống
               </span>
-              <span className="flex items-center gap-1.5 font-medium text-orange-600">
-                <span className="w-3 h-3 rounded-full bg-orange-100 border border-orange-500"></span> Đang phục vụ
+              <span className="flex items-center gap-1.5 font-medium text-blue-600">
+                <span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-500"></span> Đang phục vụ
               </span>
             </div>
           </div>
@@ -102,7 +102,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
               className="p-2 text-zinc-500 hover:text-zinc-900 bg-zinc-50 hover:bg-zinc-200 rounded-full transition-colors cursor-pointer"
               title="Làm mới trạng thái bàn"
             >
-              <RefreshCw size={18} className={cn(isLoading && 'animate-spin text-orange-600')} />
+              <RefreshCw size={18} className={cn(isLoading && 'animate-spin text-blue-600')} />
             </button>
             <button 
               onClick={onClose} 
@@ -141,17 +141,17 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                   className={cn(
                     "relative p-3 h-32 rounded-2xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 group cursor-pointer",
                     isOccupied 
-                      ? "bg-orange-50 border-orange-400 hover:bg-orange-100 hover:border-orange-500 shadow-sm" 
-                      : "bg-white border-zinc-200 hover:border-orange-300 hover:shadow-md"
+                      ? "bg-blue-50 border-blue-400 hover:bg-blue-100 hover:border-blue-500 shadow-sm" 
+                      : "bg-white border-zinc-200 hover:border-blue-300 hover:shadow-md"
                   )}
                 >
-                  <span className={cn("text-2xl font-black", isOccupied ? "text-orange-600" : "text-zinc-400 group-hover:text-zinc-600")}>
+                  <span className={cn("text-2xl font-black", isOccupied ? "text-blue-600" : "text-zinc-400 group-hover:text-zinc-600")}>
                     {num}
                   </span>
                   
                   {isOccupied ? (
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-orange-200 text-orange-900 rounded-full mb-1">
+                      <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full mb-1">
                         {tableOrders.length > 1 ? `${tableOrders.length} đợt • ${totalItemsCount} món` : `${totalItemsCount} món`}
                       </span>
                       <span className="text-xs font-bold text-zinc-900">{formatCurrency(tableTotal)}</span>
@@ -173,12 +173,12 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-xs p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-orange-50/90 shrink-0">
+            <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-blue-50/90 shrink-0">
               <div>
-                <h3 className="font-bold text-lg text-orange-950 flex items-center gap-2">
-                  <Users size={20} className="text-orange-600" /> Bàn {selectedOccupiedTable.tableId}
+                <h3 className="font-bold text-lg text-blue-950 flex items-center gap-2">
+                  <Users size={20} className="text-blue-600" /> Bàn {selectedOccupiedTable.tableId}
                 </h3>
-                <p className="text-xs text-orange-700 mt-0.5">
+                <p className="text-xs text-blue-700 mt-0.5">
                   {selectedOccupiedTable.orders.length > 1
                     ? `${selectedOccupiedTable.orders.length} đợt gọi món từ khách`
                     : 'Đơn hàng đang phục vụ'}
@@ -186,7 +186,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
               </div>
               <button 
                 onClick={() => setSelectedOccupiedTable(null)} 
-                className="p-1.5 text-orange-400 hover:text-orange-900 rounded-full hover:bg-orange-100 transition-colors cursor-pointer"
+                className="p-1.5 text-blue-400 hover:text-blue-900 rounded-full hover:bg-blue-100 transition-colors cursor-pointer"
               >
                 <X size={20} />
               </button>
@@ -195,7 +195,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
             {/* Modal Body: Complete Item List */}
             <div className="p-6 overflow-y-auto flex-1">
               <div className="text-xs font-bold text-zinc-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                <Receipt size={14} className="text-orange-600" />
+                <Receipt size={14} className="text-blue-600" />
                 Danh sách món khách đã gọi ({selectedOccupiedTable.allItems.length} món)
               </div>
 
@@ -227,7 +227,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                             <div key={item.id || itemIdx} className="p-2 flex justify-between items-start text-xs hover:bg-white rounded-xl transition-colors">
                               <div className="flex-1 pr-3">
                                 <div className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-orange-600 font-extrabold bg-orange-100 px-1.5 py-0.2 rounded text-[11px]">
+                                  <span className="text-blue-600 font-extrabold bg-blue-100 px-1.5 py-0.2 rounded text-[11px]">
                                     {item.quantity}x
                                   </span>
                                   <span>{item.productName}</span>
@@ -249,7 +249,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                                 )}
 
                                 {item.note && (
-                                  <div className="text-[11px] text-orange-600 italic mt-0.5 pl-6">
+                                  <div className="text-[11px] text-blue-600 italic mt-0.5 pl-6">
                                     Ghi chú: {item.note}
                                   </div>
                                 )}
@@ -268,14 +268,14 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
               </div>
 
               {/* Total Summary */}
-              <div className="bg-orange-50/70 border border-orange-200/80 rounded-2xl p-4 flex justify-between items-center">
+              <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4 flex justify-between items-center">
                 <div>
-                  <span className="text-xs text-orange-800 font-medium block">Tổng tiền cần thanh toán</span>
-                  <span className="text-xs text-orange-950 font-bold">
+                  <span className="text-xs text-blue-800 font-medium block">Tổng tiền cần thanh toán</span>
+                  <span className="text-xs text-blue-950 font-bold">
                     {selectedOccupiedTable.orders.length} đợt gọi • {selectedOccupiedTable.allItems.reduce((s: number, it: any) => s + Number(it.quantity || 1), 0)} món
                   </span>
                 </div>
-                <span className="text-2xl font-black text-orange-600">
+                <span className="text-2xl font-black text-blue-600">
                   {formatCurrency(selectedOccupiedTable.totalAmount)}
                 </span>
               </div>
@@ -310,7 +310,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                   setSelectedOccupiedTable(null);
                   onClose();
                 }}
-                className="flex-[2] py-3 bg-orange-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-orange-700 active:scale-95 transition-all shadow-md cursor-pointer text-sm"
+                className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition-all shadow-md cursor-pointer text-sm"
               >
                 <CheckCircle size={18} /> Thanh toán bàn này
               </button>

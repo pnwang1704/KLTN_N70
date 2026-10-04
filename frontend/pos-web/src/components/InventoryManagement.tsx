@@ -170,17 +170,17 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
     <div className="flex-1 p-6 overflow-y-auto bg-zinc-50">
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-2xl font-bold text-zinc-900 flex items-center gap-2">
-          <Package className="text-orange-600" />
+          <Package className="text-blue-600" />
           Quản lý Kho nguyên liệu
         </h2>
         <div className="flex gap-3">
           <button onClick={fetchData} className="px-4 py-2 bg-white border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-600 hover:bg-zinc-100">
             Làm mới
           </button>
-          <button onClick={() => setShowAddIngredientModal(true)} className="px-4 py-2 bg-white border border-orange-200 text-orange-600 rounded-xl text-sm font-semibold hover:bg-orange-50 flex items-center gap-2">
+          <button onClick={() => setShowAddIngredientModal(true)} className="px-4 py-2 bg-white border border-blue-200 text-blue-600 rounded-xl text-sm font-semibold hover:bg-blue-50 flex items-center gap-2">
             <Plus size={16} /> Thêm nguyên liệu
           </button>
-          <button onClick={() => setShowStockInModal(true)} className="px-4 py-2 bg-orange-600 text-white rounded-xl text-sm font-semibold hover:bg-orange-700 flex items-center gap-2">
+          <button onClick={() => setShowStockInModal(true)} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-semibold hover:bg-blue-700 flex items-center gap-2">
             <PlusCircle size={16} /> Nhập kho
           </button>
         </div>
@@ -188,7 +188,7 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
 
       <div className="grid grid-cols-2 gap-6 mb-6">
         <div className="bg-white p-6 rounded-2xl border border-zinc-200 shadow-sm flex items-center gap-4">
-          <div className="p-4 bg-orange-50 text-orange-600 rounded-xl"><Package size={24} /></div>
+          <div className="p-4 bg-blue-50 text-blue-600 rounded-xl"><Package size={24} /></div>
           <div>
             <p className="text-zinc-500 text-sm font-semibold">Tổng nguyên liệu</p>
             <p className="text-2xl font-bold text-zinc-900">{ingredients.length}</p>
@@ -274,7 +274,7 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
                   value={addIngredientForm.name}
                   onChange={(e) => setAddIngredientForm({ ...addIngredientForm, name: e.target.value })}
                   placeholder="VD: Cà phê Robusta, Trà sữa..."
-                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-orange-500 text-sm"
+                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm"
                   required
                 />
               </div>
@@ -286,7 +286,7 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
                   value={addIngredientForm.unit}
                   onChange={(e) => setAddIngredientForm({ ...addIngredientForm, unit: e.target.value })}
                   placeholder="VD: g, ml, chai, gói, kg..."
-                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-orange-500 text-sm"
+                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm"
                   required
                 />
               </div>
@@ -300,12 +300,12 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
                   value={addIngredientForm.minStockThreshold}
                   onChange={(e) => setAddIngredientForm({ ...addIngredientForm, minStockThreshold: e.target.value })}
                   placeholder="VD: 500"
-                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-orange-500 text-sm"
+                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm"
                   required
                 />
               </div>
 
-              <button type="submit" className="w-full py-3.5 bg-orange-600 text-white font-bold rounded-xl active:scale-95 transition-transform mt-2">
+              <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl active:scale-95 transition-transform mt-2">
                 Xác nhận Thêm
               </button>
             </form>
@@ -328,7 +328,7 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
                 <select 
                   value={stockInForm.ingredientId}
                   onChange={(e) => setStockInForm({...stockInForm, ingredientId: e.target.value})}
-                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-orange-500 text-sm"
+                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm"
                   required
                 >
                   <option value="">-- Chọn nguyên liệu --</option>
@@ -342,17 +342,17 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
                 <label className="block text-sm font-semibold text-zinc-900 mb-2">Số lượng nhập thêm</label>
                 <input 
                   type="number" 
-                  step="0.01"
+                  step="0.01" 
                   min="0"
                   value={stockInForm.quantity}
                   onChange={(e) => setStockInForm({...stockInForm, quantity: e.target.value})}
                   placeholder="VD: 500"
-                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-orange-500 text-sm"
+                  className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-blue-500 text-sm"
                   required
                 />
               </div>
 
-              <button type="submit" className="w-full py-3.5 bg-orange-600 text-white font-bold rounded-xl active:scale-95 transition-transform">
+              <button type="submit" className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl active:scale-95 transition-transform">
                 Xác nhận Nhập kho
               </button>
             </form>

@@ -536,7 +536,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             </button>
             <button 
               onClick={onSuccess}
-              className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl active:scale-95 transition-transform hover:bg-orange-700"
+              className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl active:scale-95 transition-transform hover:bg-blue-700 shadow-md shadow-blue-600/20"
             >
               Đóng & Bắt đầu đơn mới
             </button>
@@ -561,12 +561,12 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
 
         <div className="p-6 overflow-y-auto flex-1 space-y-5">
           {/* Summary Card */}
-          <div className="bg-orange-50/70 p-4 rounded-2xl border border-orange-100 flex justify-between items-center">
+          <div className="bg-blue-50/70 p-4 rounded-2xl border border-blue-100 flex justify-between items-center">
             <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-orange-700 block mb-0.5">Tổng Cần Thu</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-700 block mb-0.5">Tổng Cần Thu</span>
               <span className="text-xs text-zinc-500">Số tiền khách cần thanh toán</span>
             </div>
-            <span className="text-2xl font-extrabold text-orange-600">{formatCurrency(normalizedTotal)}</span>
+            <span className="text-2xl font-extrabold text-blue-600">{formatCurrency(normalizedTotal)}</span>
           </div>
 
           <div>
@@ -574,13 +574,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             <div className="grid grid-cols-2 gap-3">
               <button 
                 onClick={() => setPaymentMethod('CASH')}
-                className={cn("py-3 rounded-xl font-semibold border-2 transition-colors", paymentMethod === 'CASH' ? "border-orange-500 bg-orange-50 text-orange-700" : "border-zinc-200 bg-white text-zinc-600")}
+                className={cn("py-3 rounded-xl font-semibold border-2 transition-colors", paymentMethod === 'CASH' ? "border-blue-600 bg-blue-50 text-blue-700" : "border-zinc-200 bg-white text-zinc-600")}
               >
                 Tiền mặt
               </button>
               <button 
                 onClick={() => setPaymentMethod('BANK_TRANSFER')}
-                className={cn("py-3 rounded-xl font-semibold border-2 transition-colors", paymentMethod === 'BANK_TRANSFER' ? "border-orange-500 bg-orange-50 text-orange-700" : "border-zinc-200 bg-white text-zinc-600")}
+                className={cn("py-3 rounded-xl font-semibold border-2 transition-colors", paymentMethod === 'BANK_TRANSFER' ? "border-blue-600 bg-blue-50 text-blue-700" : "border-zinc-200 bg-white text-zinc-600")}
               >
                 Chuyển khoản (QR)
               </button>
@@ -597,8 +597,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
                   className={cn(
                     "px-2.5 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer",
                     amountPaid === normalizedTotal
-                      ? "bg-orange-600 text-white shadow-sm"
-                      : "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
                   )}
                 >
                   Đúng số tiền ({formatCurrency(normalizedTotal)})
@@ -619,7 +619,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
                     setAmountPaidStr(formatAmountInput(digits));
                   }
                 }}
-                className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-lg font-bold text-zinc-900 focus:outline-none focus:border-orange-500 focus:bg-white"
+                className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-lg font-bold text-zinc-900 focus:outline-none focus:border-blue-500 focus:bg-white"
                 placeholder="0 đ"
               />
               <div className="mt-3">
@@ -633,7 +633,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
                       className={cn(
                         "py-2.5 px-2 text-xs font-bold rounded-xl border transition-all text-center cursor-pointer active:scale-95",
                         amountPaid === val
-                          ? "bg-orange-500 border-orange-500 text-white shadow-sm"
+                          ? "bg-blue-600 border-blue-600 text-white shadow-sm"
                           : "bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100 hover:border-zinc-300"
                       )}
                     >
@@ -645,7 +645,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
             </div>
           ) : (
             <div className="mb-6 flex flex-col items-center">
-              <div className="p-3 bg-white border-2 border-orange-100 rounded-2xl shadow-sm mb-3 min-h-[192px] flex items-center justify-center">
+              <div className="p-3 bg-white border-2 border-blue-100 rounded-2xl shadow-sm mb-3 min-h-[192px] flex items-center justify-center">
                 {payOsQr ? (
                   <img 
                     src={payOsQr}
@@ -672,7 +672,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
           <button 
             onClick={handlePayment}
             disabled={isSubmitting || changeAmount < 0}
-            className="w-full py-4 bg-orange-600 text-white font-bold text-lg rounded-xl flex items-center justify-center disabled:opacity-50 active:scale-95 transition-transform"
+            className="w-full py-4 bg-blue-600 text-white font-bold text-lg rounded-xl flex items-center justify-center disabled:opacity-50 active:scale-95 transition-transform hover:bg-blue-700 shadow-lg shadow-blue-600/25 cursor-pointer"
           >
             {isSubmitting ? 'Đang xử lý...' : (paymentMethod === 'BANK_TRANSFER' ? 'Xác nhận đã nhận tiền' : 'Xác nhận Thanh toán')}
           </button>

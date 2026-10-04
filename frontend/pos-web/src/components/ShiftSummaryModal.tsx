@@ -550,14 +550,14 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:hidden">
         <div className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-zinc-200 flex flex-col max-h-[90vh]">
           {/* Modal Top Header */}
-          <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-amber-700 p-6 text-white flex items-center justify-between shadow-md">
+          <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-sky-600 p-6 text-white flex items-center justify-between shadow-md">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner">
                 <Coins className="text-white" size={26} />
               </div>
               <div>
                 <h3 className="text-xl font-black tracking-tight">Báo Cáo Kết Ca & Doanh Thu</h3>
-                <p className="text-orange-100 text-xs mt-0.5">
+                <p className="text-blue-100 text-xs mt-0.5">
                   Đối chiếu tiền mặt trong két và tổng kết doanh thu ca trực
                 </p>
               </div>
@@ -575,7 +575,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
             {/* Shift & Staff Metadata Banner */}
             <div className="bg-white border border-zinc-200 rounded-2xl p-4 shadow-sm grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
                   <User size={16} />
                 </div>
                 <div>
@@ -710,17 +710,17 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
                 </div>
 
                 {/* 4. Total Revenue Card */}
-                <div className="bg-white border-2 border-orange-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                <div className="bg-white border-2 border-blue-200 rounded-2xl p-4 shadow-sm flex flex-col justify-between">
                   <div>
                     <div className="flex justify-between items-start mb-1.5">
                       <span className="text-xs font-bold uppercase tracking-wider text-zinc-500">
                         💰 Doanh thu bán hàng
                       </span>
-                      <div className="p-1.5 bg-orange-100 rounded-lg text-orange-600">
+                      <div className="p-1.5 bg-blue-100 rounded-lg text-blue-600">
                         <Coins size={18} />
                       </div>
                     </div>
-                    <div className="text-xl font-black text-orange-600 tracking-tight mt-1">
+                    <div className="text-xl font-black text-blue-600 tracking-tight mt-1">
                       {formatCurrency(totalRevenue)}
                     </div>
                   </div>
@@ -843,7 +843,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
                     </thead>
                     <tbody className="divide-y divide-zinc-100">
                       {summaryData.recentOrders.map((o) => (
-                        <tr key={o.id} className="hover:bg-orange-50/40 transition-colors">
+                        <tr key={o.id} className="hover:bg-blue-50/40 transition-colors">
                           <td className="px-4 py-2 text-zinc-600">{formatDate(o.createdAt)}</td>
                           <td className="px-4 py-2 font-mono font-bold text-zinc-800">
                             {o.orderCode ? `#${o.orderCode}` : o.id.split('-')[0]}
@@ -878,7 +878,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
                 disabled={loading}
                 className="px-3.5 py-2.5 rounded-xl border border-zinc-200 text-zinc-700 hover:bg-zinc-100 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
               >
-                <RotateCw size={14} className={loading ? 'animate-spin text-orange-600' : ''} />
+                <RotateCw size={14} className={loading ? 'animate-spin text-blue-600' : ''} />
                 <span>{loading ? 'Đang tải...' : 'Làm mới dữ liệu'}</span>
               </button>
 
@@ -887,9 +887,9 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
                   onClose();
                   onSwitchShift();
                 }}
-                className="px-3.5 py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3.5 py-2.5 rounded-xl border border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <ArrowRightLeft size={14} className="text-amber-600" />
+                <ArrowRightLeft size={14} className="text-blue-600" />
                 <span>Đổi ca trực</span>
               </button>
             </div>
@@ -904,7 +904,7 @@ export const ShiftSummaryModal: React.FC<ShiftSummaryModalProps> = ({
 
               <button
                 onClick={handlePrint}
-                className="px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md transition-all cursor-pointer"
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-blue-600/20 transition-all cursor-pointer"
               >
                 <Printer size={15} />
                 <span>In phiếu kết ca (80mm)</span>

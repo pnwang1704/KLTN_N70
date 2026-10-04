@@ -401,14 +401,14 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl border border-zinc-200 animate-in zoom-in-95 duration-200 flex flex-col max-h-[92vh]">
         {/* Modal Header */}
-        <div className="bg-gradient-to-r from-rose-600 via-red-600 to-amber-600 p-5 text-white flex items-center justify-between shadow-md shrink-0">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-sky-600 p-5 text-white flex items-center justify-between shadow-md shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner">
               <Receipt className="text-white" size={22} />
             </div>
             <div>
               <h3 className="text-lg font-black tracking-tight">Tạo Phiếu Chi Tiền Mặt</h3>
-              <p className="text-rose-100 text-xs mt-0.5">
+              <p className="text-blue-100 text-xs mt-0.5">
                 Ghi nhận các khoản chi phát sinh từ két tiền mặt trong ca trực
               </p>
             </div>
@@ -433,7 +433,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
           {/* 1. Số tiền chi */}
           <div>
             <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <Banknote size={15} className="text-rose-600" />
+              <Banknote size={15} className="text-blue-600" />
               <span>Số tiền chi (VNĐ) <span className="text-red-500">*</span></span>
             </label>
             <div className="relative">
@@ -445,7 +445,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
                 onFocus={handleFocusOrClick}
                 onClick={handleFocusOrClick}
                 placeholder="0 đ"
-                className="w-full px-4 py-3 bg-zinc-50 border-2 border-zinc-200 focus:border-rose-500 focus:bg-white rounded-2xl text-lg font-black text-rose-600 focus:outline-none transition-all shadow-inner"
+                className="w-full px-4 py-3 bg-zinc-50 border-2 border-zinc-200 focus:border-blue-500 focus:bg-white rounded-2xl text-lg font-black text-blue-700 focus:outline-none transition-all shadow-inner"
               />
             </div>
           </div>
@@ -453,34 +453,34 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
           {/* 2. Lý do chi */}
           <div>
             <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <FileText size={15} className="text-rose-600" />
+              <FileText size={15} className="text-blue-600" />
               <span>Lý do chi tiền mặt <span className="text-red-500">*</span></span>
             </label>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-50 border-2 border-zinc-200 focus:border-rose-500 focus:bg-white rounded-2xl text-sm font-semibold text-zinc-900 focus:outline-none transition-all shadow-inner"
+              className="w-full px-4 py-3 bg-zinc-50 border-2 border-zinc-200 focus:border-blue-500 focus:bg-white rounded-2xl text-sm font-semibold text-zinc-900 focus:outline-none transition-all shadow-inner"
             />
           </div>
 
           {/* 3. Người nhận / Ghi chú */}
           <div>
             <label className="block text-xs font-bold text-zinc-700 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
-              <User size={15} className="text-rose-600" />
+              <User size={15} className="text-blue-600" />
               <span>Người nhận tiền / Ghi chú (Tùy chọn)</span>
             </label>
             <input
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full px-4 py-2.5 bg-zinc-50 border-2 border-zinc-200 focus:border-rose-500 focus:bg-white rounded-2xl text-sm font-medium text-zinc-800 focus:outline-none transition-all shadow-inner"
+              className="w-full px-4 py-2.5 bg-zinc-50 border-2 border-zinc-200 focus:border-blue-500 focus:bg-white rounded-2xl text-sm font-medium text-zinc-800 focus:outline-none transition-all shadow-inner"
             />
           </div>
 
           {/* Shift info note */}
-          <div className="p-3 bg-rose-50/70 border border-rose-100 rounded-2xl text-xs text-rose-900 flex items-start gap-2">
-            <span className="text-rose-500 font-bold">ℹ️</span>
+          <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl text-xs text-blue-900 flex items-start gap-2">
+            <span className="text-blue-600 font-bold">ℹ️</span>
             <div>
               Khoản tiền này sẽ được <strong>tự động khấu trừ</strong> vào tổng tiền mặt trong két khi kết ca làm việc của bạn.
             </div>
@@ -502,7 +502,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
             type="button"
             onClick={() => handleSubmit(false)}
             disabled={submitting}
-            className="flex-1 py-3 px-4 bg-white border-2 border-rose-600 hover:bg-rose-50 text-rose-700 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            className="flex-1 py-3 px-4 bg-white border-2 border-blue-600 hover:bg-blue-50 text-blue-700 font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-sm cursor-pointer disabled:opacity-50"
           >
             <Check size={16} />
             <span>{submitting ? 'Đang lưu...' : 'Lưu phiếu'}</span>
@@ -512,7 +512,7 @@ export const ExpenseModal: React.FC<ExpenseModalProps> = ({
             type="button"
             onClick={() => handleSubmit(true)}
             disabled={submitting}
-            className="flex-1 py-3 px-4 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-rose-600/25 transition-all cursor-pointer disabled:opacity-50"
+            className="flex-1 py-3 px-4 bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/25 transition-all cursor-pointer disabled:opacity-50"
           >
             <Printer size={16} />
             <span>{submitting ? 'Đang lưu & in...' : 'Lưu & In phiếu chi'}</span>

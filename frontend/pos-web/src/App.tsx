@@ -13,6 +13,7 @@ import { ExpenseModal } from './components/ExpenseModal';
 import { ShiftManagementModal } from './components/ShiftManagementModal';
 import { AttendanceKioskModal } from './components/AttendanceKioskModal';
 import { TimesheetModal } from './components/TimesheetModal';
+import { HeldOrdersDrawer } from './components/HeldOrdersDrawer';
 import { useSocket } from './hooks/useSocket';
 import type { Product } from './types';
 
@@ -190,6 +191,9 @@ function App() {
         onClose={() => setShowTimesheetModal(false)}
         user={user}
       />
+
+      {/* Held / Draft Orders Drawer */}
+      <HeldOrdersDrawer onNavigatePOS={() => setActiveTab('POS')} />
 
       {/* Toast Notification for Realtime ITEM_READY */}
       {toastMessage && (
