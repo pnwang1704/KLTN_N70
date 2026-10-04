@@ -37,9 +37,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
   return (
     <div className="min-h-screen bg-zinc-50 flex flex-col justify-center items-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl overflow-hidden">
-        <div className="px-8 pt-10 pb-8 bg-orange-600 text-center">
+        <div className="px-8 pt-10 pb-8 bg-gradient-to-r from-blue-600 via-blue-700 to-sky-600 text-center">
           <h1 className="text-3xl font-bold text-white mb-2">N70 POS</h1>
-          <p className="text-orange-100 font-medium">Hệ thống Thu Ngân</p>
+          <p className="text-blue-100 font-medium">Hệ thống Thu Ngân</p>
         </div>
         
         <form onSubmit={handleLogin} className="p-8">
@@ -55,7 +55,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               type="text" 
               value={username}
               onChange={e => setUsername(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-orange-500 focus:bg-white transition-colors"
+              className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
               placeholder="VD: cashier_01"
               required
             />
@@ -67,7 +67,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
               type="password" 
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-orange-500 focus:bg-white transition-colors"
+              className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:border-blue-500 focus:bg-white transition-colors"
               placeholder="••••••••"
               required
             />
@@ -76,7 +76,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           <button 
             type="submit"
             disabled={isLoading}
-            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3.5 rounded-xl active:scale-95 transition-all shadow-md shadow-orange-600/20 disabled:opacity-70 flex justify-center cursor-pointer"
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl active:scale-95 transition-all shadow-md shadow-blue-600/20 disabled:opacity-70 flex justify-center cursor-pointer"
           >
             {isLoading ? 'Đang xác thực...' : 'Đăng nhập vào Ca'}
           </button>
@@ -91,7 +91,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
           <button
             type="button"
             onClick={() => setShowKiosk(true)}
-            className="w-full py-3.5 px-4 bg-orange-50/80 hover:bg-orange-100 text-orange-700 border-2 border-dashed border-orange-300 hover:border-orange-400 font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-xs group"
+            className="w-full py-3.5 px-4 bg-blue-50/80 hover:bg-blue-100 text-blue-700 border-2 border-dashed border-blue-300 hover:border-blue-400 font-bold rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer shadow-xs group"
           >
             <span className="text-xl group-hover:scale-110 transition-transform">⏰</span>
             <span className="text-sm">Chấm công Kiosk (Nhận diện khuôn mặt)</span>

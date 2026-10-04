@@ -98,7 +98,7 @@ export const StaffManagement: React.FC<{ loggedInUser: any }> = ({ loggedInUser 
       case 'ADMIN': return 'bg-purple-100 text-purple-700';
       case 'MANAGER': return 'bg-blue-100 text-blue-700';
       case 'CASHIER': return 'bg-emerald-100 text-emerald-700';
-      case 'KITCHEN': return 'bg-orange-100 text-orange-700';
+      case 'KITCHEN': return 'bg-sky-100 text-sky-700';
       case 'WAITER': return 'bg-amber-100 text-amber-700';
       default: return 'bg-zinc-100 text-zinc-700';
     }
@@ -114,7 +114,7 @@ export const StaffManagement: React.FC<{ loggedInUser: any }> = ({ loggedInUser 
           </div>
           <button 
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-xl font-semibold transition-colors"
           >
             <UserPlus size={20} />
             Thêm nhân viên
@@ -200,7 +200,7 @@ export const StaffManagement: React.FC<{ loggedInUser: any }> = ({ loggedInUser 
                   type="text" 
                   value={formData.fullName}
                   onChange={(e) => setFormData({...formData, fullName: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Vd: Nguyễn Văn A"
                 />
               </div>
@@ -212,7 +212,7 @@ export const StaffManagement: React.FC<{ loggedInUser: any }> = ({ loggedInUser 
                   type="text" 
                   value={formData.username}
                   onChange={(e) => setFormData({...formData, username: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="Vd: nva_cashier"
                 />
               </div>
@@ -224,7 +224,7 @@ export const StaffManagement: React.FC<{ loggedInUser: any }> = ({ loggedInUser 
                   type="password" 
                   value={formData.password}
                   onChange={(e) => setFormData({...formData, password: e.target.value})}
-                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="••••••••"
                 />
               </div>
@@ -235,7 +235,7 @@ export const StaffManagement: React.FC<{ loggedInUser: any }> = ({ loggedInUser 
                   <select 
                     value={formData.role}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}
-                    className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 font-medium"
+                    className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium"
                   >
                     {loggedInUser?.role === 'ADMIN' && <option value="ADMIN">Quản trị (ADMIN)</option>}
                     {loggedInUser?.role === 'ADMIN' && <option value="MANAGER">Quản lý (MANAGER)</option>}
@@ -251,7 +251,7 @@ export const StaffManagement: React.FC<{ loggedInUser: any }> = ({ loggedInUser 
                     value={formData.branchId}
                     onChange={(e) => setFormData({...formData, branchId: e.target.value})}
                     disabled={loggedInUser?.role !== 'ADMIN'}
-                    className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 disabled:opacity-60"
+                    className="w-full px-4 py-2.5 bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
                   >
                     <option value="1">Chi nhánh 1</option>
                     <option value="2">Chi nhánh 2</option>
@@ -270,7 +270,7 @@ export const StaffManagement: React.FC<{ loggedInUser: any }> = ({ loggedInUser 
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 bg-orange-600 text-white rounded-xl font-semibold hover:bg-orange-700 transition-colors"
+                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-colors"
                 >
                   Tạo tài khoản
                 </button>

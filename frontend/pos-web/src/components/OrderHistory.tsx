@@ -70,7 +70,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
       <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900 flex items-center gap-2.5">
-            <FileText className="text-orange-600" size={26} />
+            <FileText className="text-blue-600" size={26} />
             Lịch sử Đơn hàng
           </h2>
           <p className="text-xs text-zinc-500 mt-0.5">
@@ -85,11 +85,11 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
               onClick={() => setOnlyCurrentShift(!onlyCurrentShift)}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer border ${
                 onlyCurrentShift
-                  ? 'bg-orange-50 border-orange-200 text-orange-700 hover:bg-orange-100 shadow-xs'
+                  ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100 shadow-xs'
                   : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-100'
               }`}
             >
-              <Clock size={14} className={onlyCurrentShift ? 'text-orange-600' : 'text-zinc-400'} />
+              <Clock size={14} className={onlyCurrentShift ? 'text-blue-600' : 'text-zinc-400'} />
               <span>{onlyCurrentShift ? 'Đang lọc theo ca' : 'Tất cả ca'}</span>
             </button>
           )}
@@ -99,7 +99,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
             disabled={isLoading}
             className="px-4 py-2 bg-white border border-zinc-200 rounded-xl text-xs font-bold text-zinc-700 hover:bg-zinc-100 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
           >
-            <RotateCw size={14} className={isLoading ? 'animate-spin text-orange-600' : ''} />
+            <RotateCw size={14} className={isLoading ? 'animate-spin text-blue-600' : ''} />
             <span>{isLoading ? 'Đang tải...' : 'Làm mới'}</span>
           </button>
         </div>
@@ -107,25 +107,25 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
 
       {/* Shift Information Banner */}
       {activeShift && onlyCurrentShift ? (
-        <div className="mb-5 bg-gradient-to-r from-orange-50/90 via-amber-50/70 to-orange-50/90 border border-orange-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="mb-5 bg-gradient-to-r from-blue-50/90 via-sky-50/70 to-blue-50/90 border border-blue-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-base shrink-0 shadow-inner">
+            <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-base shrink-0 shadow-inner">
               📋
             </div>
             <div>
               <div className="font-bold text-zinc-900 text-sm flex items-center gap-2">
                 <span>Đang hiển thị đơn trong ca:</span>
-                <span className="px-2.5 py-0.5 rounded-full bg-orange-500 text-white font-bold text-xs shadow-xs">
+                <span className="px-2.5 py-0.5 rounded-full bg-blue-600 text-white font-bold text-xs shadow-xs">
                   {activeShift.shiftName}
                 </span>
               </div>
               <div className="text-zinc-500 text-xs mt-0.5 flex flex-wrap items-center gap-3">
                 <span className="flex items-center gap-1">
-                  <Clock size={12} className="text-orange-600" />
+                  <Clock size={12} className="text-blue-600" />
                   Mở ca: <strong>{formatDateTimeFull(activeShift.openedAt)}</strong>
                 </span>
                 <span className="flex items-center gap-1">
-                  <User size={12} className="text-orange-600" />
+                  <User size={12} className="text-blue-600" />
                   Thu ngân: <strong>{activeShift.cashierName}</strong>
                 </span>
               </div>
@@ -133,13 +133,13 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
           </div>
 
           <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block bg-white/70 px-3 py-1.5 rounded-xl border border-orange-200/50">
+            <div className="text-right hidden sm:block bg-white/70 px-3 py-1.5 rounded-xl border border-blue-200/50">
               <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold block">Doanh thu trong ca</span>
-              <span className="font-black text-sm text-orange-600">{formatCurrency(totalRevenue)}</span>
+              <span className="font-black text-sm text-blue-600">{formatCurrency(totalRevenue)}</span>
             </div>
             <button
               onClick={() => setOnlyCurrentShift(false)}
-              className="px-3 py-2 bg-white hover:bg-orange-100 text-orange-700 border border-orange-300/80 rounded-xl font-bold text-xs transition-colors cursor-pointer shadow-xs"
+              className="px-3 py-2 bg-white hover:bg-blue-100 text-blue-700 border border-blue-300/80 rounded-xl font-bold text-xs transition-colors cursor-pointer shadow-xs"
             >
               Xem tất cả đơn
             </button>
@@ -164,7 +164,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
           {activeShift && (
             <button
               onClick={() => setOnlyCurrentShift(true)}
-              className="px-3.5 py-2 bg-orange-600 text-white hover:bg-orange-700 rounded-xl font-bold text-xs transition-colors cursor-pointer shadow-xs"
+              className="px-3.5 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-xl font-bold text-xs transition-colors cursor-pointer shadow-xs"
             >
               Chỉ xem đơn ca hiện tại ({activeShift.shiftName})
             </button>
@@ -202,8 +202,8 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
             onClick={() => setStatusFilter('PENDING')}
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
               statusFilter === 'PENDING'
-                ? 'bg-orange-500 text-white shadow-xs'
-                : 'text-zinc-500 hover:text-orange-700'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-zinc-500 hover:text-blue-700'
             }`}
           >
             Đang phục vụ ({orders.filter(o => o.status === 'PENDING').length})
@@ -218,7 +218,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Tìm theo mã đơn, số bàn..."
-            className="w-full pl-9 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-orange-500 focus:bg-white transition-all"
+            className="w-full pl-9 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-medium text-zinc-900 focus:outline-none focus:border-blue-500 focus:bg-white transition-all"
           />
           {searchQuery && (
             <button
@@ -262,7 +262,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
               </tr>
             ) : (
               filteredOrders.map(order => (
-                <tr key={order.id} className="hover:bg-orange-50/40 transition-colors">
+                <tr key={order.id} className="hover:bg-blue-50/40 transition-colors">
                   <td className="px-6 py-4 font-mono text-xs font-bold text-zinc-800">
                     {order.orderCode ? `#${order.orderCode}` : order.id.split('-')[0]}
                   </td>
@@ -282,7 +282,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
                     <span className={`px-2.5 py-0.5 rounded-md text-xs font-bold ${
                       order.status === 'COMPLETED' 
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
-                        : 'bg-orange-50 text-orange-700 border border-orange-200'
+                        : 'bg-blue-50 text-blue-700 border border-blue-200'
                     }`}>
                       {order.status === 'COMPLETED' ? 'Đã thanh toán' : order.status}
                     </span>
@@ -290,7 +290,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
                   <td className="px-6 py-4 text-right">
                     <button 
                       onClick={() => setSelectedOrder(order)} 
-                      className="p-2 text-orange-600 hover:bg-orange-100 rounded-lg inline-flex items-center gap-1 font-semibold text-xs transition-colors cursor-pointer"
+                      className="p-2 text-blue-600 hover:bg-blue-100 rounded-lg inline-flex items-center gap-1 font-semibold text-xs transition-colors cursor-pointer"
                     >
                       <Eye size={16} /> Chi tiết
                     </button>
@@ -306,9 +306,9 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
       {selectedOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 print:bg-white print:static print:inset-auto print:p-0">
           <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 print:hidden">
-            <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-orange-50">
+            <div className="px-6 py-4 border-b border-zinc-200 flex justify-between items-center bg-blue-50">
               <div>
-                <h3 className="font-bold text-lg text-orange-900">
+                <h3 className="font-bold text-lg text-blue-900">
                   Chi tiết đơn: {selectedOrder.orderCode ? `#${selectedOrder.orderCode}` : selectedOrder.id.split('-')[0]}
                 </h3>
               </div>
@@ -337,7 +337,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
                         {item.size && <span>Size: {item.size}</span>}
                         {item.toppings?.length > 0 && <span> | {item.toppings.map((t: any) => t.toppingName).join(', ')}</span>}
                       </div>
-                      {item.note && <div className="text-[11px] text-orange-600 mt-0.5">Ghi chú: {item.note}</div>}
+                      {item.note && <div className="text-[11px] text-blue-600 mt-0.5">Ghi chú: {item.note}</div>}
                     </div>
                     <div className="font-bold text-zinc-900">
                       {formatCurrency(Number(item.unitPrice || 0) * Number(item.quantity || 1) + (item.toppings?.reduce((acc: number, t: any) => acc + Number(t.price || 0) * Number(t.quantity || 1), 0) || 0) * Number(item.quantity || 1))}
@@ -350,7 +350,7 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
             <div className="p-5 bg-zinc-50 border-t border-zinc-200 flex justify-between items-center">
               <div>
                 <span className="block font-bold text-zinc-500 text-xs mb-0.5">Tổng thanh toán:</span>
-                <span className="text-xl font-black text-orange-600">{formatCurrency(selectedOrder.finalAmount)}</span>
+                <span className="text-xl font-black text-blue-600">{formatCurrency(selectedOrder.finalAmount)}</span>
               </div>
               <button 
                 onClick={() => window.print()}

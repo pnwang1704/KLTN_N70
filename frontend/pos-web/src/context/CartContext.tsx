@@ -9,12 +9,32 @@ interface CartContextType {
   clearCart: () => void;
   totalItems: number;
   totalAmount: number;
+  
+  orderType: 'AT_TABLE' | 'TAKE_AWAY';
+  setOrderType: (type: 'AT_TABLE' | 'TAKE_AWAY') => void;
+  tableId: string;
+  setTableId: (id: string) => void;
+  discountType: 'PERCENT' | 'AMOUNT';
+  setDiscountType: (type: 'PERCENT' | 'AMOUNT') => void;
+  discountInput: string;
+  setDiscountInput: (val: string) => void;
+  loadOrderToCart: (order: {
+    items: CartItem[];
+    orderType?: 'AT_TABLE' | 'TAKE_AWAY';
+    tableId?: string;
+    discountType?: 'PERCENT' | 'AMOUNT';
+    discountInput?: string;
+  }) => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [orderType, setOrderType] = useState<'AT_TABLE' | 'TAKE_AWAY'>('TAKE_AWAY');
+  const [tableId, setTableId] = useState('');
+  const [discountType, setDiscountType] = useState<'PERCENT' | 'AMOUNT'>('PERCENT');
+  const [discountInput, setDiscountInput] = useState<string>('');
 
   const addToCart = (item: CartItem) => {
     setCart((prev) => [...prev, item]);
@@ -39,13 +59,48 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    setCart([]);
+    setTableId('');
+    setDiscountInput('');
+  };
+
+  const loadOrderToCart = (order: {
+    items: CartItem[];
+    orderType?: 'AT_TABLE' | 'TAKE_AWAY';
+    tableId?: string;
+    discountType?: 'PERCENT' | 'AMOUNT';
+    discountInput?: string;
+  }) => {
+    setCart(order.items || []);
+    if (order.orderType) setOrderType(order.orderType);
+    setTableId(order.tableId || '');
+    if (order.discountType) setDiscountType(order.discountType);
+    setDiscountInput(order.discountInput || '');
+  };
 
   const totalItems = useMemo(() => cart.reduce((acc, item) => acc + item.quantity, 0), [cart]);
   const totalAmount = useMemo(() => cart.reduce((acc, item) => acc + item.totalPrice, 0), [cart]);
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalAmount }}>
+    <CartContext.Provider value={{ 
+      cart, 
+      addToCart, 
+      removeFromCart, 
+      updateQuantity, 
+      clearCart, 
+      totalItems, 
+      totalAmount,
+      orderType,
+      setOrderType,
+      tableId,
+      setTableId,
+      discountType,
+      setDiscountType,
+      discountInput,
+      setDiscountInput,
+      loadOrderToCart
+    }}>
       {children}
     </CartContext.Provider>
   );

@@ -124,7 +124,7 @@ export const ConfirmModal: React.FC<{
       <div className="flex flex-col items-center text-center">
         <div className={cn(
           "w-16 h-16 rounded-full flex items-center justify-center mb-4",
-          isDestructive ? "bg-red-100 text-red-600" : "bg-orange-100 text-orange-600"
+          isDestructive ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
         )}>
           <AlertCircle size={32} />
         </div>
@@ -144,7 +144,7 @@ export const ConfirmModal: React.FC<{
             }}
             className={cn(
               "flex-1 py-2.5 text-white rounded-xl font-semibold transition-colors",
-              isDestructive ? "bg-red-600 hover:bg-red-700" : "bg-orange-600 hover:bg-orange-700"
+              isDestructive ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-700"
             )}
           >
             {confirmText}

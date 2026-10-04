@@ -89,7 +89,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
         <div className="flex-1 overflow-y-auto p-4 pb-24">
           <h2 className="text-2xl font-bold text-zinc-900">{product.name}</h2>
           <p className="text-zinc-500 text-sm mt-1">{product.description}</p>
-          <div className="mt-2 text-xl font-bold text-orange-600">
+          <div className="mt-2 text-xl font-bold text-blue-700">
             {formatCurrency(product.basePrice)}
           </div>
 
@@ -110,7 +110,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors",
-                        selectedSize === size.id ? "border-orange-500 bg-orange-500" : "border-zinc-300"
+                        selectedSize === size.id ? "border-blue-600 bg-blue-600" : "border-zinc-300"
                       )}>
                         {selectedSize === size.id && <Check size={12} className="text-white" strokeWidth={4} />}
                       </div>
@@ -139,7 +139,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
                     <div className="flex items-center gap-3">
                       <div className={cn(
                         "w-5 h-5 rounded border-2 flex items-center justify-center transition-colors",
-                        selectedToppings[topping.id] ? "border-orange-500 bg-orange-500" : "border-zinc-300"
+                        selectedToppings[topping.id] ? "border-blue-600 bg-blue-600" : "border-zinc-300"
                       )}>
                         {selectedToppings[topping.id] && <Check size={14} className="text-white" strokeWidth={3} />}
                       </div>
@@ -158,7 +158,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
           <div className="mt-6">
             <h3 className="font-semibold text-zinc-900 mb-3">Ghi chú cho quán</h3>
             <textarea
-              className="w-full border border-zinc-200 rounded-xl p-3 text-sm focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 resize-none bg-zinc-50"
+              className="w-full border border-zinc-200 rounded-xl p-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none bg-zinc-50"
               placeholder="VD: Ít đá, nhiều đường..."
               rows={3}
               value={note}
@@ -172,11 +172,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
           <div className="flex items-center border border-zinc-200 rounded-xl bg-zinc-50">
             <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-12 h-12 flex items-center justify-center text-xl font-medium text-zinc-600">-</button>
             <span className="w-8 text-center font-semibold text-zinc-900">{quantity}</span>
-            <button onClick={() => setQuantity(q => q + 1)} className="w-12 h-12 flex items-center justify-center text-xl font-medium text-orange-600">+</button>
+            <button onClick={() => setQuantity(q => q + 1)} className="w-12 h-12 flex items-center justify-center text-xl font-medium text-blue-600">+</button>
           </div>
           <button 
             onClick={handleAddToCart}
-            className="flex-1 bg-orange-600 text-white rounded-xl font-semibold flex items-center justify-between px-5 active:scale-95 transition-transform"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold flex items-center justify-between px-5 active:scale-95 transition-all shadow-md shadow-blue-600/20"
           >
             <span>Thêm vào giỏ</span>
             <span>{formatCurrency(totalPrice)}</span>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
+import { useHeldOrders } from '../context/HeldOrdersContext';
 import { formatCurrency, cn } from '../lib/utils';
-import { Trash2, Send, CreditCard, LayoutGrid, Tag } from 'lucide-react';
+import { Trash2, Send, CreditCard, LayoutGrid, Tag, BookmarkPlus } from 'lucide-react';
 import api from '../lib/axios';
 import { TableMap } from './TableMap';
 import { SuccessModal, ErrorModal, WarningModal } from './ui/Modals';
@@ -17,13 +18,24 @@ interface OrderPanelProps {
 }
 
 export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
-  const { cart, updateQuantity, removeFromCart, totalAmount, clearCart } = useCart();
-  const [orderType, setOrderType] = useState<'AT_TABLE' | 'TAKE_AWAY'>('TAKE_AWAY');
-  const [tableId, setTableId] = useState('');
+  const { 
+    cart, 
+    updateQuantity, 
+    removeFromCart, 
+    totalAmount, 
+    clearCart,
+    orderType,
+    setOrderType,
+    tableId,
+    setTableId,
+    discountType,
+    setDiscountType,
+    discountInput,
+    setDiscountInput
+  } = useCart();
+  const { holdOrder } = useHeldOrders();
   const [showTableMap, setShowTableMap] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [discountType, setDiscountType] = useState<'PERCENT' | 'AMOUNT'>('PERCENT');
-  const [discountInput, setDiscountInput] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState<{ title?: string; message: string; subMessage?: string } | null>(null);
   const [warningMsg, setWarningMsg] = useState<{ title?: string; message: string } | null>(null);
   const [errorMsg, setErrorMsg] = useState<{ title?: string; error: string } | null>(null);
@@ -64,6 +76,25 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
       const num = parseInt(digits, 10);
       setDiscountInput(num.toLocaleString('vi-VN'));
     }
+  };
+
+  const handleHoldOrder = () => {
+    if (cart.length === 0) {
+      setWarningMsg({ title: 'Giỏ hàng trống', message: 'Vui lòng chọn món trước khi lưu tạm!' });
+      return;
+    }
+    holdOrder({
+      items: cart,
+      orderType,
+      tableId: orderType === 'AT_TABLE' ? tableId : undefined,
+      discountType,
+      discountInput,
+      discountPercent,
+      discountAmount,
+      subtotal,
+      finalTotal,
+    });
+    clearCart();
   };
 
   const handleSendToKitchen = async () => {
@@ -191,12 +222,12 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
               placeholder="Chọn bàn hoặc nhập..." 
               value={tableId ? `Bàn ${tableId}` : ''}
               readOnly
-              className="w-full px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-900 focus:outline-none focus:border-orange-500 cursor-pointer"
+              className="w-full px-4 py-2 bg-white border border-zinc-200 rounded-lg text-sm font-semibold text-zinc-900 focus:outline-none focus:border-blue-500 cursor-pointer"
               onClick={() => setShowTableMap(true)}
             />
             <button 
               onClick={() => setShowTableMap(true)}
-              className="p-2 bg-orange-100 text-orange-600 rounded-lg hover:bg-orange-200 transition-colors"
+              className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
               title="Mở sơ đồ bàn"
             >
               <LayoutGrid size={20} />
@@ -236,7 +267,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
                     {item.size && <span>{item.size}</span>}
                     {item.toppings.length > 0 && <span> + {item.toppings.map(t => t.toppingName).join(', ')}</span>}
                   </div>
-                  {item.note && <div className="text-xs text-orange-600 mt-1">Ghi chú: {item.note}</div>}
+                  {item.note && <div className="text-xs text-blue-600 mt-1">Ghi chú: {item.note}</div>}
                   <div className="font-bold text-zinc-900 text-sm mt-2">{formatCurrency(item.totalPrice)}</div>
                 </div>
 
@@ -269,7 +300,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <span className="text-xs font-bold text-zinc-700 flex items-center gap-1">
-                <Tag size={13} className="text-orange-600" />
+                <Tag size={13} className="text-blue-600" />
                 Chiết khấu:
               </span>
               {/* Type Switcher: % or VNĐ */}
@@ -283,7 +314,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
                   className={cn(
                     "px-2 py-0.5 rounded-md transition-all cursor-pointer",
                     discountType === 'PERCENT'
-                      ? "bg-white text-orange-600 shadow-xs font-bold"
+                      ? "bg-white text-blue-600 shadow-xs font-bold"
                       : "text-zinc-600 hover:text-zinc-900"
                   )}
                 >
@@ -298,7 +329,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
                   className={cn(
                     "px-2 py-0.5 rounded-md transition-all cursor-pointer",
                     discountType === 'AMOUNT'
-                      ? "bg-white text-orange-600 shadow-xs font-bold"
+                      ? "bg-white text-blue-600 shadow-xs font-bold"
                       : "text-zinc-600 hover:text-zinc-900"
                   )}
                 >
@@ -314,7 +345,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
                 value={discountInput}
                 onChange={(e) => handleDiscountChange(e.target.value)}
                 placeholder="0"
-                className="w-full pl-2.5 pr-7 py-1 text-right text-xs font-bold bg-white border border-zinc-200 rounded-lg focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-zinc-900"
+                className="w-full pl-2.5 pr-7 py-1 text-right text-xs font-bold bg-white border border-zinc-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-zinc-900"
               />
               <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400 pointer-events-none">
                 {discountType === 'PERCENT' ? '%' : '₫'}
@@ -339,7 +370,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
                   className={cn(
                     "px-2 py-0.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer shrink-0",
                     discountPercent === pct && discountInput !== ''
-                      ? "bg-orange-500 border-orange-500 text-white shadow-xs font-bold"
+                      ? "bg-blue-600 border-blue-600 text-white shadow-xs font-bold"
                       : pct === 0 && (!discountInput || discountPercent === 0)
                       ? "bg-zinc-200 border-zinc-300 text-zinc-700 font-bold"
                       : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-100"
@@ -366,7 +397,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
                   className={cn(
                     "px-2 py-0.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer shrink-0",
                     discountAmount === amt && discountInput !== ''
-                      ? "bg-orange-500 border-orange-500 text-white shadow-xs font-bold"
+                      ? "bg-blue-600 border-blue-600 text-white shadow-xs font-bold"
                       : amt === 0 && (!discountInput || discountAmount === 0)
                       ? "bg-zinc-200 border-zinc-300 text-zinc-700 font-bold"
                       : "bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-100"
@@ -392,24 +423,36 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
         {/* Tổng thanh toán */}
         <div className="flex justify-between items-center pt-1">
           <span className="font-bold text-base text-zinc-900">Tổng thanh toán</span>
-          <span className="text-2xl font-bold text-orange-600">{formatCurrency(finalTotal)}</span>
+          <span className="text-2xl font-bold text-blue-600">{formatCurrency(finalTotal)}</span>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-3 pt-1">
+        <div className="flex gap-2 pt-1">
           <button 
-            onClick={handleSendToKitchen}
-            disabled={isSubmitting || cart.length === 0}
-            className="flex-1 py-3.5 bg-zinc-100 text-zinc-900 font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-zinc-200 transition-colors disabled:opacity-50 cursor-pointer"
+            type="button"
+            onClick={handleHoldOrder}
+            disabled={cart.length === 0}
+            className="flex-1 py-3 bg-blue-50/60 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-xs sm:text-sm shadow-xs active:scale-95"
+            title="Lưu tạm hóa đơn hiện tại vào danh sách chờ"
           >
-            <Send size={18} /> Gửi bếp
+            <BookmarkPlus size={17} />
+            <span>Lưu tạm</span>
           </button>
           <button 
+            type="button"
+            onClick={handleSendToKitchen}
+            disabled={isSubmitting || cart.length === 0}
+            className="flex-1 py-3 bg-zinc-100 text-zinc-900 font-bold rounded-xl flex items-center justify-center gap-1.5 hover:bg-zinc-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer text-xs sm:text-sm active:scale-95"
+          >
+            <Send size={16} /> Gửi bếp
+          </button>
+          <button 
+            type="button"
             onClick={handlePaymentClick}
             disabled={isSubmitting || cart.length === 0}
-            className="flex-[2] py-3.5 bg-orange-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-orange-700 transition-colors disabled:opacity-50 cursor-pointer shadow-sm hover:shadow"
+            className="flex-[1.4] py-3 bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-md shadow-blue-600/20 text-xs sm:text-sm active:scale-95"
           >
-            <CreditCard size={18} /> Thanh toán
+            <CreditCard size={16} /> Thanh toán
           </button>
         </div>
       </div>

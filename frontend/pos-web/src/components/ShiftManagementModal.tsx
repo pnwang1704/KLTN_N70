@@ -61,12 +61,12 @@ const Time24Picker: React.FC<Time24PickerProps> = ({
         <label className="font-bold text-zinc-700 text-xs">
           {label} {required && <span className="text-rose-500">*</span>}
         </label>
-        <span className="font-mono font-extrabold text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-lg text-[11px]">
+        <span className="font-mono font-extrabold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-lg text-[11px]">
           {currentHour}:{currentMinute} ({Number(currentHour)}h{currentMinute !== '00' ? `${currentMinute}p` : ''})
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5 bg-white border border-zinc-200 rounded-xl p-1.5 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-100 transition-all">
+      <div className="flex items-center gap-1.5 bg-white border border-zinc-200 rounded-xl p-1.5 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-100 transition-all">
         <Clock size={15} className="text-zinc-400 shrink-0 ml-1.5" />
 
         {/* Giờ: 00 - 23 */}
@@ -74,7 +74,7 @@ const Time24Picker: React.FC<Time24PickerProps> = ({
           <select
             value={currentHour}
             onChange={e => handleHourChange(e.target.value)}
-            className="w-full bg-zinc-50 border border-zinc-200/80 rounded-lg pl-2 pr-6 py-1.5 text-xs font-bold text-zinc-800 focus:outline-none focus:bg-white focus:border-orange-500 cursor-pointer appearance-none transition-colors"
+            className="w-full bg-zinc-50 border border-zinc-200/80 rounded-lg pl-2 pr-6 py-1.5 text-xs font-bold text-zinc-800 focus:outline-none focus:bg-white focus:border-blue-500 cursor-pointer appearance-none transition-colors"
           >
             {Array.from({ length: 24 }, (_, i) => {
               const val = String(i).padStart(2, '0');
@@ -95,7 +95,7 @@ const Time24Picker: React.FC<Time24PickerProps> = ({
           <select
             value={currentMinute}
             onChange={e => handleMinuteChange(e.target.value)}
-            className="w-full bg-zinc-50 border border-zinc-200/80 rounded-lg pl-2 pr-6 py-1.5 text-xs font-bold text-zinc-800 focus:outline-none focus:bg-white focus:border-orange-500 cursor-pointer appearance-none transition-colors"
+            className="w-full bg-zinc-50 border border-zinc-200/80 rounded-lg pl-2 pr-6 py-1.5 text-xs font-bold text-zinc-800 focus:outline-none focus:bg-white focus:border-blue-500 cursor-pointer appearance-none transition-colors"
           >
             {Array.from({ length: 60 }, (_, i) => {
               const val = String(i).padStart(2, '0');
@@ -120,7 +120,7 @@ const Time24Picker: React.FC<Time24PickerProps> = ({
             onClick={() => handleMinuteChange(minVal)}
             className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all cursor-pointer ${
               currentMinute === minVal
-                ? 'bg-orange-500 text-white shadow-xs'
+                ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-600'
             }`}
           >
@@ -301,14 +301,14 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
         )}
 
         {/* Modal Header */}
-        <div className="px-6 py-4 bg-gradient-to-r from-orange-600 to-amber-600 text-white flex items-center justify-between shrink-0 shadow-md">
+        <div className="px-6 py-4 bg-gradient-to-r from-blue-600 via-blue-700 to-sky-600 text-white flex items-center justify-between shrink-0 shadow-md">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shadow-inner">
               <Clock size={20} className="text-white" />
             </div>
             <div>
               <h2 className="text-lg font-black tracking-tight">Quản Lý Khung Giờ Ca Làm Việc</h2>
-              <p className="text-orange-100 text-xs">
+              <p className="text-blue-100 text-xs">
                 Cấu hình giờ chuẩn, thời gian ân hạn và trạng thái ca trực của chi nhánh
               </p>
             </div>
@@ -328,7 +328,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
           {/* Action Bar */}
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-xs text-zinc-500 font-medium">
-              <Building2 size={15} className="text-orange-500" />
+              <Building2 size={15} className="text-blue-500" />
               <span>
                 Phạm vi áp dụng: <strong className="text-zinc-800">Chi nhánh {user?.branchId || 1} & Toàn chuỗi</strong>
               </span>
@@ -338,7 +338,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
               <button
                 type="button"
                 onClick={handleOpenCreate}
-                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm shadow-orange-600/20 transition-all cursor-pointer"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-sm shadow-blue-600/20 transition-all cursor-pointer"
               >
                 <Plus size={15} />
                 <span>Thêm ca làm việc mới</span>
@@ -348,10 +348,10 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
 
           {/* Form Create / Edit Section */}
           {isFormOpen && (
-            <form onSubmit={handleSubmitForm} className="bg-orange-50/50 border border-orange-200/80 rounded-2xl p-5 space-y-4 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between border-b border-orange-200/60 pb-3">
-                <h3 className="text-xs font-black uppercase tracking-wider text-orange-900 flex items-center gap-2">
-                  <Edit2 size={14} className="text-orange-600" />
+            <form onSubmit={handleSubmitForm} className="bg-blue-50/50 border border-blue-200/80 rounded-2xl p-5 space-y-4 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between border-b border-blue-200/60 pb-3">
+                <h3 className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-2">
+                  <Edit2 size={14} className="text-blue-600" />
                   <span>{editingShiftId ? 'Chỉnh sửa ca làm việc' : 'Tạo ca làm việc mới'}</span>
                 </h3>
                 <button
@@ -375,7 +375,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
                     placeholder="VD: CA_1, CA_TOI, CA_NGAY"
                     value={formData.code}
                     onChange={e => setFormData({ ...formData, code: e.target.value })}
-                    className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl font-bold uppercase text-zinc-800 focus:outline-none focus:border-orange-500 transition-all"
+                    className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl font-bold uppercase text-zinc-800 focus:outline-none focus:border-blue-500 transition-all"
                   />
                   <p className="text-[10px] text-zinc-400 mt-1">Mã duy nhất viết liền, không dấu</p>
                 </div>
@@ -391,7 +391,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
                     placeholder="VD: Ca Sáng (06:00 - 14:00)"
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-orange-500 transition-all"
+                    className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-blue-500 transition-all"
                   />
                   <p className="text-[10px] text-zinc-400 mt-1">Tên ca hiển thị cho thu ngân</p>
                 </div>
@@ -425,7 +425,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
                     max={120}
                     value={formData.gracePeriodMinutes}
                     onChange={e => setFormData({ ...formData, gracePeriodMinutes: Number(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-orange-500 transition-all"
+                    className="w-full px-3 py-2 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-blue-500 transition-all"
                   />
                   <p className="text-[10px] text-zinc-400 mt-1">Mặc định: 15 phút</p>
                 </div>
@@ -438,7 +438,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
                         type="checkbox"
                         checked={formData.isGlobal}
                         onChange={e => setFormData({ ...formData, isGlobal: e.target.checked })}
-                        className="w-4 h-4 text-orange-600 rounded border-zinc-300 focus:ring-orange-500"
+                        className="w-4 h-4 text-blue-600 rounded border-zinc-300 focus:ring-blue-500"
                       />
                       <span>Áp dụng chung toàn hệ thống (Toàn chuỗi)</span>
                     </label>
@@ -447,7 +447,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
               </div>
 
               {/* Form Buttons */}
-              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-orange-200/60">
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-blue-200/60">
                 <button
                   type="button"
                   onClick={() => setIsFormOpen(false)}
@@ -458,7 +458,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
                 <button
                   type="submit"
                   disabled={formSubmitting}
-                  className="px-5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-600/20 transition-all cursor-pointer disabled:opacity-50"
+                  className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {formSubmitting ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -475,7 +475,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
           <div className="border border-zinc-200 rounded-2xl overflow-hidden shadow-xs">
             {loading ? (
               <div className="py-12 flex flex-col items-center justify-center gap-2 text-zinc-400 text-xs">
-                <Loader2 size={24} className="animate-spin text-orange-500" />
+                <Loader2 size={24} className="animate-spin text-blue-500" />
                 <span>Đang tải danh sách ca làm việc...</span>
               </div>
             ) : errorMsg ? (
@@ -485,7 +485,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
                 <button
                   type="button"
                   onClick={fetchShifts}
-                  className="inline-flex items-center gap-1 text-xs text-orange-600 font-bold underline"
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 font-bold underline"
                 >
                   <RotateCcw size={12} />
                   Thử lại
@@ -498,7 +498,7 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
                 <button
                   type="button"
                   onClick={handleOpenCreate}
-                  className="text-xs text-orange-600 font-bold hover:underline"
+                  className="text-xs text-blue-600 font-bold hover:underline"
                 >
                   + Thêm ca làm việc đầu tiên
                 </button>
@@ -525,8 +525,8 @@ export const ShiftManagementModal: React.FC<ShiftManagementModalProps> = ({
                       <td className="py-3.5 px-4 font-semibold text-zinc-900">
                         {shift.name}
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-orange-700">
-                        <span className="bg-orange-50 border border-orange-200 px-2.5 py-1 rounded-lg">
+                      <td className="py-3.5 px-4 font-bold text-blue-700">
+                        <span className="bg-blue-50 border border-blue-200 px-2.5 py-1 rounded-lg">
                           {shift.startTime} - {shift.endTime}
                         </span>
                       </td>

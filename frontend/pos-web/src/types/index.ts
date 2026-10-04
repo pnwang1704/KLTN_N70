@@ -44,3 +44,19 @@ export interface CartItem {
   toppings: CartItemTopping[];
   totalPrice: number;
 }
+
+export interface HeldOrder {
+  id: string;
+  code: string; // e.g. '#TAM-01'
+  createdAt: string; // ISO string
+  orderType: 'AT_TABLE' | 'TAKE_AWAY';
+  tableId?: string;
+  items: CartItem[];
+  discountType?: 'PERCENT' | 'AMOUNT';
+  discountInput?: string;
+  discountPercent?: number;
+  discountAmount?: number;
+  subtotal: number;
+  finalTotal: number;
+  note?: string;
+}

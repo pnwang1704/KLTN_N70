@@ -310,9 +310,9 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
       case 'CASHIER':
         return 'bg-emerald-100 text-emerald-700 border-emerald-200';
       case 'KITCHEN':
-        return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'WAITER':
         return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'WAITER':
+        return 'bg-sky-100 text-sky-700 border-sky-200';
       default:
         return 'bg-zinc-100 text-zinc-700 border-zinc-200';
     }
@@ -532,7 +532,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white w-full max-w-5xl rounded-3xl overflow-hidden shadow-2xl border border-zinc-200 flex flex-col max-h-[92vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-4 sm:p-5 text-white flex items-center justify-between shrink-0 shadow-sm">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-sky-600 p-4 sm:p-5 text-white flex items-center justify-between shrink-0 shadow-sm">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center shadow-inner">
               <Users size={22} className="text-white" />
@@ -544,7 +544,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   {user?.role || 'ADMIN'}
                 </span>
               </div>
-              <p className="text-orange-100 text-xs mt-0.5">
+              <p className="text-blue-100 text-xs mt-0.5">
                 Chấm công tự động, hồ sơ sinh trắc học AI & tài khoản hệ thống
               </p>
             </div>
@@ -565,7 +565,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
             onClick={() => setActiveTab('timesheet')}
             className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border-b-2 ${
               activeTab === 'timesheet'
-                ? 'border-orange-500 text-orange-600 bg-white shadow-2xs'
+                ? 'border-blue-600 text-blue-600 bg-white shadow-2xs'
                 : 'border-transparent text-zinc-500 hover:text-zinc-800'
             }`}
           >
@@ -578,7 +578,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
             onClick={() => setActiveTab('employees')}
             className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border-b-2 ${
               activeTab === 'employees'
-                ? 'border-orange-500 text-orange-600 bg-white shadow-2xs'
+                ? 'border-blue-600 text-blue-600 bg-white shadow-2xs'
                 : 'border-transparent text-zinc-500 hover:text-zinc-800'
             }`}
           >
@@ -591,7 +591,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
             onClick={() => setActiveTab('users')}
             className={`px-4 py-2.5 rounded-t-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 border-b-2 ${
               activeTab === 'users'
-                ? 'border-orange-500 text-orange-600 bg-white shadow-2xs'
+                ? 'border-blue-600 text-blue-600 bg-white shadow-2xs'
                 : 'border-transparent text-zinc-500 hover:text-zinc-800'
             }`}
           >
@@ -629,7 +629,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                     type="date"
                     value={filterFromDate}
                     onChange={e => setFilterFromDate(e.target.value)}
-                    className="px-2.5 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-orange-500"
+                    className="px-2.5 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
@@ -640,7 +640,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                     type="date"
                     value={filterToDate}
                     onChange={e => setFilterToDate(e.target.value)}
-                    className="px-2.5 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-orange-500"
+                    className="px-2.5 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-blue-600"
                   />
                 </div>
 
@@ -650,7 +650,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   <select
                     value={filterEmployeeId}
                     onChange={e => setFilterEmployeeId(e.target.value)}
-                    className="px-2.5 py-1.5 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-orange-500 cursor-pointer"
+                    className="px-2.5 py-1.5 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-blue-600 cursor-pointer"
                   >
                     <option value="">Tất cả nhân viên</option>
                     {employees.map(e => (
@@ -676,7 +676,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
             <div className="border border-zinc-200 rounded-2xl overflow-hidden shadow-2xs">
               {loadingAttendances ? (
                 <div className="py-16 flex flex-col items-center justify-center gap-2 text-zinc-400 text-xs">
-                  <Loader2 size={24} className="animate-spin text-orange-500" />
+                  <Loader2 size={24} className="animate-spin text-blue-600" />
                   <span>Đang tải bảng chấm công...</span>
                 </div>
               ) : attendances.length === 0 ? (
@@ -716,7 +716,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                             {ROLE_LABELS[emp?.role || ''] || emp?.role || '-'}
                           </td>
                           <td className="py-3 px-3.5">
-                            <span className="font-bold bg-orange-50 border border-orange-200 text-orange-700 px-2 py-0.5 rounded-md text-[11px]">
+                            <span className="font-bold bg-blue-50 border border-blue-200 text-blue-700 px-2 py-0.5 rounded-md text-[11px]">
                               {record.shiftCode}
                             </span>
                           </td>
@@ -783,7 +783,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                                     : undefined,
                                 })
                               }
-                              className="px-2.5 py-1 bg-zinc-100 hover:bg-orange-50 hover:text-orange-600 text-zinc-700 font-bold rounded-lg border border-zinc-200 inline-flex items-center gap-1 transition-colors cursor-pointer text-[11px]"
+                              className="px-2.5 py-1 bg-zinc-100 hover:bg-blue-50 hover:text-blue-600 text-zinc-700 font-bold rounded-lg border border-zinc-200 inline-flex items-center gap-1 transition-colors cursor-pointer text-[11px]"
                             >
                               <Camera size={12} />
                               <span>Xem ảnh</span>
@@ -811,7 +811,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   placeholder="Tìm nhân viên theo tên, mã..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-800 focus:outline-none focus:border-orange-500 focus:bg-white"
+                  className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-800 focus:outline-none focus:border-blue-500 focus:bg-white"
                 />
               </div>
 
@@ -829,7 +829,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   });
                   setIsEmployeeFormOpen(true);
                 }}
-                className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-600/20 transition-all cursor-pointer"
+                className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition-all cursor-pointer"
               >
                 <Plus size={14} />
                 <span>Thêm nhân viên mới</span>
@@ -840,7 +840,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
             {isEmployeeFormOpen && (
               <form
                 onSubmit={handleSaveEmployee}
-                className="bg-orange-50/50 border border-orange-200 rounded-2xl p-4 animate-in slide-in-from-top-2 duration-200 space-y-3"
+                className="bg-blue-50/50 border border-blue-200 rounded-2xl p-4 animate-in slide-in-from-top-2 duration-200 space-y-3"
               >
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-zinc-900 text-xs">
@@ -878,7 +878,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                         className={`w-full px-3 py-1.5 border rounded-xl font-mono font-bold text-xs uppercase focus:outline-none transition-all ${
                           !editingEmployeeId
                             ? 'bg-zinc-100/80 border-zinc-200 text-zinc-600 cursor-not-allowed select-none'
-                            : 'bg-white border-zinc-200 text-zinc-800 focus:border-orange-500'
+                            : 'bg-white border-zinc-200 text-zinc-800 focus:border-blue-500'
                         }`}
                       />
                       {!editingEmployeeId && (
@@ -899,7 +899,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       onChange={e =>
                         setEmployeeFormData({ ...employeeFormData, fullName: e.target.value })
                       }
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-orange-500"
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -908,7 +908,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                     <select
                       value={employeeFormData.role}
                       onChange={e => setEmployeeFormData({ ...employeeFormData, role: e.target.value })}
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-orange-500 cursor-pointer"
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-blue-500 cursor-pointer"
                     >
                       <option value="CASHIER">Thu ngân (Cashier)</option>
                       <option value="BARISTA">Pha chế (Barista)</option>
@@ -928,12 +928,12 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       onChange={e =>
                         setEmployeeFormData({ ...employeeFormData, pinCode: e.target.value })
                       }
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-mono font-bold text-zinc-800 focus:outline-none focus:border-orange-500"
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-mono font-bold text-zinc-800 focus:outline-none focus:border-blue-500"
                     />
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-orange-200/50">
+                <div className="flex justify-end gap-2 pt-2 border-t border-blue-200/50">
                   <button
                     type="button"
                     onClick={() => setIsEmployeeFormOpen(false)}
@@ -944,7 +944,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   <button
                     type="submit"
                     disabled={savingEmployee}
-                    className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm cursor-pointer disabled:opacity-50"
                   >
                     {savingEmployee ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                     <span>{editingEmployeeId ? 'Lưu thay đổi' : 'Tạo hồ sơ'}</span>
@@ -957,7 +957,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
             <div className="border border-zinc-200 rounded-2xl overflow-hidden shadow-2xs">
               {loadingEmployees ? (
                 <div className="py-16 flex flex-col items-center justify-center gap-2 text-zinc-400 text-xs">
-                  <Loader2 size={24} className="animate-spin text-orange-500" />
+                  <Loader2 size={24} className="animate-spin text-blue-500" />
                   <span>Đang tải danh sách nhân viên...</span>
                 </div>
               ) : (
@@ -1026,7 +1026,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                             <button
                               type="button"
                               onClick={() => handleOpenFaceEnroll(emp)}
-                              className="px-2.5 py-1.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl font-bold inline-flex items-center gap-1 transition-colors cursor-pointer text-xs"
+                              className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-bold inline-flex items-center gap-1 transition-colors cursor-pointer text-xs"
                               title="Đăng ký hoặc cập nhật khuôn mặt"
                             >
                               <Camera size={13} />
@@ -1079,7 +1079,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   placeholder="Tìm tài khoản theo họ tên, username..."
                   value={searchUserQuery}
                   onChange={e => setSearchUserQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-800 focus:outline-none focus:border-orange-500 focus:bg-white"
+                  className="w-full pl-8 pr-3 py-1.5 bg-zinc-50 border border-zinc-200 rounded-xl text-xs font-semibold text-zinc-800 focus:outline-none focus:border-blue-500 focus:bg-white"
                 />
               </div>
 
@@ -1106,7 +1106,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                     });
                     setIsUserFormOpen(true);
                   }}
-                  className="px-3.5 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-orange-600/20 transition-all cursor-pointer"
+                  className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-md shadow-blue-600/20 transition-all cursor-pointer"
                 >
                   <UserPlus size={14} />
                   <span>Thêm tài khoản mới</span>
@@ -1118,11 +1118,11 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
             {isUserFormOpen && (
               <form
                 onSubmit={handleCreateUser}
-                className="bg-orange-50/50 border border-orange-200 rounded-2xl p-4 animate-in slide-in-from-top-2 duration-200 space-y-3"
+                className="bg-blue-50/50 border border-blue-200 rounded-2xl p-4 animate-in slide-in-from-top-2 duration-200 space-y-3"
               >
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-zinc-900 text-xs flex items-center gap-2">
-                    <UserPlus size={15} className="text-orange-600" />
+                    <UserPlus size={15} className="text-blue-600" />
                     <span>Thêm tài khoản đăng nhập hệ thống</span>
                   </h4>
                   <button
@@ -1145,7 +1145,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       placeholder="VD: Thu ngân Quầy 1, Quản trị viên..."
                       value={userFormData.fullName}
                       onChange={e => setUserFormData({ ...userFormData, fullName: e.target.value })}
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-orange-500"
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-semibold text-zinc-800 focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -1157,7 +1157,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       placeholder="VD: nva_cashier"
                       value={userFormData.username}
                       onChange={e => setUserFormData({ ...userFormData, username: e.target.value })}
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-mono text-zinc-800 focus:outline-none focus:border-orange-500"
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-mono text-zinc-800 focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -1169,7 +1169,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       placeholder="••••••••"
                       value={userFormData.password}
                       onChange={e => setUserFormData({ ...userFormData, password: e.target.value })}
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-mono text-zinc-800 focus:outline-none focus:border-orange-500"
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-mono text-zinc-800 focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -1178,7 +1178,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                     <select
                       value={userFormData.role}
                       onChange={e => setUserFormData({ ...userFormData, role: e.target.value })}
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-orange-500 cursor-pointer"
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-blue-500 cursor-pointer"
                     >
                       {user?.role === 'ADMIN' && <option value="ADMIN">Quản trị (ADMIN)</option>}
                       {user?.role === 'ADMIN' && <option value="MANAGER">Quản lý (MANAGER)</option>}
@@ -1194,7 +1194,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       value={userFormData.branchId}
                       onChange={e => setUserFormData({ ...userFormData, branchId: e.target.value })}
                       disabled={user?.role !== 'ADMIN'}
-                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-orange-500 disabled:opacity-60 cursor-pointer"
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-blue-500 disabled:opacity-60 cursor-pointer"
                     >
                       <option value="1">Chi nhánh 1</option>
                       <option value="2">Chi nhánh 2</option>
@@ -1203,7 +1203,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2 border-t border-orange-200/50">
+                <div className="flex justify-end gap-2 pt-2 border-t border-blue-200/50">
                   <button
                     type="button"
                     onClick={() => setIsUserFormOpen(false)}
@@ -1214,7 +1214,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   <button
                     type="submit"
                     disabled={savingUser}
-                    className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
+                    className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1 shadow-sm transition-all cursor-pointer"
                   >
                     {savingUser ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
                     <span>Tạo tài khoản</span>
@@ -1227,7 +1227,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
             <div className="border border-zinc-200 rounded-2xl overflow-hidden shadow-2xs">
               {loadingUsers ? (
                 <div className="py-16 flex flex-col items-center justify-center gap-2 text-zinc-400 text-xs">
-                  <Loader2 size={24} className="animate-spin text-orange-500" />
+                  <Loader2 size={24} className="animate-spin text-blue-500" />
                   <span>Đang tải danh sách tài khoản...</span>
                 </div>
               ) : filteredUsers.length === 0 ? (
@@ -1316,10 +1316,10 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
         {enrollingEmployee && (
           <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
             <div className="bg-white w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-zinc-200 flex flex-col">
-              <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-4 text-white flex items-center justify-between">
+              <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-sky-600 p-4 text-white flex items-center justify-between">
                 <div>
                   <h3 className="font-black text-sm">Đăng Ký Khuôn Mặt Sinh Trắc Học</h3>
-                  <p className="text-orange-100 text-xs mt-0.5">
+                  <p className="text-blue-100 text-xs mt-0.5">
                     Nhân viên: <span className="font-bold text-white">{enrollingEmployee.fullName}</span> ({enrollingEmployee.employeeCode})
                   </p>
                 </div>
@@ -1342,7 +1342,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       startEnrollCamera();
                     }}
                     className={`py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                      enrollSource === 'camera' ? 'bg-white text-orange-600 shadow-2xs' : ''
+                      enrollSource === 'camera' ? 'bg-white text-blue-600 shadow-2xs' : ''
                     }`}
                   >
                     <Camera size={14} />
@@ -1356,7 +1356,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       stopEnrollCamera();
                     }}
                     className={`py-1.5 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
-                      enrollSource === 'upload' ? 'bg-white text-orange-600 shadow-2xs' : ''
+                      enrollSource === 'upload' ? 'bg-white text-blue-600 shadow-2xs' : ''
                     }`}
                   >
                     <Upload size={14} />
@@ -1377,7 +1377,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       />
                       {!enrollVideoActive && !enrollError && (
                         <div className="absolute inset-0 bg-zinc-900 flex flex-col items-center justify-center gap-2 text-zinc-400 text-xs">
-                          <Loader2 size={24} className="animate-spin text-orange-500" />
+                          <Loader2 size={24} className="animate-spin text-blue-500" />
                           <span>Đang mở camera...</span>
                         </div>
                       )}
@@ -1398,7 +1398,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                           <p className="text-xs text-zinc-400">Chọn ảnh chân dung chụp trực diện, ánh sáng rõ</p>
                         </div>
                       )}
-                      <label className="mt-3 inline-block px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors">
+                      <label className="mt-3 inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors">
                         <span>Chọn tệp ảnh</span>
                         <input
                           type="file"
@@ -1448,7 +1448,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       type="button"
                       disabled={extractingFace}
                       onClick={handleCaptureAndExtract}
-                      className="w-full py-2.5 bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md cursor-pointer transition-all"
                     >
                       {extractingFace ? (
                         <Loader2 size={16} className="animate-spin" />
@@ -1600,7 +1600,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                 <span className="font-bold text-zinc-900">
                   {confirmToggleUser.action === 'LOCK' ? 'KHÓA' : 'MỞ KHÓA'}
                 </span>{' '}
-                tài khoản <span className="font-mono font-bold text-orange-600">[{confirmToggleUser.user.username}]</span> ({confirmToggleUser.user.fullName}) không?
+                tài khoản <span className="font-mono font-bold text-blue-600">[{confirmToggleUser.user.username}]</span> ({confirmToggleUser.user.fullName}) không?
               </p>
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100">

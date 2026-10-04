@@ -228,12 +228,12 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border border-zinc-200 max-h-[95vh] flex flex-col">
         {/* Header */}
-        <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-5 text-white text-center relative shrink-0">
+        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-sky-600 p-5 text-white text-center relative shrink-0">
           <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-inner">
             <Clock className="text-white" size={26} />
           </div>
           <h2 className="text-xl font-black tracking-tight">Chọn Ca Làm Việc</h2>
-          <p className="text-orange-100 text-xs mt-0.5">
+          <p className="text-blue-100 text-xs mt-0.5">
             Xác nhận ca trực và số tiền mặt trong két nhận bàn giao
           </p>
         </div>
@@ -241,9 +241,9 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
         {/* Content */}
         <div className="p-5 overflow-y-auto flex-1 space-y-4">
           {/* User Info Card */}
-          <div className="bg-orange-50/60 border border-orange-100 rounded-2xl p-3 flex items-center justify-between text-xs text-zinc-700">
+          <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-3 flex items-center justify-between text-xs text-zinc-700">
             <div className="flex items-center gap-2">
-              <User size={15} className="text-orange-600" />
+              <User size={15} className="text-blue-600" />
               <span className="font-semibold text-zinc-900">{user?.fullName || user?.username}</span>
             </div>
             <div className="flex items-center gap-1.5 text-zinc-500">
@@ -260,7 +260,7 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
               </label>
               {loadingShifts && (
                 <span className="flex items-center gap-1 text-[11px] text-zinc-400">
-                  <Loader2 size={11} className="animate-spin text-orange-500" />
+                  <Loader2 size={11} className="animate-spin text-blue-500" />
                   <span>Đang tải ca...</span>
                 </span>
               )}
@@ -277,13 +277,13 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
                     onClick={() => setSelectedCode(option.code)}
                     className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer relative flex items-start justify-between ${
                       isSelected
-                        ? 'border-orange-500 bg-orange-50/40 shadow-sm ring-2 ring-orange-200'
+                        ? 'border-blue-500 bg-blue-50/40 shadow-sm ring-2 ring-blue-200'
                         : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/50'
                     }`}
                   >
                     <div className="flex-1 pr-3">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className={`font-bold text-xs ${isSelected ? 'text-orange-950 font-black' : 'text-zinc-800'}`}>
+                        <h4 className={`font-bold text-xs ${isSelected ? 'text-blue-950 font-black' : 'text-zinc-800'}`}>
                           {option.name}
                         </h4>
                         {isSuggested && (
@@ -299,7 +299,7 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
 
                     <div className="pt-0.5">
                       {isSelected ? (
-                        <CheckCircle2 size={20} className="text-orange-600 fill-orange-100" />
+                        <CheckCircle2 size={20} className="text-blue-600 fill-blue-100" />
                       ) : (
                         <div className="w-4 h-4 rounded-full border-2 border-zinc-300" />
                       )}
@@ -354,7 +354,7 @@ export const ShiftSelectModal: React.FC<ShiftSelectModalProps> = ({
           <button
             type="button"
             onClick={handleConfirm}
-            className="flex-1 py-3 px-5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-orange-600/25 transition-all cursor-pointer"
+            className="flex-1 py-3 px-5 bg-gradient-to-r from-blue-600 to-sky-600 hover:from-blue-700 hover:to-sky-700 text-white font-bold rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 transition-all cursor-pointer"
           >
             <span>Bắt đầu ca làm</span>
             <ArrowRight size={16} />
