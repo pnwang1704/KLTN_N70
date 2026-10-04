@@ -20,13 +20,13 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `POST` | `/shifts` | `order-service` | `ADMIN`, `MANAGER` | Tạo mới ca làm việc (Mã ca, Tên ca, Khung giờ `startTime - endTime`, Ân hạn, Chi nhánh) (`201 Created`, `400 Bad Request`). |
 | `PUT`  | `/shifts/:id` | `order-service` | `ADMIN`, `MANAGER` | Cập nhật thông tin ca làm việc theo ID (`200 OK`, `400 Bad Request`, `404 Not Found`). |
 | `PATCH`| `/shifts/:id/toggle` | `order-service` | `ADMIN`, `MANAGER` | Bật/Tắt trạng thái hoạt động (`isActive`) của ca làm việc (`200 OK`, `404 Not Found`). |
-| `GET`  | `/employees` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách nhân viên chi nhánh (`?branchId=&isActive=`) (`200 OK`). |
+| `GET`  | `/employees` | `order-service` | `@Public` | Lấy danh sách nhân viên chi nhánh (Hỗ trợ truy vấn công khai cho Kiosk chấm công trước đăng nhập, mặc định fallback `branchId = '1'`) (`200 OK`). |
 | `GET`  | `/employees/next-code` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy mã nhân viên tự động tăng tiếp theo (VD: `NV04`) (`?branchId=`) (`200 OK`). |
 | `POST` | `/employees` | `order-service` | `ADMIN`, `MANAGER` | Tạo hồ sơ nhân viên mới (`employeeCode`, `fullName`, `role`, `pinCode`, `branchId`) (`201 Created`, `400 Bad Request`). |
 | `PUT`  | `/employees/:id` | `order-service` | `ADMIN`, `MANAGER` | Cập nhật thông tin nhân viên (`fullName`, `role`, `pinCode`, `isActive`, `branchId`) (`200 OK`, `404 Not Found`). |
 | `PUT`  | `/employees/:id/face` | `order-service` | `ADMIN`, `MANAGER` | Đăng ký/Cập nhật vector sinh trắc học khuôn mặt 128 chiều (`descriptor`) và ảnh thẻ (`avatarBase64`) (`200 OK`, `400 Bad Request`). |
-| `POST` | `/attendances/check-in` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Chấm công vào ca tại Kiosk POS: so khớp AI khuôn mặt 1:1, tự động gán ca chuẩn (`Shift`), tính trạng thái `ON_TIME` / `LATE` và lưu ảnh snapshot (`201 Created`, `400 Bad Request`). |
-| `POST` | `/attendances/check-out` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Chấm công tan ca tại Kiosk POS: so khớp AI khuôn mặt, tự động tính số giờ làm việc `workingHours` và lưu snapshot đối soát (`200 OK`, `400 Bad Request`). |
+| `POST` | `/attendances/check-in` | `order-service` | `@Public` | Chấm công vào ca tại Kiosk POS: `@Public` cho phép gọi trực tiếp từ màn hình đăng nhập, so khớp AI khuôn mặt 1:1, tự động gán ca chuẩn (`Shift`), tính trạng thái `ON_TIME` / `LATE` và lưu ảnh snapshot (`201 Created`, `400 Bad Request`). |
+| `POST` | `/attendances/check-out` | `order-service` | `@Public` | Chấm công tan ca tại Kiosk POS: `@Public` gọi trực tiếp trước/sau đăng nhập, so khớp AI khuôn mặt, tự động tính số giờ làm việc `workingHours` và lưu snapshot đối soát (`200 OK`, `400 Bad Request`). |
 | `GET`  | `/attendances/timesheet` | `order-service` | `ADMIN`, `MANAGER` | Truy xuất bảng chấm công đối soát (`?branchId=&fromDate=&toDate=&employeeId=`) kèm ảnh chụp và giờ công (`200 OK`). |
 | `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`) (`200 OK`). |
 | `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (Dine-in Post-pay) hoặc POS Web (`201 Created`, `400 Bad Request`). |
@@ -433,3 +433,39 @@ WebSocket Server chạy trên `order-service` (Port `3004`) phụ trách đẩy 
 | `ITEM_READY` | Server -> POS Web | `branch_${branchId}` | Phát khi Đầu bếp bấm "Hoàn thành" một món trên KDS. POS Web hiển thị Toast thông báo nổi và lưu vào danh sách thông báo (Notification Dropdown). |
 | `order:paid` | Server -> POS Web | `branch_${branchId}` | Phát khi đơn hàng nhận được thanh toán thành công từ Webhook PayOS hoặc quẹt thẻ. POS Web lập tức đóng modal thanh toán và kích hoạt in hóa đơn. |
 | `table:completed` | Server -> Customer & POS Web | `branch_${branchId}` | Phát khi thu ngân hoàn tất thanh toán cho bàn. Payload: `{ branchId, tableId, orderId, orderIds }`. Customer Web tự động đóng modal tra cứu món và reset bàn; POS Web chuyển trạng thái bàn sang Bàn trống. |
+
+---
+
+## 5. Quản Lý Trạng Thái Cục Bộ Phía Client (Client-Side Local State & Storage)
+
+Bên cạnh các REST API tập trung, một số nghiệp vụ vận hành tức thời tại quầy POS được xử lý theo mô hình **Client-side Local State Persistence** nhằm tối ưu hóa trải nghiệm người dùng, đạt tốc độ phản hồi 0ms và duy trì khả năng hoạt động ngay cả khi mạng chập chờn:
+
+### 5.1. Quản lý Hóa đơn Tạm tính (`pos_held_orders`)
+* **Storage Engine:** `window.localStorage` của trình duyệt POS Web.
+* **Storage Key:** `'pos_held_orders'` (Giá trị lưu trữ là chuỗi JSON mảng các đối tượng `HeldOrder`).
+* **Cấu trúc Dữ liệu `HeldOrder`:**
+  ```typescript
+  interface HeldOrder {
+    id: string;                     // UUID tự sinh
+    code: string;                   // Mã tăng dần: '#TAM-01', '#TAM-02'...
+    createdAt: string;              // Giờ tạo HH:mm:ss
+    orderType: 'DINE_IN' | 'TAKE_AWAY';
+    tableId?: string;               // Số bàn (nếu DINE_IN)
+    items: CartItem[];              // Danh sách món ăn chi tiết
+    subtotal: number;               // Tạm tính
+    discountType: 'PERCENT' | 'AMOUNT';
+    discountInput: string;          // Giá trị nhập ô chiết khấu
+    discountAmount: number;         // Tiền giảm trừ
+    finalTotal: number;             // Tổng tiền sau giảm
+    note?: string;                  // Ghi chú đơn
+  }
+  ```
+* **Lợi ích Kỹ thuật:**
+  - Không phát sinh request lên server, không tạo rác bản ghi nháp trong PostgreSQL `order_db`.
+  - Phục hồi đơn tức thì khi thu ngân bấm "Phục hồi đơn", có modal bảo vệ ghi đè an toàn.
+  - Tự động lưu trữ bền vững qua các lượt refresh F5 trình duyệt.
+
+### 5.2. Quản lý Phiên Ca Làm Việc (`pos_shift`)
+* **Storage Engine:** `window.localStorage`.
+* **Storage Key:** `'pos_shift'`.
+* **Cấu trúc:** Lưu thông tin ca trực đang mở của thu ngân (`shiftCode`, `shiftName`, `openedAt`, `cashierName`, `initialCash`), phục vụ hiển thị trên Top Header / Drawer và truyền tham số `fromDate` chính xác khi xuất Báo cáo kết ca (`ShiftSummaryModal`).

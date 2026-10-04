@@ -542,11 +542,109 @@ sequenceDiagram
 Quy trình cho phép nhân viên toàn quầy (Pha chế, Phục vụ, Thu ngân ca kế tiếp) hoàn tất điểm danh sinh trắc học ngay cả khi quầy POS chưa được đăng nhập tài khoản thu ngân:
 
 1. **Khởi động:** Nhân viên đứng trước màn hình máy POS đang ở trạng thái Đăng nhập (`LoginScreen.tsx`).
-2. **Kích hoạt Kiosk:** Nhấp vào nút nổi bật **"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"** (thiết kế viền cam nét đứt).
+2. **Kích hoạt Kiosk:** Nhấp vào nút nổi bật **"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"** (thiết kế viền xanh nét đứt `bg-blue-50/80 text-blue-700 border-2 border-dashed border-blue-300`).
 3. **Mở modal Kiosk độc lập:** Component `AttendanceKioskModal` mở ra, tự động gọi API `GET /employees?branchId=1&isActive=true` (không cần Bearer Token) để nạp danh sách nhân sự chi nhánh 1 kèm vector khuôn mặt 128D.
 4. **Xác thực khuôn mặt thời gian thực:** Nhân viên chọn tên mình, nhìn vào camera webcam. Mô hình AI client-side tính khoảng cách Euclid. Khi $d < 0.50$, hệ thống nhận diện chính chủ và mở khóa nút chấm công.
 5. **Gửi kết quả:** Bấm "Vào ca" hoặc "Tan ca". Request gửi tới `POST /attendances/check-in` hoặc `check-out` (Public endpoint). Server lưu snapshot và giờ làm việc.
 6. **Tự động đóng và khôi phục:** Modal hiển thị Toast kết quả chấm công trong 2.5 giây, sau đó tự động đóng lại. Màn hình quay về form đăng nhập ban đầu mà không làm gián đoạn hay ảnh hưởng đến phiên làm việc của hệ thống.
+
+---
+
+## 8. Luồng Lưu & Phục Hồi Hóa Đơn Tạm Tính (Hold / Draft Orders Workflow)
+
+Quy trình giải phóng quầy thu ngân khi khách hàng đang gọi món cần tạm dừng để chờ người đi cùng hoặc đổi ý, cho phép phục vụ ngay khách tiếp theo mà không làm mất thông tin đơn trước đó:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Cashier as Thu ngân quầy
+    participant UI as POS UI (OrderPanel & Header)
+    participant Cart as CartContext
+    participant Held as HeldOrdersContext
+    participant Storage as LocalStorage (pos_held_orders)
+    participant Drawer as HeldOrdersDrawer
+
+    %% Giai đoạn 1: Lưu tạm đơn hàng của Khách A
+    Note over Cashier, Storage: Giai đoạn 1: Lưu tạm đơn hàng của Khách A
+    Cashier->>UI: Thêm món Khách A vào giỏ (Trà sữa, Size L, Topping trân châu)
+    UI->>Cart: Cập nhật items, subtotal, discount
+    Note right of Cashier: Khách A cần chờ bạn hoặc phân vân đổi món
+    Cashier->>UI: Bấm nút [💾 Lưu tạm] ở chân giỏ hàng
+    UI->>Held: saveHeldOrder({ orderType, tableId, items, subtotal, discount, finalTotal })
+    Held->>Held: Tự sinh mã tăng dần: #TAM-01 (format padStart 2 chữ số)
+    Held->>Storage: Ghi snapshot đơn tạm vào key 'pos_held_orders'
+    Held->>Cart: clearCart() (Xóa trắng giỏ hàng)
+    Held->>UI: Hiển thị Toast "Đã lưu tạm đơn #TAM-01 thành công"
+    Held->>UI: Header cập nhật Badge [📄 Đơn tạm tính (1)] kèm animate-pulse
+
+    %% Giai đoạn 2: Phục vụ khách B bình thường
+    Note over Cashier, Cart: Giai đoạn 2: Thu ngân phục vụ Khách B
+    Cashier->>UI: Thêm món Khách B vào giỏ -> Thanh toán tiền mặt -> Hoàn tất
+
+    %% Giai đoạn 3: Khách A quay lại và phục hồi đơn
+    Note over Cashier, Storage: Giai đoạn 3: Khách A quay lại quầy & Phục hồi đơn
+    Cashier->>UI: Nhấp vào Badge [📄 Đơn tạm tính (1)] trên Top Header
+    UI->>Drawer: Mở Slide Drawer từ cạnh phải màn hình (w-96, backdrop mờ)
+    Drawer->>Held: Đọc danh sách đơn tạm từ Context / LocalStorage
+    Drawer-->>Cashier: Hiển thị thẻ đơn #TAM-01 (giờ tạo, số món, tổng tiền xanh in đậm)
+    Cashier->>Drawer: Bấm nút [↩ Phục hồi đơn]
+    alt Giỏ hàng hiện tại đang có món
+        Drawer->>Cashier: Bật modal cảnh báo "Giỏ hàng đang có món. Bạn có chắc muốn ghi đè?"
+        Cashier->>Drawer: Bấm "Đồng ý ghi đè"
+    end
+    Drawer->>Cart: loadOrderToCart(heldOrder)
+    Note over Cart: Khôi phục trọn vẹn: món, size, topping, bàn, chiết khấu, tổng tiền
+    Drawer->>Held: removeHeldOrder(heldOrderId)
+    Held->>Storage: Cập nhật lại mảng pos_held_orders
+    Drawer->>Drawer: Đóng Slide Drawer
+    UI->>Cashier: Giỏ hàng hiển thị nguyên vẹn đơn của Khách A
+    Cashier->>UI: Bấm [Thanh toán] và hoàn tất đơn hàng bình thường
+```
+
+### Các Tình Huống Ngoại Lệ & Cơ Chế Bảo Vệ
+1. **Giỏ hàng rỗng:** Nút `[ 💾 Lưu tạm ]` tại chân `OrderPanel.tsx` tự động bị vô hiệu hóa (`disabled`) với con trỏ `not-allowed`, ngăn chặn việc tạo ra các đơn tạm rỗng vô nghĩa.
+2. **Khôi phục đè giỏ hàng:** Nếu thu ngân đang vô tình có vài món mới trong giỏ mà lại bấm phục hồi một đơn tạm, hệ thống hiển thị modal xác nhận hai lựa chọn ("Hủy bỏ" hoặc "Đồng ý ghi đè"), ngăn ngừa 100% tình trạng mất dữ liệu giỏ hàng ngoài ý muốn.
+3. **Hủy đơn tạm an toàn:** Cung cấp nút xóa từng đơn tạm và nút "Hủy tất cả đơn tạm", đều có hộp thoại xác nhận trước khi thực thi xóa dữ liệu khỏi `localStorage`.
+4. **Bền vững khi tải lại trang:** Dữ liệu đơn tạm được lưu trực tiếp vào `localStorage.pos_held_orders`, do đó khi thu ngân vô tình nhấn F5 hoặc trình duyệt tự refresh, danh sách đơn tạm vẫn được bảo toàn nguyên vẹn.
+
+---
+
+## 9. Luồng Kiểm Soát Quyền Hạn RBAC & Cơ Chế Ném Ngoại Lệ Tường Minh (RolesGuard Workflow)
+
+Quy trình thẩm định quyền truy cập người dùng tại API Gateway trước khi chuyển tiếp yêu cầu đến các microservices:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as POS / KDS Web
+    participant GW as API Gateway (Port 3000)
+    participant Guard as RolesGuard (canActivate)
+    participant Reflector as NestJS Reflector
+    participant Service as Order / Auth / Inventory Service
+
+    Client->>GW: Gửi HTTP Request (Header: Authorization Bearer JWT)
+    GW->>Guard: Kích hoạt canActivate(ExecutionContext)
+    Guard->>Reflector: Lấy metadata roles được cấu hình qua @Roles(...)
+    alt Endpoint không khai báo @Roles
+        Reflector-->>Guard: requiredRoles = undefined
+        Guard-->>GW: return true (Cho phép truy cập)
+    else Endpoint có khai báo @Roles (ví dụ: 'ADMIN', 'MANAGER')
+        Reflector-->>Guard: requiredRoles = ['ADMIN', 'MANAGER']
+        Guard->>Guard: Trích xuất request.user từ payload JWT
+        alt request.user không tồn tại hoặc không có thuộc tính role
+            Guard-->>GW: throw new ForbiddenException('No role found')
+            GW-->>Client: HTTP 403 Forbidden { statusCode: 403, message: 'No role found' }
+        else user.role không nằm trong requiredRoles
+            Guard-->>GW: throw new ForbiddenException('User does not have the required role')
+            GW-->>Client: HTTP 403 Forbidden { statusCode: 403, message: 'User does not have the required role' }
+        else user.role hợp lệ
+            Guard-->>GW: return true
+            GW->>Service: RabbitMQ RPC: Điều phối nghiệp vụ xuống Microservice đích
+            Service-->>GW: Kết quả xử lý
+            GW-->>Client: HTTP 200 OK / 201 Created
+        end
+    end
+```
 
 
 

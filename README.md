@@ -9,10 +9,17 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 - [x] **Customer QR Web (Mobile-First):** Quét mã QR tại bàn tự động nhận diện bàn qua URL (`?branchId=1&tableId=5`), fallback giao diện sang trọng; mô hình **Thanh toán sau tại quầy (Post-pay)**; hỗ trợ gọi nhiều đợt trong bữa ăn và tra cứu "Món đã gọi tại bàn" (Active order drawer).
 - [x] **KDS Web:** Màn hình hiển thị bếp Realtime (đồng bộ Socket.IO sự kiện `NEW_ORDER_CREATED` và `ITEM_READY`).
 - [x] **POS Web (Thu ngân quầy):**
-  - Quản lý sơ đồ bàn (đang phục vụ / bàn trống).
+  - **Chuẩn hóa Bảng màu POS:** Chuyển đổi 100% giao diện sang tông Xanh dương chuyên nghiệp (`#0070ba`, `blue-600`, `sky-600`) & Trắng sáng (`bg-white`, `bg-zinc-50`), sạch 100% class `orange-` và `amber-`, tối ưu công thái học thị giác.
+  - Quản lý sơ đồ bàn (đang phục vụ màu xanh dương / bàn trống màu trắng xám).
   - Chiết khấu linh hoạt (% và VNĐ) tại chân giỏ hàng.
   - Thanh toán bàn gộp các đợt gọi thành 1 hóa đơn và in hóa đơn nhiệt 80mm.
   - Quản lý quỹ tiền mặt (Cash In / Cash Out qua phiếu chi khẩn cấp), đối soát kết ca 3 chiều (`ShiftSummaryModal`).
+- [x] **Lưu & Quản lý Hóa đơn Tạm tính (Hold / Draft Orders):**
+  - Nút **`[ 💾 Lưu tạm ]`** tại chân giỏ hàng `OrderPanel.tsx` (tự vô hiệu hóa khi giỏ rỗng).
+  - Cơ chế tự sinh mã `#TAM-01`, `#TAM-02`... tăng dần theo ngày, lưu trữ snapshot toàn vẹn vào `localStorage` (`pos_held_orders`), giải phóng giỏ hàng tức thời.
+  - Badge **`[ 📄 Đơn tạm tính (N) ]`** trên Top Header hiển thị số lượng đơn chờ kèm hiệu ứng `animate-pulse` khi $N > 0$.
+  - Slide-over Drawer `HeldOrdersDrawer.tsx` trượt từ cạnh phải (`w-96`, backdrop mờ, phím ESC đóng): Xem chi tiết món, giá in đậm màu xanh, nút "Phục hồi đơn", "Xóa đơn" và "Hủy tất cả đơn tạm".
+  - Cơ chế bảo vệ giỏ hàng chống ghi đè (Safe Cart Overwrite Protection) với modal xác nhận trước khi khôi phục đơn.
 - [x] **Phân hệ Quản lý Ca làm việc (Shift Management):**
   - Entity `Shift` lưu trữ khung giờ ca chuẩn linh hoạt (`code`, `name`, `startTime`, `endTime`, `gracePeriodMinutes`, `isActive`).
   - Cơ chế nạp ca làm việc động từ backend, tự động gợi ý ca làm việc thông minh theo đồng hồ hệ thống (0h - 23h59).
@@ -23,16 +30,20 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
   - Entity `Attendance`: Ghi nhận nhật ký chấm công (`checkInAt`, `checkInPhoto`, `checkOutAt`, `checkOutPhoto`, số giờ thực tế `workingHours`, trạng thái `ON_TIME` hoặc `LATE` theo thời gian ân hạn `gracePeriodMinutes`).
   - **Tự động sinh mã nhân viên (Auto-increment Employee Code):** Backend `services/order-service` tự động truy vấn tìm mã lớn nhất và sinh mã tăng dần chuẩn định dạng `NVxx` (`NV01`, `NV02`, `NV03`, `NV04`...), cung cấp qua endpoint `GET /employees/next-code` và khóa `readOnly` trên form tạo mới để tránh trùng lặp.
   - **AI Thị giác máy tính Client-side (`@vladmandic/face-api`):** Trích xuất vector đặc trưng 128 chiều (SSD MobileNet V1, 68 landmarks, Face Recognition 128D) trực tiếp trên trình duyệt, so khớp khoảng cách Euclid 1:1 ($d < 0.500$) loại bỏ 100% tình trạng chấm công hộ (buddy punching).
-  - **Chấm công Kiosk độc lập ngay từ Màn hình Đăng nhập (Login Kiosk Flow):** Bổ sung nút nổi bật *"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"* ngay dưới form đăng nhập tại `LoginScreen.tsx`. API Gateway gắn `@Public()` cho `POST /attendances/check-in`, `check-out` và `GET /employees` (mặc định `branchId = '1'`), cho phép nhân viên toàn quầy điểm danh trước khi thu ngân đăng nhập vào ca.
-  - **Kiosk 1-chạm trên Header bán hàng:** Bố trí nút *"⏰ Chấm công Kiosk"* trực tiếp cạnh thông tin Thu ngân & đồng hồ ca làm việc, hỗ trợ thao tác nhanh khi giao nhận ca mà không cần mở menu.
+  - **Chấm công Kiosk độc lập ngay từ Màn hình Đăng nhập (Login Kiosk Flow):** Bổ sung nút nổi bật *"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"* (viền xanh nét đứt `bg-blue-50/80 text-blue-700 border-blue-300`) ngay dưới form đăng nhập tại `LoginScreen.tsx`. API Gateway gắn `@Public()` cho `POST /attendances/check-in`, `check-out` và `GET /employees` (mặc định `branchId = '1'`), cho phép nhân viên toàn quầy điểm danh trước khi thu ngân đăng nhập vào ca.
+  - **Kiosk 1-chạm trên Header bán hàng:** Bố trí nút *"⏰ Chấm công Kiosk"* (viền xanh, nền gradient sky-blue) trực tiếp cạnh thông tin Thu ngân & đồng hồ ca làm việc, hỗ trợ thao tác nhanh khi giao nhận ca mà không cần mở menu.
   - **Giải pháp Un-mirror Text trên Video Canvas:** Giữ video soi gương tự nhiên (`scaleX(-1)`) nhưng nghịch đảo tọa độ bounding box và label tag trên Canvas để chữ hiển thị chuẩn từ trái sang phải, không bị lật chữ.
 - [x] **Hợp nhất Trung tâm Quản trị Nhân sự (`TimesheetModal.tsx`):**
   - **Tab 1: 🕒 Bảng chấm công (Timesheet):** Tra cứu lịch sử vào/tan ca theo ngày/tháng/nhân viên kèm ảnh snapshot đối soát trực quan.
   - **Tab 2: 👥 Hồ sơ Nhân viên & Sinh trắc học (Face Enrollment):** Quản lý danh sách nhân sự, mã nhân viên tự động sinh kèm badge "Tự động sinh", chụp webcam trực tiếp hoặc tải ảnh chân dung để trích xuất và lưu vector khuôn mặt mẫu 128D.
   - **Tab 3: 🔐 Tài khoản hệ thống (Users & Roles):** Hiển thị danh sách tài khoản đăng nhập POS/Admin với "TÊN HIỂN THỊ" chuẩn hóa, form tạo tài khoản với "Tên hiển thị *", "Tên đăng nhập *", "Phân quyền", "Chi nhánh", và thao tác khóa/mở khóa.
-- [x] **Tinh chỉnh Giao diện Quầy & Menu Tiện ích (UX Refinements):**
-  - **Dropdown Menu trên Header:** Loại bỏ các dòng mô tả phụ màu xám, chuẩn hóa layout thành 1 hàng ngang (Flex Row căn giữa icon và nhãn chức năng), đồng bộ phong cách với nhóm "Quản trị hệ thống".
+- [x] **Kiến trúc Header Siêu Tinh Gọn & Side Menu Drawer:**
+  - **Top Header:** Loại bỏ logo "N70 POS", đưa nút menu ☰, tab "Bán hàng" và nút Badge "Đơn tạm tính" lên đầu góc trái; chuyển thông tin chi nhánh, tài khoản và ca trực vào Side Drawer. Góc phải giữ: Nút Kiosk 1-chạm, Trạng thái mạng, Chuông thông báo và Đăng xuất.
+  - **Side Menu Drawer:** Trượt mượt mà từ mép trái (`w-80`, backdrop mờ): Header nổi bật với gradient xanh CukCuk `from-blue-600 via-blue-700 to-sky-600`, avatar tròn, tên hiển thị, chi nhánh, badge ca trực nhấp đổi ca; thân Drawer phân nhóm nghiệp vụ rõ ràng dạng Flex-row 1 dòng, loại bỏ text mô tả phụ gây nhiễu.
   - **Phiếu Chi Tiền Mặt (`ExpenseModal.tsx`):** Loại bỏ toàn bộ placeholder gợi ý ở ô Lý do chi và Người nhận/ghi chú, tự động làm sạch form mỗi khi mở.
+- [x] **Kiểm thử Tự động & Bảo mật RBAC (Unit Testing):**
+  - Tinh chỉnh `RolesGuard` trong `api-gateway` ném `ForbiddenException('No role found')` chuẩn NestJS khi request thiếu user hoặc role.
+  - 100% các bộ kiểm thử Jest (`roles.guard.spec.ts`, `inventory.service.spec.ts`) vượt qua kiểm tra nghiêm ngặt.
 - [x] **Thanh toán Đa phương thức:** Tiền mặt (tính tiền thối nhanh) và PayOS VietQR động (Webhook & Polling xác nhận tiền vào tài khoản tự động).
 - [x] **Giải phóng bàn Real-time:** Socket.IO sự kiện `table:completed` đồng bộ hai chiều giữa POS và Customer Web ngay khi thanh toán xong.
 - [x] **Trừ kho tự động theo công thức (SAGA Pattern):** Lắng nghe sự kiện `order_completed` qua RabbitMQ, trừ nguyên vật liệu bằng TypeORM Transaction, tự động rollback nếu thiếu hàng.
@@ -134,13 +145,13 @@ Toàn bộ nhân sự tại quầy dùng chung Kiosk chấm công tại máy POS
 > **Thao tác thử nghiệm chấm công sinh trắc học AI:**
 > 1. **Cách 1 - Chấm công trực tiếp từ Màn hình Đăng nhập (Không cần login):**
 >    - Truy cập POS Web (`http://localhost:5175`).
->    - Nhấp nút viền cam **"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"** bên dưới form đăng nhập.
+>    - Nhấp nút viền xanh nét đứt **"⏰ Chấm công Kiosk (Nhận diện khuôn mặt)"** bên dưới form đăng nhập.
 >    - Kiosk mở camera nhận diện: Chọn nhân viên `NV01`, nhìn vào camera để xác thực khuôn mặt (hoặc nhập PIN `1234`), bấm **"Vào ca"** / **"Tan ca"**. Modal tự động lưu ảnh snapshot và đóng lại, quay về form login.
 > 2. **Cách 2 - Chấm công 1-chạm từ màn hình Thu ngân bán hàng:**
 >    - Đăng nhập POS (`admin` hoặc `thungancn1`).
->    - Nhấp nút **"⏰ Chấm công Kiosk"** trực tiếp trên thanh Header (nằm cạnh tên Thu ngân).
+>    - Nhấp nút **"⏰ Chấm công Kiosk"** trực tiếp trên thanh Top Header hoặc mở từ Side Menu Drawer (☰).
 > 3. **Đăng ký khuôn mặt mới:**
->    - Bấm Menu tiện ích -> "Quản lý Nhân sự & Bảng Công" -> Chọn Tab **"👥 Hồ sơ Nhân viên & Sinh trắc học"**.
+>    - Bấm nút Menu (☰) ở góc trái Header -> "Quản lý Nhân sự & Bảng Công" -> Chọn Tab **"👥 Hồ sơ Nhân viên & Sinh trắc học"**.
 >    - Khi bấm "Thêm nhân viên", hệ thống tự động sinh mã `NV04` (khóa read-only).
 >    - Bấm nút **"Đăng ký mặt"** cho nhân viên, mở camera chụp khuôn mặt để hệ thống trích xuất vector 128 chiều và lưu trữ.
 
@@ -160,14 +171,20 @@ Sau khi các Container `Started`, mở 3 tab trình duyệt để mô phỏng th
    - Bếp bấm "Bắt đầu làm" -> "Hoàn thành" từng món (POS sẽ nhận được Toast thông báo `ITEM_READY`).
 3. **Thu ngân thao tác và thanh toán tại quầy (POS):** `http://localhost:5175`
    - Đăng nhập `thungancn1` (mật khẩu: `123456`). Modal chọn ca hiển thị gợi ý thông minh ca đang diễn ra (`Ca 1: 06:00 - 14:00` hoặc `Ca 2: 14:00 - 22:00`), nhập số tiền nhận bàn giao đầu ca.
-   - Chuyển sang Tab "Sơ đồ bàn", Bàn 5 đổi sang màu cam (Đang phục vụ).
+   - Chuyển sang Tab "Sơ đồ bàn", Bàn 5 đổi sang màu xanh dương (Đang phục vụ).
    - Nhấp vào Bàn 5: Hiển thị đầy đủ danh sách món gộp từ các đợt gọi.
    - Nhập chiết khấu (nếu có) -> Bấm "Thanh toán bàn này".
    - Chọn Tiền mặt (nhập tiền khách đưa / chọn mệnh giá nhanh) hoặc Chuyển khoản VietQR PayOS -> Bấm "Xác nhận".
    - Hóa đơn nhiệt (80mm) hiển thị trọn vẹn toàn bộ món của tất cả đợt gọi để in.
-   - **Realtime Sync:** Bàn 5 trên POS chuyển về màu xanh (Trống); điện thoại khách hàng tự động đóng modal và giải phóng bàn ăn.
+   - **Realtime Sync:** Bàn 5 trên POS chuyển về màu xám nhạt (Trống); điện thoại khách hàng tự động đóng modal và giải phóng bàn ăn.
    - Chuyển sang Tab "Quản lý Kho", số lượng nguyên liệu tự động bị trừ ngầm qua hệ thống RabbitMQ (Transactional SAGA).
    - Khi hết ca, bấm Menu tiện ích -> "Báo cáo kết ca" (`ShiftSummaryModal`) để kiểm kê tiền két 3 chiều và in phiếu bàn giao kết ca 80mm.
+4. **Thử nghiệm Lưu & Phục hồi Hóa đơn tạm tính (Hold Orders):**
+   - Tại Tab "Bán hàng", chọn một vài món vào giỏ hàng (kèm Size, Topping, Chiết khấu).
+   - Bấm nút **[💾 Lưu tạm]** ở đáy giỏ hàng: Giỏ hàng được làm sạch tức thì, hệ thống tự sinh mã `#TAM-01`, lưu vào `localStorage.pos_held_orders`, và badge **[📄 Đơn tạm tính (1)]** trên Header nhấp nháy xanh `animate-pulse`.
+   - Thu ngân có thể phục vụ bán hàng cho khách tiếp theo bình thường.
+   - Nhấp vào badge **[📄 Đơn tạm tính (1)]** trên Top Header hoặc chọn "Hóa đơn tạm tính" từ Side Menu Drawer để mở Drawer từ cạnh phải.
+   - Bấm **[↩ Phục hồi đơn]**: Toàn bộ món, chiết khấu và tổng tiền được tải lại trọn vẹn vào giỏ; nếu giỏ đang có món, hệ thống hiển thị modal cảnh báo xác nhận ghi đè an toàn.
 
 ---
 
