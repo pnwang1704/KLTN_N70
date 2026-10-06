@@ -75,6 +75,10 @@
 | **UC28** | Chuẩn hóa Giao diện Tối ưu Thao tác Vận hành Quầy | POS Web | **ĐÃ HOÀN THÀNH** | Loại bỏ toàn bộ các chuỗi placeholder gây hiểu lầm trong modal Chi tiền mặt (`ExpenseModal.tsx`), tự động reset rỗng form khi mở. Chuẩn hóa Dropdown Menu trên Header và Side Drawer dạng Flex-row 1 dòng, loại bỏ text mô tả phụ màu xám, tạo cảm giác chuyên nghiệp, tinh giản và tránh phân tâm cho thu ngân. |
 | **UC29** | Lưu & Quản lý Hóa đơn Tạm tính (Hold / Draft Orders) | POS Web | **ĐÃ HOÀN THÀNH** | Tích hợp nút `[ 💾 Lưu tạm ]` tại chân giỏ hàng `OrderPanel.tsx` (tự động sinh mã `#TAM-01`, `#TAM-02`..., lưu `localStorage` `pos_held_orders`, clear giỏ và bật toast). Nút Badge `[ 📄 Đơn tạm tính (N) ]` trên Top Header nhấp nháy `animate-pulse` khi $N > 0$. Slide Drawer `HeldOrdersDrawer.tsx` trượt từ cạnh phải hỗ trợ: xem chi tiết món, tổng tiền xanh đậm in đậm, phục hồi đơn vào giỏ kèm cảnh báo ghi đè nếu giỏ đang có món, hủy 1 đơn hoặc hủy tất cả đơn tạm. |
 | **UC30** | Chuẩn hóa Bảng màu CukCuk POS & Khắc phục Unit Test RolesGuard | POS Web / Gateway | **ĐÃ HOÀN THÀNH** | Refactor 100% mã nguồn `frontend/pos-web` từ Cam/Hổ phách sang tông Xanh dương CukCuk (`#0070ba`, `blue-600`, `sky-600`) & Trắng sáng (`bg-white`, `bg-zinc-50`). Tinh chỉnh `RolesGuard` trong `api-gateway` ném `ForbiddenException('No role found')` chuẩn NestJS khi request không có user/role, đảm bảo 100% bộ Jest Unit Test (`roles.guard.spec.ts`) vượt qua. |
+| **UC31** | Gom Traffic Single-Domain & Proxy WebSocket HTTP Upgrade | API Gateway / POS Web | **ĐÃ HOÀN THÀNH** | Tích hợp `http-proxy-middleware` tại API Gateway (Port 3000) lắng nghe và chuyển tiếp toàn bộ request `/socket.io` sang `order-service:3004`. Kích hoạt cơ chế HTTP Upgrade (`server.on('upgrade')`), cho phép client kết nối REST và WebSocket qua một domain/port duy nhất, tối ưu 100% cho mô hình ngrok Single Tunnel và triển khai đám mây Vercel. |
+| **UC32** | Mock & Decoupled Fallback cho Product & Branch Service | API Gateway / POS Web | **ĐÃ HOÀN THÀNH** | Thiết lập các Mock Controller (`/products`, `/categories`, `/toppings`, `/branches`) tại API Gateway với dữ liệu thực đơn chuẩn F&B và `branchId = "1"`. Đảm bảo POS Web và Customer Web hoạt động mượt mà, độc lập, không bị chặn đứng bởi mã lỗi 502/500 khi hai service backend này chưa tách độc lập. |
+| **UC33** | Tự động Chốt Phiên Chấm công Cũ >16h & Chuẩn hóa Kiosk Exception | Order / API Gateway | **ĐÃ HOÀN THÀNH** | Bổ sung logic tự động chốt phiên cũ (`checkOutAt = checkInAt + 8h`, note `[Tự động chốt do phiên quá 16h]`) khi nhân viên quên check-out ngày hôm trước, cho phép check-in ca mới ngay lập tức. Cột `checkInPhoto` / `checkOutPhoto` chuyển sang Nullable. Cải tiến `RpcExceptionFilter` tại Gateway bóc tách đúng `statusCode` HTTP (400, 404) thay vì trả 500. |
+| **UC34** | Triển khai Phân tán (Distributed Hybrid Deployment) & Docker Sẵn sàng | DevOps / Toàn hệ thống | **ĐÃ HOÀN THÀNH** | Hỗ trợ mô hình kết hợp: Backend & DB chạy Docker Compose (VPS hoặc Localhost), Frontend (`pos-web`) chạy trên Vercel Edge CDN kết nối qua API Gateway duy nhất. Chuẩn hóa Dockerfile tách biệt cache, cấu hình Named Volumes bền vững, và tài liệu hướng dẫn triển khai chi tiết (`DEPLOYMENT_GUIDE.md`). |
 
 ---
 
@@ -218,3 +222,30 @@
   - Cập nhật tường minh trong `roles.guard.ts`: Nếu không tìm thấy đối tượng `user` hoặc không có thuộc tính `role` trong request, guard chủ động ném `throw new ForbiddenException('No role found')`.
   - Nếu role không nằm trong mảng roles được cấp phép, ném `throw new ForbiddenException('User does not have the required role')`.
   - Đảm bảo 100% các bài kiểm thử đơn vị (`roles.guard.spec.ts`) vượt qua kiểm tra nghiêm ngặt mà vẫn duy trì cơ chế bảo vệ phân quyền tuyệt đối trong môi trường sản xuất.
+
+### Quyết định 19: Kiến trúc Gom Traffic Single-Domain qua API Gateway bằng `http-proxy-middleware`
+* **Bối cảnh:** Khi triển khai hệ thống thử nghiệm hoặc sản xuất, Frontend (`pos-web`) được đưa lên dịch vụ CDN/Serverless (Vercel) trong khi Backend và Database chạy Docker Compose trên VPS hoặc Localhost kết nối qua ngrok.
+* **Vấn đề:** Gói dịch vụ miễn phí của ngrok chỉ cung cấp 1 domain công khai duy nhất (Single Static Domain). Tuy nhiên, kiến trúc ban đầu tách rời: REST API đi qua Gateway (Port 3000), còn WebSocket Socket.IO lại kết nối thẳng vào Order Service (Port 3004). Việc mở 2 tunnel ngrok song song vừa vi phạm giới hạn tài khoản, vừa phức tạp hóa việc quản lý SSL/TLS và cấu hình CORS trên trình duyệt máy POS.
+* **Giải pháp Kỹ thuật:**
+  1. Tích hợp `http-proxy-middleware` trực tiếp tại `api-gateway/src/main.ts` để chặn và chuyển tiếp toàn bộ đường dẫn `/socket.io`.
+  2. Bắt buộc sử dụng cú pháp `pathFilter: '/socket.io'` kết hợp `app.use(socketProxy)` thay vì `app.use('/socket.io', socketProxy)` để tránh lỗi cắt mất prefix đường dẫn (URL stripping) của Express, bảo toàn 100% đường dẫn `/socket.io/?EIO=4&transport=websocket`.
+  3. Lắng nghe sự kiện HTTP Upgrade của Node.js HTTP Server (`server.on('upgrade', socketProxy.upgrade)`) để chuyển tiếp mượt mà kết nối WebSocket hai chiều.
+  4. Phía Client (`pos-web`), các hook `useSocket` và component sử dụng `VITE_SOCKET_URL || VITE_API_GATEWAY_URL`. Nhờ vậy, chỉ cần duy nhất 1 biến môi trường `VITE_API_GATEWAY_URL` là toàn bộ traffic REST và WebSocket đều được thông suốt.
+
+### Quyết định 20: Cơ chế Decoupled Mock Fallback cho Product & Branch Service tại API Gateway
+* **Bối cảnh:** Trong lộ trình phát triển Microservices, các dịch vụ `product-service` và `branch-service` đang trong quá trình hoàn thiện cấu trúc độc lập.
+* **Vấn đề:** Khi khởi chạy toàn diện POS Web, các request lấy danh mục món ăn (`GET /categories`), danh sách món (`GET /products`), danh sách topping (`GET /toppings`), và danh sách chi nhánh (`GET /branches`) nếu gọi vào service chưa sẵn sàng sẽ gây lỗi HTTP 502/500 làm trắng trang hoặc treo lưới bán hàng.
+* **Giải pháp Kỹ thuật:**
+  1. Xây dựng `ProductController` và `BranchController` tại `api-gateway` hoạt động như một tầng Mock Adapter tạm thời.
+  2. Cung cấp dữ liệu chuẩn F&B: 5 danh mục (Trà sữa, Cà phê, Trà hoa quả...), 8 món đồ uống kèm kích thước Size M/L, 4 loại topping và chi nhánh mặc định `branchId = "1"`.
+  3. Khi các backend microservices chính thức hoàn thiện cơ chế RabbitMQ RPC hoặc gRPC, API Gateway chỉ cần chuyển đổi logic nội bộ trong các controller này sang ClientProxy mà không làm thay đổi bất kỳ dòng mã nào ở tầng Frontend.
+
+### Quyết định 21: Tự động chốt ca điểm danh quá hạn (>16h) và Hoàn thiện Exception Filter cho Kiosk Chấm công
+* **Bối cảnh:** Nhân viên quầy kết thúc ca làm việc nhưng quên bấm "Tan ca (Check-out)". Ngày hôm sau khi đến cửa hàng mở Kiosk check-in ca mới, hệ thống ném ngoại lệ chặn lại với thông báo *"Nhân viên đã vào ca trước đó nhưng chưa hoàn tất tan ca"*.
+* **Vấn đề:** 
+  1. Nhân viên bị kẹt vĩnh viễn ở trạng thái "đang trong ca", không thể check-in vào ca mới, buộc quản lý phải can thiệp thủ công vào database.
+  2. Ngoại lệ từ Microservice gửi qua RabbitMQ RPC trước đây bị `RpcExceptionFilter` tại API Gateway bắt và bao bọc thành mã lỗi `500 Internal Server Error`, khiến màn hình Kiosk báo lỗi hệ thống chung chung thay vì thông báo lỗi nghiệp vụ rõ ràng cho nhân viên.
+* **Giải pháp Kỹ thuật:**
+  1. **Tự động Chốt Phiên Quá Hạn (Stale Session Auto-Close):** Trong `attendance.service.ts`, trước khi kiểm tra bản ghi chưa check-out, hệ thống kiểm tra khoảng cách thời gian giữa thời điểm hiện tại và `checkInAt`. Nếu $\Delta t > 16\text{ giờ}$, hệ thống tự động cập nhật bản ghi cũ: gán `checkOutAt = checkInAt + 8h`, tính `workingHours = 8.0`, ghi chú trạng thái `[Tự động chốt do phiên quá 16h]`, và cho phép nhân viên check-in phiên mới bình thường.
+  2. **Nullable Snapshot Photo:** Chuyển đổi thuộc tính `checkInPhoto` và `checkOutPhoto` sang nullable (`@IsOptional()`), cho phép lưu trữ an toàn khi nhân viên điểm danh bằng mã PIN hoặc khi webcam gặp sự cố nhẹ.
+  3. **Chuẩn hóa RpcExceptionFilter:** Cải tiến filter tại Gateway bóc tách trực tiếp mã `statusCode` từ payload ngoại lệ của RabbitMQ (`error.status` hoặc `error.statusCode`), phản hồi chính xác mã `400 Bad Request` hoặc `404 Not Found` kèm thông điệp nghiệp vụ trực quan lên giao diện Kiosk.

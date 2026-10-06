@@ -78,9 +78,10 @@ Toàn bộ hệ thống chạy ngầm trong một mạng nội bộ (`app-networ
 
 | Thành phần | Công nghệ | Container Name | Port ngoài (Host) | Port trong | Named Persistent Volume |
 | :--- | :--- | :--- | :--- | :--- | :--- |
+| :--- | :--- | :--- | :--- | :--- | :--- |
 | **RabbitMQ Management** | RabbitMQ | `fnb_rabbitmq` | `15672` (UI), `5672` | 15672, 5672 | `rabbitmq_data` |
-| **API Gateway** | NestJS | `fnb_api_gateway` | **`3000`** | 3000 | - |
-| **Order Service (Socket)** | NestJS | `fnb_order_service` | **`3004`** | 3004 | - |
+| **API Gateway** | NestJS | `fnb_api_gateway` | **`3000`** | 3000 | - (Hỗ trợ REST API & WebSocket Proxy `/socket.io`) |
+| **Order Service (Socket)** | NestJS | `fnb_order_service` | **`3004`** | 3004 | - (Được proxy qua Gateway port 3000) |
 | **Auth Database** | PostgreSQL | `fnb_postgres_auth` | `5432` | 5432 | `postgres_auth_data` |
 | **Product Database** | PostgreSQL | `fnb_postgres_product`| `5434` | 5432 | `postgres_product_data` |
 | **Order Database** | PostgreSQL | `fnb_postgres_order` | `5435` | 5432 | `postgres_order_data` |
@@ -104,24 +105,42 @@ frontend/pos-web/public/models/
 ├── face_recognition_model-weights_manifest.json & .bin (Mô hình trích xuất vector 128 chiều)
 └── tiny_face_detector_model-weights_manifest.json & .bin
 ```
-*(Thư mục này được mount trực tiếp hoặc copy vào static assets của Nginx khi build Docker container).*
+*(Thư mục này được git track đầy đủ và tự động tải lên Vercel Edge CDN hoặc đóng gói vào container Nginx).*
 
-### 2. Khởi chạy bằng Docker Compose (Khuyên dùng)
-Bạn không cần cài đặt Node.js hay cấu hình Database thủ công. Chỉ cần chạy duy nhất lệnh sau tại thư mục gốc:
+### 2. Các Mô hình Khởi chạy Hệ thống
 
+#### 🔹 Mô hình 1: Chạy Cục bộ Toàn diện (Full Local Stack - Docker Compose)
+Dành cho kiểm thử hoặc phát triển toàn bộ hệ thống trên một máy tính:
 ```bash
-docker compose up --build -d
+docker compose up -d
 ```
+*(Hệ thống có cơ chế **Healthcheck** tự động chờ Database & RabbitMQ lên sóng mới khởi động Backend).*
 
-*(Quá trình này có thể mất 1-3 phút để biên dịch toàn bộ Microservices và Frontend. Hệ thống có cơ chế **Healthcheck** tự động chờ Database & RabbitMQ lên sóng mới khởi động Backend).*
+#### 🔹 Mô hình 2: Triển khai Phân tán Production (Backend VPS + Frontend Vercel)
+Dành cho môi trường sản xuất thực tế:
+- **Backend & Database trên VPS:**
+  ```bash
+  chmod +x scripts/init-multiple-dbs.sh
+  docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
+  ```
+- **Frontend `pos-web` trên Vercel:**
+  - Nhập repository vào Vercel, chọn Root Directory là `frontend/pos-web`.
+  - Khai báo Environment Variable: `VITE_API_GATEWAY_URL = https://api.yourdomain.com`.
+  - Xem chi tiết tại [Hướng dẫn Triển khai Hệ thống Phân tán (docs/DEPLOYMENT_GUIDE.md)](docs/DEPLOYMENT_GUIDE.md).
 
-### 3. Cấu hình Biến Môi Trường (Tùy chọn)
-Để luồng thanh toán tự động qua PayOS hoạt động, bạn có thể bổ sung 3 biến môi trường vào file `.env` tại thư mục gốc hoặc API Gateway:
-```env
-PAYOS_CLIENT_ID=your_client_id
-PAYOS_API_KEY=your_api_key
-PAYOS_CHECKSUM_KEY=your_checksum_key
+#### 🔹 Mô hình 3: Thử nghiệm ngrok (Backend Local + Frontend Vercel)
+Nhờ tính năng **Reverse Proxy WebSocket** tại API Gateway, bạn **chỉ cần mở DUY NHẤT 1 tunnel ngrok tới cổng 3000**:
+```bash
+ngrok http 3000
 ```
+- Trên Vercel, chỉ cần đặt: `VITE_API_GATEWAY_URL = https://your-domain.ngrok-free.app`.
+- Toàn bộ cuộc gọi REST API và kết nối WebSocket Socket.IO thời gian thực tự động đi chung qua domain ngrok này!
+
+### 3. Cấu hình Biến Môi Trường (`.env`)
+Hệ thống cung cấp file mẫu `.env.production.example` và tự động đọc các biến cấu hình từ `.env`:
+- `JWT_SECRET`: Khóa bí mật ký phát token (mặc định: `super-secret-key`, đồng bộ giữa Gateway và Auth Service).
+- `ORDER_SERVICE_URL`: URL nội bộ proxy WebSocket (`http://order-service:3004` trong Docker).
+- `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`: Cổng thanh toán VietQR PayOS.
 
 ---
 
@@ -194,12 +213,16 @@ Hệ thống sử dụng cơ chế Multi-stage build cho Docker.
 Khi chạy hoặc phát triển độc lập từng service:
 ```bash
 # Cài đặt dependencies cho từng module
+npm install --prefix services/auth-service
 npm install --prefix services/order-service
+npm install --prefix services/inventory-service
 npm install --prefix api-gateway
 npm install --prefix frontend/pos-web
 
 # Build kiểm tra mã nguồn
+npm run build --prefix services/auth-service
 npm run build --prefix services/order-service
+npm run build --prefix services/inventory-service
 npm run build --prefix api-gateway
 npm run build --prefix frontend/pos-web
 ```
@@ -209,6 +232,7 @@ npm run build --prefix frontend/pos-web
 ## 📚 Tài liệu Kỹ thuật Chi tiết
 
 Vui lòng tham khảo thư mục `docs/` để biết thêm chi tiết về kiến trúc:
+- [Hướng dẫn Triển khai Hệ thống Phân tán (docs/DEPLOYMENT_GUIDE.md)](docs/DEPLOYMENT_GUIDE.md)
 - [Kiến trúc Hệ thống (docs/ARCHITECTURE.md)](docs/ARCHITECTURE.md)
 - [Tài liệu API (docs/API_DOCUMENTATION.md)](docs/API_DOCUMENTATION.md)
 - [Luồng Hoạt động E2E (docs/E2E_WORKFLOWS.md)](docs/E2E_WORKFLOWS.md)

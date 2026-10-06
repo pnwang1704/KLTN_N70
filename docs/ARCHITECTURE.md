@@ -415,3 +415,43 @@ Nhằm tối ưu hóa công thái học thị giác (visual ergonomics) và gi�
 | **Neutral Border** | `border-zinc-200` / `border-slate-200` | Đường phân cách danh mục, viền ô nhập liệu, đường chia giỏ hàng. |
 | **Text Primary & Muted** | `text-zinc-900` / `text-zinc-500` | Chữ tiêu đề đậm và chữ phụ chú rõ ràng, tương phản cao trên nền trắng. |
 
+---
+
+## 10. Kiến Trúc Gom Traffic Single-Domain & Triển Khai Phân Tán (Single-Domain Proxy & Distributed Deployment)
+
+Nhằm phục vụ mô hình triển khai phân tán (Frontend trên Vercel Edge CDN, Backend & Databases trên VPS hoặc máy phát triển kết nối qua ngrok), hệ thống áp dụng cơ chế Gom Traffic toàn diện:
+
+```mermaid
+graph TD
+    Client["Client Browser (Vercel SPA: pos-web)"]
+    Gateway["API Gateway (Port 3000)<br/>Single Entry Point"]
+    OrderSvc["Order Service (Port 3004)"]
+    AuthSvc["Auth Service"]
+    InvenSvc["Inventory Service"]
+
+    Client -->|"HTTP REST API (GET, POST, PUT, DELETE)"| Gateway
+    Client -->|"WebSocket Handshake & Upgrade (/socket.io)"| Gateway
+
+    Gateway -->|"TCP RPC via RabbitMQ"| AuthSvc
+    Gateway -->|"TCP RPC via RabbitMQ"| OrderSvc
+    Gateway -->|"TCP RPC via RabbitMQ"| InvenSvc
+
+    Gateway -.->|"HTTP Long-Polling & WebSocket Upgrade Proxy (/socket.io)"| OrderSvc
+```
+
+### 10.1. Cơ Chế Reverse Proxy WebSocket tại API Gateway
+- **Single-Port Architecture:** Thay vì buộc Frontend phải mở 2 kết nối tới 2 domain hoặc 2 port khác nhau (`:3000` cho REST và `:3004` cho Socket), API Gateway tích hợp `http-proxy-middleware` để tiếp nhận toàn bộ request tại đường dẫn `/socket.io`.
+- **Hỗ trợ HTTP Upgrade:** Khi client khởi tạo bắt tay nâng cấp lên WebSocket protocol (`Connection: Upgrade`, `Upgrade: websocket`), máy chủ HTTP của Gateway (`server.on('upgrade', ...)`) lập tức ủy thác socket kết nối sang `order-service:3004`.
+- **Lợi ích ngrok Free:** Người dùng chỉ cần mở 1 tunnel duy nhất (`ngrok http 3000`), không cần tài khoản trả phí hay mở nhiều domain.
+- **Client Auto-Fallback:** Phía Frontend `pos-web` tự động dùng chung `VITE_API_GATEWAY_URL` khi `VITE_SOCKET_URL` không được cấu hình riêng biệt.
+
+### 10.2. Kiến Trúc Mock & Fallback (Decoupled Readiness)
+Để đảm bảo các chức năng bán hàng POS không bị gián đoạn khi các service vệ tinh (`product-service`, `branch-service`) chưa triển khai độc lập:
+1. **Product Controller Mock tại Gateway:** Xử lý trực tiếp các tuyến đường `@Public() /products`, `/products/categories`, `/products/toppings`, trả về danh mục và món ăn demo đầy đủ.
+2. **Branch Controller Mock & Default Branch:** Tuyến đường `@Public() /branches` trả về Chi nhánh 1 mặc định; `JwtAuthGuard` và `AuthService` tự động gán fallback `branchId = "1"` cho người dùng chưa có chi nhánh cụ thể.
+3. **CORS Mở Rộng:** Whitelist tự động cho phép `*.vercel.app`, `*.ngrok-free.app`, `*.ngrok.io` cùng danh sách `FRONTEND_URL` tùy chỉnh.
+
+### 10.3. Cơ Chế Tự Động Chốt Ca Điểm Danh (Auto-close Stale Session)
+- Khi nhân viên quên hoàn tất tan ca (Check-out) ở ngày hôm trước, `AttendanceService.checkIn()` tự động phát hiện phiên làm việc cũ (>16 giờ hoặc khác ngày), chốt giờ ra mặc định và cho phép nhân viên vào ca mới bình thường của ngày hôm nay.
+- Bộ lọc `RpcExceptionFilter` tại API Gateway bắt toàn bộ exception từ microservice qua RabbitMQ, ném về mã lỗi HTTP chuẩn (400, 404) cùng thông báo tiếng Việt chi tiết lên giao diện người dùng.
+
