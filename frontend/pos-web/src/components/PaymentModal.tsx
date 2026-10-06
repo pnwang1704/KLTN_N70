@@ -104,8 +104,13 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
     const userStr = localStorage.getItem('pos_user');
     const user = userStr ? JSON.parse(userStr) : null;
     const branchId = user?.branchId || 1;
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3004';
-    const socket = io(socketUrl);
+    const socketUrl =
+      import.meta.env.VITE_SOCKET_URL ||
+      import.meta.env.VITE_API_GATEWAY_URL ||
+      'http://localhost:3000';
+    const socket = io(socketUrl, {
+      transports: ['websocket', 'polling'],
+    });
 
     socket.on('connect', () => {
       socket.emit('joinBranchRoom', branchId.toString());
