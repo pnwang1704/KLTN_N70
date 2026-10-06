@@ -1,0 +1,142 @@
+version: '3.8'
+
+networks:
+  pos-network:
+    driver: bridge
+
+services:
+  # ==============================================================================
+  # 1. HẠ TẦNG DỮ LIỆU & MESSAGE BROKER (INFRASTRUCTURE)
+  # ==============================================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: fnb_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_MULTIPLE_DATABASES: auth_db,order_db,inventory_db
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ./scripts/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+    networks:
+      - pos-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: fnb_rabbitmq_prod
+    restart: always
+    ports:
+      # Cổng quản trị RabbitMQ (Có thể đóng hoặc mở nếu cần kiểm tra)
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-password}
+    volumes:
+      - rabbitmq_prod_data:/var/lib/rabbitmq
+    networks:
+      - pos-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==============================================================================
+  # 2. CÁC DỊCH VỤ MICROSERVICES NỘI BỘ (INTERNAL SERVICES)
+  # ==============================================================================
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: fnb_auth_service_prod
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER:-user}:${RABBITMQ_DEFAULT_PASS:-password}@rabbitmq:5672
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/auth_db
+      - JWT_SECRET=${JWT_SECRET:-SECRET_KEY_FOR_JWT_KLTN}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - pos-network
+
+  order-service:
+    build:
+      context: ./services/order-service
+      dockerfile: Dockerfile
+    container_name: fnb_order_service_prod
+    restart: always
+    ports:
+      # Mở cổng Socket.IO Realtime Gateway cho Frontend kết nối
+      - "${ORDER_SERVICE_PORT:-3004}:3004"
+    environment:
+      - NODE_ENV=production
+      - PORT=3004
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER:-user}:${RABBITMQ_DEFAULT_PASS:-password}@rabbitmq:5672
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/order_db
+      - FRONTEND_URL=${FRONTEND_URL:-*}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - pos-network
+
+  inventory-service:
+    build:
+      context: ./services/inventory-service
+      dockerfile: Dockerfile
+    container_name: fnb_inventory_service_prod
+    restart: always
+    environment:
+      - NODE_ENV=production
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER:-user}:${RABBITMQ_DEFAULT_PASS:-password}@rabbitmq:5672
+      - DATABASE_URL=postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/inventory_db
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - pos-network
+
+  # ==============================================================================
+  # 3. CỔNG TIẾP NHẬN YÊU CẦU DUY NHẤT RA HOST (API GATEWAY)
+  # ==============================================================================
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: fnb_api_gateway_prod
+    restart: always
+    ports:
+      - "${API_GATEWAY_PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - RABBITMQ_URL=amqp://${RABBITMQ_DEFAULT_USER:-user}:${RABBITMQ_DEFAULT_PASS:-password}@rabbitmq:5672
+      - ORDER_SERVICE_URL=${ORDER_SERVICE_URL:-http://order-service:3004}
+      - JWT_SECRET=${JWT_SECRET:-SECRET_KEY_FOR_JWT_KLTN}
+      - FRONTEND_URL=${FRONTEND_URL:-}
+      - PAYOS_CLIENT_ID=${PAYOS_CLIENT_ID:-}
+      - PAYOS_API_KEY=${PAYOS_API_KEY:-}
+      - PAYOS_CHECKSUM_KEY=${PAYOS_CHECKSUM_KEY:-}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pos-network
+
+volumes:
+  postgres_prod_data:
+  rabbitmq_prod_data:
