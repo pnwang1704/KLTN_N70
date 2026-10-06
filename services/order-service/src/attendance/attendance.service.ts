@@ -85,6 +85,8 @@ export class AttendanceService {
       throw new BadRequestException('Mã PIN xác thực không chính xác');
     }
 
+    const now = new Date();
+
     // Check if employee already has an open check-in (not checked out yet)
     const openAttendance = await this.attendanceRepository.findOne({
       where: { employeeId: employee.id, checkOutAt: IsNull() },
@@ -92,16 +94,27 @@ export class AttendanceService {
     });
 
     if (openAttendance) {
-      const inTimeStr = new Date(openAttendance.checkInAt).toLocaleTimeString('vi-VN', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      throw new BadRequestException(
-        `Nhân viên ${employee.fullName} (${employee.employeeCode}) đã vào ca lúc ${inTimeStr} và chưa hoàn tất tan ca (Check-out).`,
-      );
-    }
+      const checkInDate = new Date(openAttendance.checkInAt);
+      const isSameDay =
+        checkInDate.getFullYear() === now.getFullYear() &&
+        checkInDate.getMonth() === now.getMonth() &&
+        checkInDate.getDate() === now.getDate();
 
-    const now = new Date();
+      const diffHours = (now.getTime() - checkInDate.getTime()) / (1000 * 60 * 60);
+      if (!isSameDay || diffHours > 16) {
+        // Tự động chốt ca cũ từ ngày trước để tránh kẹt trạng thái vào ca mới
+        openAttendance.checkOutAt = new Date(checkInDate.getTime() + 8 * 60 * 60 * 1000);
+        await this.attendanceRepository.save(openAttendance);
+      } else {
+        const inTimeStr = checkInDate.toLocaleTimeString('vi-VN', {
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+        throw new BadRequestException(
+          `Nhân viên ${employee.fullName} (${employee.employeeCode}) đã vào ca lúc ${inTimeStr} và chưa hoàn tất tan ca (Check-out).`,
+        );
+      }
+    }
 
     // Determine shift
     const activeShifts = await this.shiftService.findAll({
@@ -126,7 +139,7 @@ export class AttendanceService {
     attendance.shiftId = currentShift.id || null;
     attendance.shiftCode = currentShift.code;
     attendance.checkInAt = now;
-    attendance.checkInPhoto = dto.snapshotPhoto;
+    attendance.checkInPhoto = dto.snapshotPhoto || null;
     attendance.status = status;
     attendance.isFaceVerified = dto.faceVerified !== false;
 

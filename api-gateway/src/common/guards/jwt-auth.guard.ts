@@ -12,14 +12,19 @@ export class JwtAuthGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const jwtSecret = process.env.JWT_SECRET || 'SECRET_KEY_FOR_JWT_KLTN';
+
     if (isPublic) {
       const request = context.switchToHttp().getRequest();
       const token = this.extractTokenFromHeader(request);
       if (token) {
         try {
           const payload = await this.jwtService.verifyAsync(token, {
-            secret: 'SECRET_KEY_FOR_JWT_KLTN'
+            secret: jwtSecret
           });
+          if (payload && !payload.branchId) {
+            payload.branchId = '1';
+          }
           request['user'] = payload;
         } catch {
           // Token is optional on public endpoints
@@ -37,8 +42,11 @@ export class JwtAuthGuard implements CanActivate {
     
     try {
       const payload = await this.jwtService.verifyAsync(token, {
-        secret: 'SECRET_KEY_FOR_JWT_KLTN' // Should use config service in production
+        secret: jwtSecret
       });
+      if (payload && !payload.branchId) {
+        payload.branchId = '1';
+      }
       request['user'] = payload;
     } catch {
       throw new UnauthorizedException('Invalid or expired token');
