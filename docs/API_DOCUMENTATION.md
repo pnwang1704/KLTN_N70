@@ -36,6 +36,11 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `PATCH`| `/orders/item-status` | `order-service` | `KITCHEN`, `ADMIN` | Cập nhật trạng thái từng món ăn trên màn hình KDS (`PENDING` -> `IN_PROGRESS` -> `COMPLETED`) (`200 OK`). |
 | `GET`  | `/inventory` | `inventory-service` | `ADMIN`, `MANAGER` | Lấy danh sách tồn kho nguyên liệu theo chi nhánh (`200 OK`). |
 | `POST` | `/inventory/stock-in` | `inventory-service` | `ADMIN`, `MANAGER` | Nhập nguyên vật liệu vào kho chi nhánh (`201 Created`). |
+| `GET`  | `/products` | `api-gateway` (Mock) | `@Public` | Lấy danh sách sản phẩm thực đơn demo (kèm giá, size, toppings) cho lưới bán hàng POS (`200 OK`). |
+| `GET`  | `/categories` | `api-gateway` (Mock) | `@Public` | Lấy danh mục sản phẩm (Trà Sữa, Cà Phê, Đá Xay...) (`200 OK`). |
+| `GET`  | `/toppings` | `api-gateway` (Mock) | `@Public` | Lấy danh sách topping kèm đơn giá (`200 OK`). |
+| `GET`  | `/branches` | `api-gateway` (Mock) | `@Public` | Lấy danh sách chi nhánh (Mặc định Chi nhánh 1 Trung Tâm) (`200 OK`). |
+| `WS/GET`| `/socket.io` | `api-gateway` (Proxy)| `@Public` | Reverse Proxy gom traffic: Chuyển tiếp HTTP Polling và WebSocket Upgrade sang Order Service cổng 3004 (`101 Switching Protocols`, `200 OK`). |
 | `POST` | `/payments/payos/create` | `api-gateway` | `@Public` | Tạo link thanh toán VietQR động tích hợp PayOS (tự động gắn `orderCode` và số tiền chính xác sau chiết khấu) (`200 OK`). |
 | `POST` | `/payments/payos/status` | `api-gateway` | `@Public` | Polling kiểm tra trạng thái thanh toán từ PayOS qua `orderCode` (`200 OK`). |
 | `POST` | `/webhooks/payos` | `api-gateway` | `@Public` | Endpoint nhận Webhook tự động từ PayOS khi khách hàng chuyển khoản thành công (`200 OK`). |

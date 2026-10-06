@@ -446,11 +446,18 @@ sequenceDiagram
     Kiosk->>GW: POST /attendances/check-in (Public, employeeCode, branchId, snapshotPhoto, faceVerified: true)
     GW->>OS: RabbitMQ RPC: 'attendance_check_in'
     OS->>DB: Kiểm tra: Nhân viên có lượt vào ca nào chưa check-out không?
-    alt Đã vào ca và chưa check-out
-        OS-->>GW: Throw BadRequestException ("Nhân viên chưa hoàn tất tan ca")
-        GW-->>Kiosk: HTTP 400 Bad Request
-        Kiosk-->>Staff: Báo lỗi trên màn hình
-    else Chưa vào ca
+    alt Đã vào ca trước đó nhưng chưa check-out
+        alt Phiên cũ đã trôi qua > 16 giờ (Quên check-out hôm trước)
+            OS->>DB: Tự động chốt phiên cũ: checkOutAt = checkInAt + 8h, workingHours = 8.0, note = '[Tự động chốt do phiên quá 16h]'
+            Note over OS, DB: Giải phóng trạng thái kẹt ca và cho phép tiếp tục check-in ca mới
+        else Phiên cũ đang diễn ra trong vòng 16 giờ
+            OS-->>GW: Throw BadRequestException ("Nhân viên chưa hoàn tất tan ca")
+            GW-->>Kiosk: HTTP 400 Bad Request
+            Kiosk-->>Staff: Báo lỗi trên màn hình ("Bạn đang trong ca trực, vui lòng bấm Tan ca!")
+        end
+    end
+    
+    opt Được phép vào ca (chưa vào ca hoặc vừa tự động chốt phiên cũ >16h)
         OS->>DB: Lấy ca chuẩn đang diễn ra trong shifts (So khớp startTime & endTime)
         OS->>OS: So sánh giờ vào ca với (shift.startTime + gracePeriodMinutes)
         alt Đúng giờ (now <= startTime + gracePeriod)
@@ -643,6 +650,55 @@ sequenceDiagram
             Service-->>GW: Kết quả xử lý
             GW-->>Client: HTTP 200 OK / 201 Created
         end
+    end
+```
+
+---
+
+## 10. Luồng Truyền Thông Thời Gian Thực & Single-Domain WebSocket Proxy qua API Gateway
+
+Nhằm phục vụ mô hình triển khai phân tán (Frontend chạy trên Vercel Edge CDN, Backend & DB chạy Docker Compose trên VPS/Local kết nối qua ngrok Single Domain), toàn bộ traffic REST API và WebSocket Socket.IO đều được gom qua một domain và port duy nhất tại API Gateway (Port 3000).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Staff as Thu ngân / Bếp / Khách hàng
+    participant Client as POS / KDS / Customer Web (Vercel)
+    participant GW as API Gateway (Port 3000)
+    participant Proxy as http-proxy-middleware
+    participant OS as Order Service (Port 3004)
+    participant Room as Socket.IO Room (branch_1)
+
+    %% Giai đoạn 1: Bắt tay WebSocket Handshake qua API Gateway
+    Note over Client, OS: Giai đoạn 1: Kết nối WebSocket Handshake (Single Domain Port 3000)
+    Client->>GW: HTTP GET /socket.io/?EIO=4&transport=polling
+    GW->>Proxy: Nhận diện pathFilter: '/socket.io'
+    Proxy->>OS: Chuyển tiếp tới http://order-service:3004/socket.io/...
+    OS-->>Proxy: HTTP 200 OK (sid, upgrades: ['websocket'], pingInterval: 25000)
+    Proxy-->>GW: Forward response
+    GW-->>Client: Handshake Polling thành công
+
+    %% Giai đoạn 2: Nâng cấp kết nối WebSocket (HTTP Upgrade)
+    Note over Client, OS: Giai đoạn 2: Nâng cấp giao thức (HTTP Upgrade to WebSocket)
+    Client->>GW: GET /socket.io/?EIO=4&transport=websocket (Header: Upgrade: websocket)
+    GW->>GW: server.on('upgrade') kích hoạt socketProxy.upgrade(req, socket, head)
+    GW->>OS: Duplex Stream Upgrade sang ws://order-service:3004
+    OS-->>Client: HTTP 101 Switching Protocols (Kênh kết nối WebSocket 2 chiều thông suốt)
+
+    %% Giai đoạn 3: Tham gia Room Chi nhánh & Truyền nhận sự kiện
+    Note over Client, Room: Giai đoạn 3: Tham gia Room Chi nhánh & Phát/Nhận Sự kiện Realtime
+    Client->>OS: Socket Emit: 'join' (branchId: '1')
+    OS->>Room: Thêm socket client vào Room 'branch_1'
+    
+    alt Bếp hoàn thành món ăn
+        OS->>Room: Socket Emit 'ITEM_READY' (branchId: '1', item: 'Trà Sữa Matcha')
+        Room-->>Client: POS Web nhận sự kiện: Hiển thị Toast nổi & Cập nhật Chuông thông báo
+    else Thanh toán hóa đơn bàn
+        OS->>Room: Socket Emit 'table:completed' (branchId: '1', tableId: '5')
+        Room-->>Client: Customer Web: Reset giỏ hàng & đóng drawer; POS Web: Đổi màu Bàn 5 sang Trống
+    else Khách quét mã VietQR PayOS
+        OS->>Room: Socket Emit 'order:paid' (orderId: 'xxx')
+        Room-->>Client: POS Web: Tự động đóng modal thanh toán và in hóa đơn nhiệt 80mm
     end
 ```
 

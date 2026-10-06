@@ -116,7 +116,7 @@ export class AuthService implements OnModuleInit {
       sub: user.id, 
       username: user.username, 
       role: user.role, 
-      branchId: user.branchId 
+      branchId: user.branchId || '1'
     };
 
     return {
@@ -126,7 +126,7 @@ export class AuthService implements OnModuleInit {
         username: user.username,
         fullName: user.fullName,
         role: user.role,
-        branchId: user.branchId
+        branchId: user.branchId || '1'
       }
     };
   }

@@ -142,10 +142,10 @@ classDiagram
         +String shiftId FK
         +String shiftCode
         +Date checkInAt
-        +String checkInPhoto
-        +Date checkOutAt
-        +String checkOutPhoto
-        +Float workingHours
+        +String checkInPhoto (nullable)
+        +Date checkOutAt (nullable)
+        +String checkOutPhoto (nullable)
+        +Float workingHours (nullable)
         +String status
         +Boolean isFaceVerified
         +Date createdAt

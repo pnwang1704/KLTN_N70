@@ -37,7 +37,14 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
     fetchActiveOrders();
 
     // Socket.IO real-time updates for table statuses
-    const socket = io('http://localhost:3004');
+    const socket = io(
+      import.meta.env.VITE_SOCKET_URL ||
+        import.meta.env.VITE_API_GATEWAY_URL ||
+        'http://localhost:3000',
+      {
+        transports: ['websocket', 'polling'],
+      }
+    );
     socket.emit('joinBranchRoom', branchId);
 
     socket.on('NEW_ORDER_CREATED', () => {

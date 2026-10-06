@@ -13,9 +13,9 @@ export class CheckOutDto {
   @IsNotEmpty()
   branchId: string;
 
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  snapshotPhoto: string;
+  snapshotPhoto?: string;
 
   @IsOptional()
   @IsBoolean()

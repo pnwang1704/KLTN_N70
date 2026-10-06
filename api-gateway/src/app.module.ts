@@ -11,6 +11,8 @@ import { EmployeeController } from './employee.controller';
 import { AttendanceController } from './attendance.controller';
 import { PaymentController, WebhookController } from './payment.controller';
 import { PaymentService } from './payment.service';
+import { ProductController } from './product.controller';
+import { BranchController } from './branch.controller';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
@@ -19,7 +21,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
   imports: [
     JwtModule.register({
       global: true,
-      secret: 'SECRET_KEY_FOR_JWT_KLTN', // In production, use env
+      secret: process.env.JWT_SECRET || 'SECRET_KEY_FOR_JWT_KLTN',
     }),
     ClientsModule.register([
       {
@@ -100,6 +102,8 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     AttendanceController,
     PaymentController,
     WebhookController,
+    ProductController,
+    BranchController,
   ],
   providers: [
     AppService,

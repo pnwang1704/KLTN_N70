@@ -1,7 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = 'http://localhost:3004';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_GATEWAY_URL ||
+  'http://localhost:3000';
 
 export interface NotificationItem {
   id: string;
@@ -19,7 +22,9 @@ export const useSocket = (branchId: string) => {
   useEffect(() => {
     if (!branchId) return;
 
-    const newSocket = io(SOCKET_URL);
+    const newSocket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+    });
     
     newSocket.on('connect', () => {
       setIsConnected(true);

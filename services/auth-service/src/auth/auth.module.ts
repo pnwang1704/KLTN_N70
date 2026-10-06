@@ -10,7 +10,7 @@ import { User } from './entities/user.entity';
     TypeOrmModule.forFeature([User]),
     JwtModule.register({
       global: true,
-      secret: 'SECRET_KEY_FOR_JWT_KLTN', // In production, use env
+      secret: process.env.JWT_SECRET || 'SECRET_KEY_FOR_JWT_KLTN',
       signOptions: { expiresIn: '1d' },
     }),
   ],

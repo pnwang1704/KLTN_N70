@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import api from '../lib/axios';
 import { AttendanceKioskModal } from './AttendanceKioskModal';
 
 interface LoginScreenProps {
@@ -19,7 +19,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess }) => {
     setIsLoading(true);
 
     try {
-      const res = await axios.post('http://localhost:3000/auth/login', { username, password });
+      const res = await api.post('/auth/login', { username, password });
       const { accessToken, user } = res.data;
       
       // Save to local storage

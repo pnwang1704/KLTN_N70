@@ -25,8 +25,8 @@ export class Attendance {
   @Column({ type: 'timestamptz' })
   checkInAt: Date;
 
-  @Column({ type: 'text' })
-  checkInPhoto: string;
+  @Column({ type: 'text', nullable: true })
+  checkInPhoto?: string | null;
 
   @Column({ type: 'timestamptz', nullable: true })
   checkOutAt?: Date | null;
