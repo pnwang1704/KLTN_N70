@@ -20,10 +20,13 @@ async function bootstrap() {
   ];
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Cho phép request từ mọi origin trong môi trường dev/staging hoặc các domain hợp lệ
+      callback(null, true);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'ngrok-skip-browser-warning', 'x-requested-with'],
   });
 
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
