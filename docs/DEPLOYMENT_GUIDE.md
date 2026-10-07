@@ -24,20 +24,20 @@ graph TD
         RabbitMQ["RabbitMQ :5672 / :15672"]
     end
 
-    Client -->|HTTPS| Vercel
-    Client -->|REST API & WebSocket /socket.io<br/>(Port 3000 / Single Domain)| Gateway
+    Client -->|"HTTPS"| Vercel
+    Client -->|"REST API & WebSocket /socket.io (Port 3000)"| Gateway
 
-    Gateway -->|TCP Microservice| AuthSvc
-    Gateway -->|TCP Microservice| OrderSvc
-    Gateway -->|TCP Microservice| InvenSvc
-    Gateway -->|WebSocket Proxy /socket.io| OrderSvc
+    Gateway -->|"TCP Microservice"| AuthSvc
+    Gateway -->|"TCP Microservice"| OrderSvc
+    Gateway -->|"TCP Microservice"| InvenSvc
+    Gateway -->|"WebSocket Proxy /socket.io"| OrderSvc
 
-    AuthSvc -->|SQL Connection| Postgres
-    OrderSvc -->|SQL Connection| Postgres
-    InvenSvc -->|SQL Connection| Postgres
+    AuthSvc -->|"SQL Connection"| Postgres
+    OrderSvc -->|"SQL Connection"| Postgres
+    InvenSvc -->|"SQL Connection"| Postgres
 
-    OrderSvc -->|AMQP Events| RabbitMQ
-    InvenSvc -->|AMQP Events| RabbitMQ
+    OrderSvc -->|"AMQP Events"| RabbitMQ
+    InvenSvc -->|"AMQP Events"| RabbitMQ
 ```
 
 ---
