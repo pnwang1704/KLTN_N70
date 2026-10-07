@@ -23,8 +23,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
       <div className="p-4 bg-white border-b border-zinc-200 shadow-sm flex flex-col gap-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Tìm kiếm món ăn..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -40,8 +40,8 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
                 onClick={() => setActiveCategory(cat.id)}
                 className={cn(
                   "whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold transition-colors",
-                  activeCategory === cat.id 
-                    ? "bg-blue-50 text-blue-700 border border-blue-200" 
+                  activeCategory === cat.id
+                    ? "bg-blue-50 text-blue-700 border border-blue-200"
                     : "bg-white text-zinc-600 border border-zinc-200 hover:bg-zinc-50"
                 )}
               >
@@ -56,15 +56,15 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 auto-rows-max">
           {filteredProducts.map(product => (
-            <div 
+            <div
               key={product.id}
               onClick={() => onSelectProduct(product)}
               className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group flex flex-col"
             >
               <div className="aspect-square bg-zinc-100 relative overflow-hidden">
-                <img 
-                  src={product.imageUrl} 
-                  alt={product.name} 
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
                   referrerPolicy="no-referrer"
                   loading="lazy"
                   onError={(e) => {
@@ -74,7 +74,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
                       target.src = 'https://images.unsplash.com/photo-1558857563-b37cf5a228f4?auto=format&fit=crop&q=80&w=400';
                     }
                   }}
-                  className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" 
+                  className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
                 />
               </div>
               <div className="p-3 flex flex-col flex-1">
