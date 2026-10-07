@@ -18,6 +18,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, onClick }) =>
         <img 
           src={product.imageUrl} 
           alt={product.name} 
+          referrerPolicy="no-referrer"
           className="object-cover w-full h-full"
           loading="lazy"
         />

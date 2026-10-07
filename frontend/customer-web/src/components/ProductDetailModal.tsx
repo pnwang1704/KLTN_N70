@@ -76,7 +76,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({ product,
       <div className="bg-white w-full max-h-[90vh] rounded-t-3xl overflow-hidden flex flex-col animate-in slide-in-from-bottom duration-300">
         {/* Header Image */}
         <div className="relative h-48 w-full bg-zinc-100">
-          <img src={product.imageUrl} alt={product.name} className="object-cover w-full h-full" />
+          <img 
+            src={product.imageUrl} 
+            alt={product.name} 
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            className="object-cover w-full h-full" 
+          />
           <button 
             onClick={onClose}
             className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full backdrop-blur-md"

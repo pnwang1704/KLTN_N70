@@ -62,7 +62,20 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
               className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group flex flex-col"
             >
               <div className="aspect-square bg-zinc-100 relative overflow-hidden">
-                <img src={product.imageUrl} alt={product.name} className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" />
+                <img 
+                  src={product.imageUrl} 
+                  alt={product.name} 
+                  referrerPolicy="no-referrer"
+                  loading="lazy"
+                  onError={(e) => {
+                    // Fallback nếu link ảnh ngoài bị sự cố
+                    const target = e.target as HTMLImageElement;
+                    if (!target.src.includes('unsplash')) {
+                      target.src = 'https://images.unsplash.com/photo-1558857563-b37cf5a228f4?auto=format&fit=crop&q=80&w=400';
+                    }
+                  }}
+                  className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300" 
+                />
               </div>
               <div className="p-3 flex flex-col flex-1">
                 <h3 className="font-semibold text-zinc-900 text-sm line-clamp-2 mb-1">{product.name}</h3>

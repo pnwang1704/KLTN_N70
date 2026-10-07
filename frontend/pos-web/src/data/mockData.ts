@@ -28,7 +28,7 @@ export const mockProducts: Product[] = [
     name: 'Trà Sữa Trân Châu KLTN',
     description: 'Trà sữa đậm vị trà đen, thơm béo vị sữa, best seller của quán.',
     basePrice: 35000,
-    imageUrl: 'https://images.unsplash.com/photo-1558857563-b37cf5a228f4?auto=format&fit=crop&q=80&w=400',
+    imageUrl: '/products/tra-sua-tran-chau.jpg',
     sizes: [
       { id: 'S', name: 'Size S', priceModifier: 0 },
       { id: 'M', name: 'Size M', priceModifier: 5000 },
@@ -313,7 +313,7 @@ export const mockProducts: Product[] = [
     name: 'Khoai Tây Lắc Phô Mai Giòn Rụm',
     description: 'Khoai tây cọng Bỉ chiên vàng giòn rụm phủ lớp bột phô mai thơm lừng mặn ngọt.',
     basePrice: 30000,
-    imageUrl: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&q=80&w=400',
+    imageUrl: '/products/khoai-tay-lac.jpg',
     sizes: [
       { id: 'M', name: 'Phần Vừa', priceModifier: 0 },
       { id: 'L', name: 'Phần Lớn', priceModifier: 10000 },
