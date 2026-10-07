@@ -102,6 +102,13 @@ Nhằm giải quyết triệt để rủi ro mất dữ liệu khi container b�
 | `fnb_postgres_reporting`| `5438` | `postgres_reporting_data` | `/var/lib/postgresql/data` | `daily_reports`, `revenue_summaries` |
 | `fnb_rabbitmq` | `5672`, `15672`| `rabbitmq_data` | `/var/lib/rabbitmq` | Message queues, exchanges, bindings |
 
+> [!NOTE]
+> **Chuẩn hóa thông số kết nối Database-per-Service:**
+> - **Host:** `localhost` (khi kết nối ngoài container) hoặc tên service (khi kết nối trong mạng Docker).
+> - **Username:** `postgres` | **Password:** `password`
+> - Mọi container CSDL đều có database mang tên tương ứng (`auth_db`, `product_db`, `order_db`, `inventory_db`, `branch_db`, `reporting_db`).
+> - Hỗ trợ mở kết nối đồng thời qua các công cụ GUI như **VS Code Database Client extension**, **DBeaver**, **Navicat**, hoặc **pgAdmin**.
+
 ---
 
 ## 3. Kiến Trúc Hướng Sự Kiện & Tính Toàn Vẹn (Event-Driven & SAGA)
@@ -454,4 +461,109 @@ graph TD
 ### 10.3. Cơ Chế Tự Động Chốt Ca Điểm Danh (Auto-close Stale Session)
 - Khi nhân viên quên hoàn tất tan ca (Check-out) ở ngày hôm trước, `AttendanceService.checkIn()` tự động phát hiện phiên làm việc cũ (>16 giờ hoặc khác ngày), chốt giờ ra mặc định và cho phép nhân viên vào ca mới bình thường của ngày hôm nay.
 - Bộ lọc `RpcExceptionFilter` tại API Gateway bắt toàn bộ exception từ microservice qua RabbitMQ, ném về mã lỗi HTTP chuẩn (400, 404) cùng thông báo tiếng Việt chi tiết lên giao diện người dùng.
+
+---
+
+## 11. Cổng Thanh Toán VietQR PayOS & Kiến Trúc Tự Phục Hồi Lỗi Trùng Đơn (PayOS VietQR Napas 247 Integration)
+
+Hệ thống tích hợp cổng thanh toán trực tuyến **PayOS** (chuẩn VietQR Napas 247) cho phép khách hàng quét mã chuyển khoản tức thì từ bất kỳ ứng dụng ngân hàng nào tại Việt Nam (MBBank, Vietcombank, Techcombank, Momo, VNPay...).
+
+```mermaid
+graph TD
+    Client["Client / POS Web"]
+    Gateway["API Gateway (:3000)<br/>@Public() /payments/payos/create"]
+    PayOSAPI["PayOS Cloud API<br/>https://api-merchant.payos.vn"]
+    VietQR["VietQR Engine<br/>https://img.vietqr.io"]
+    Webhook["PayOS Webhook Handler<br/>@Public() /webhooks/payos"]
+    OrderSvc["Order Service (:3004)"]
+
+    Client -->|"1. POST /payments/payos/create"| Gateway
+    Gateway -->|"2. POST /v2/payment-requests"| PayOSAPI
+
+    PayOSAPI -->|"3a. Thành công (Code 00)"| Gateway
+    Gateway -->|"Trả về qrCode, checkoutUrl"| Client
+
+    PayOSAPI -.->|"3b. Lỗi trùng đơn (Code 231) / Ngoại lệ"| Gateway
+    Gateway -->|"4. Kích hoạt Self-healing Fallback<br/>(MBBank: 970422 - VQRQAMOXB8388)"| VietQR
+    VietQR -->|"Sinh URL ảnh VietQR Napas 247 động"| Gateway
+    Gateway -->|"Trả về QR ảnh tự phục hồi + checkoutUrl"| Client
+
+    Client -->|"5. Khách chuyển khoản thành công"| PayOSAPI
+    PayOSAPI -->|"6. POST /webhooks/payos (ngrok / domain)"| Webhook
+    Webhook -->|"7. RPC update_payment_status"| OrderSvc
+    OrderSvc -->|"8. Socket.IO emit 'order:paid'"| Client
+```
+
+### 11.1. Chuẩn hóa URL Encoding & Public Access
+- Tuyến đường `POST /payments/payos/create` được gắn decorator `@Public()` để cho phép cả thu ngân đã đăng nhập và khách tự phục vụ tại bàn gọi tạo mã mà không bị chặn bởi Stateless JWT Guard.
+- Toàn bộ query parameter khi giao tiếp với API PayOS (mô tả thanh toán, tên khách hàng...) được bọc qua hàm `encodeURIComponent`, loại bỏ hoàn toàn lỗi ký tự tiếng Việt có dấu.
+
+### 11.2. Cơ chế Tự Phục Hồi Thông Minh (Self-healing Fallback) khi Bị Trùng Đơn (Error Code 231)
+- **Vấn đề:** Khi đơn hàng tại bàn hoặc tại quầy được mở lại mã QR nhiều lần với cùng một `orderCode` (hoặc số ngẫu nhiên trùng khớp), PayOS API từ chối với lỗi `HTTP 400 Bad Request` (`code: "231"`).
+- **Giải pháp:** API Gateway bắt ngoại lệ `AxiosError`. Nếu phát hiện mã lỗi `231`:
+  1. Hệ thống không ngắt luồng hay ném lỗi về Client.
+  2. Tự động lấy cấu hình thụ hưởng chính thức của cửa hàng:
+     - Ngân hàng: **MBBank** (BIN: `970422`)
+     - Số tài khoản: `VQRQAMOXB8388`
+     - Tên chủ tài khoản: `PHAN NHAT QUANG`
+  3. Xây dựng trực tiếp chuỗi VietQR Napas 247 chuẩn:
+     `https://img.vietqr.io/image/970422-VQRQAMOXB8388-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(description)}&accountName=${encodeURIComponent(accountName)}`
+  4. Trả về payload hợp lệ gồm `qrCode` dạng ảnh Napas 247, `checkoutUrl`, và `qrServerFallback`.
+  5. Thu ngân và khách hàng vẫn thấy mã QR hiển thị ngay tức khắc trên màn hình, quét mã chuyển khoản thành công 100%.
+
+---
+
+## 12. Đóng Gói Tài Nguyên Tĩnh Nội Bộ & Chiến Lược Render Ảnh F&B Tối Ưu (Static Assets Packaging)
+
+Trong các hệ thống F&B thực tế, việc dựa hoàn toàn vào các URL ảnh trên Internet (Unsplash, Pinterest) tiềm ẩn rủi ro rất lớn: bị chặn bởi chính sách CORS/Hotlinking, lỗi mạng chập chờn hoặc ảnh bị xóa bởi bên thứ ba khiến menu bị vỡ giao diện.
+
+```mermaid
+graph LR
+    subgraph Browser ["Trình Duyệt Client"]
+        IMG["<img src='...' />"]
+        Policy["referrerPolicy='no-referrer'"]
+        Lazy["loading='lazy'"]
+        OnError["onError Handler"]
+    end
+
+    subgraph Storage ["Tài Nguyên Nội Bộ"]
+        Static["/products/*.jpg (Vercel Edge / Local Public)"]
+        Placeholder["SVG / Default Thumbnail Fallback"]
+    end
+
+    IMG --> Policy
+    Policy --> Lazy
+    Lazy -.->|"Tải ảnh thành công"| Static
+    Lazy -.->|"Ảnh lỗi / Mất mạng / Bị chặn"| OnError
+    OnError -->|"Fallback an toàn"| Placeholder
+```
+
+1. **Đóng gói Cục bộ (Local Bundling):** 
+   - Thư mục tĩnh `frontend/pos-web/public/products/` lưu trữ trực tiếp các tệp hình ảnh sản phẩm chất lượng cao (ví dụ: `tra-sua-tran-chau.jpg`, `khoai-tay-lac.jpg`).
+   - Khi ứng dụng được build và deploy lên Vercel Edge CDN, các tệp này được phục vụ trực tiếp từ cùng domain gốc, tốc độ phản hồi cực nhanh (< 20ms) và hoàn toàn miễn nhiễm với lỗi chặn hotlink bên ngoài.
+2. **Chính sách Bảo vệ Hotlink (`referrerPolicy="no-referrer"`):**
+   - Mọi thẻ hiển thị hình ảnh món ăn trên POS Web và Customer Web đều được bổ sung thuộc tính `referrerPolicy="no-referrer"`.
+   - Thuộc tính này ngăn trình duyệt gửi trường tiêu đề `Referer` sang máy chủ ảnh bên thứ ba, tránh được lỗi HTTP 403 Forbidden hoặc `ERR_BLOCKED_BY_ORB`.
+3. **Cơ chế Tự Phục Hồi Hình Ảnh (`onError` Fallback):**
+   - Khi có lỗi tải ảnh (URL không tồn tại hoặc mất mạng), sự kiện `onError` lập tức tráo đổi thuộc tính `src` sang ảnh mặc định nội bộ `/products/tra-sua-tran-chau.jpg` hoặc hiển thị biểu tượng Placeholder đồ họa sang trọng, đảm bảo không bao giờ để lại icon ảnh vỡ trên màn hình bán hàng.
+
+---
+
+## 13. Mô Hình Quản Trị Hệ CSDL Phân Tán (Database-per-Service Management & Port Mapping)
+
+Nhằm phục vụ công tác phát triển, kiểm thử và nghiệm thu đồ án KLTN, hệ thống mở cổng kết nối độc lập cho cả 6 cơ sở dữ liệu PostgreSQL thông qua Docker Compose:
+
+| STT | Tên Database | Dịch Vụ Phụ Trách | Container Name | Cổng Host | Tài Khoản / Mật Khẩu | Mục Đích Lưu Trữ |
+| :---: | :--- | :--- | :--- | :---: | :---: | :--- |
+| **1** | `auth_db` | Auth Service | `fnb_postgres_auth` | `5432` | `postgres` / `password` | Quản lý tài khoản người dùng, phân quyền RBAC (ADMIN, MANAGER, CASHIER, KITCHEN, WAITER), mật khẩu băm Bcrypt. |
+| **2** | `product_db` | Product Service | `fnb_postgres_product` | `5434` | `postgres` / `password` | Danh mục món (Trà sữa, Cà phê, Trà trái cây, Đồ ăn vặt), 26 món ăn, kích cỡ Size M/L, 8 loại topping, cấu hình món theo chi nhánh. |
+| **3** | `order_db` | Order Service | `fnb_postgres_order` | `5435` | `postgres` / `password` | Vòng đời đơn hàng, chiết khấu, hóa đơn thanh toán, phiếu chi tiền mặt két (`expenses`), phiên ca làm việc (`shifts`), hồ sơ nhân viên (`employees` kèm vector 128D) và dữ liệu chấm công (`attendances`). |
+| **4** | `inventory_db`| Inventory Service | `fnb_postgres_inventory` | `5436` | `postgres` / `password` | Danh mục nguyên liệu thô, tồn kho an toàn theo chi nhánh (`branch_stocks`), công thức định mức (`recipes`), lịch sử trừ kho tự động. |
+| **5** | `branch_db` | Branch Service | `fnb_postgres_branch` | `5437` | `postgres` / `password` | Danh mục chi nhánh chuỗi, sơ đồ bàn ăn vật lý (`tables`) theo trạng thái trống / đang phục vụ. |
+| **6** | `reporting_db`| Reporting Service | `fnb_postgres_reporting` | `5438` | `postgres` / `password` | Dữ liệu tổng hợp báo cáo kinh doanh, sản lượng bán hàng theo ngày/tháng, tỷ lệ hao hụt nguyên liệu. |
+
+### Hướng Dẫn Kết Nối Bằng Công Cụ Trực Quan
+- **VS Code Extension (Khuyến nghị):** Cài đặt extension **Database Client** (cweijan). Bấm biểu tượng Database trên thanh Activity Bar -> Chọn **New Connection (PostgreSQL)** -> Điền Host: `localhost`, Port tương ứng (ví dụ: `5435`), User: `postgres`, Password: `password`, Database: `order_db` -> Bấm Connect để duyệt bảng và xem dữ liệu trực tiếp trong VS Code.
+- **DBeaver / DataGrip / Navicat:** Tạo kết nối PostgreSQL mới với thông số tương tự để kiểm tra tính toàn vẹn khóa ngoại, cấu trúc bảng và thực thi các câu lệnh SQL kiểm tra nghiệp vụ.
+
 

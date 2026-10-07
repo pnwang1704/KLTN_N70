@@ -79,6 +79,10 @@
 | **UC32** | Mock & Decoupled Fallback cho Product & Branch Service | API Gateway / POS Web | **ĐÃ HOÀN THÀNH** | Thiết lập các Mock Controller (`/products`, `/categories`, `/toppings`, `/branches`) tại API Gateway với dữ liệu thực đơn chuẩn F&B và `branchId = "1"`. Đảm bảo POS Web và Customer Web hoạt động mượt mà, độc lập, không bị chặn đứng bởi mã lỗi 502/500 khi hai service backend này chưa tách độc lập. |
 | **UC33** | Tự động Chốt Phiên Chấm công Cũ >16h & Chuẩn hóa Kiosk Exception | Order / API Gateway | **ĐÃ HOÀN THÀNH** | Bổ sung logic tự động chốt phiên cũ (`checkOutAt = checkInAt + 8h`, note `[Tự động chốt do phiên quá 16h]`) khi nhân viên quên check-out ngày hôm trước, cho phép check-in ca mới ngay lập tức. Cột `checkInPhoto` / `checkOutPhoto` chuyển sang Nullable. Cải tiến `RpcExceptionFilter` tại Gateway bóc tách đúng `statusCode` HTTP (400, 404) thay vì trả 500. |
 | **UC34** | Triển khai Phân tán (Distributed Hybrid Deployment) & Docker Sẵn sàng | DevOps / Toàn hệ thống | **ĐÃ HOÀN THÀNH** | Hỗ trợ mô hình kết hợp: Backend & DB chạy Docker Compose (VPS hoặc Localhost), Frontend (`pos-web`) chạy trên Vercel Edge CDN kết nối qua API Gateway duy nhất. Chuẩn hóa Dockerfile tách biệt cache, cấu hình Named Volumes bền vững, và tài liệu hướng dẫn triển khai chi tiết (`DEPLOYMENT_GUIDE.md`). |
+| **UC35** | Mở rộng Thực đơn Đa dạng (26 Món & 8 Topping Thực tế) | Product / Gateway / POS | **ĐÃ HOÀN THÀNH** | Mở rộng danh mục lên 26 món đồ uống & thức ăn nhanh (Trà sữa, Cà phê, Trà trái cây, Đồ ăn vặt) kèm giá cơ sở, size chuẩn M/L, và 8 loại Topping thực tế (Trân châu đen/trắng, Thạch trái cây, Thạch củ năng, Kem Cheese...). Tích hợp sẵn sàng cho POS Web và Customer Web. |
+| **UC36** | Đóng gói Tài nguyên Hình ảnh Nội bộ & Chiến lược Render Tối ưu | POS Web / Customer Web | **ĐÃ HOÀN THÀNH** | Đóng gói tài nguyên tĩnh nội bộ tại `/products/` (`tra-sua-tran-chau.jpg`, `khoai-tay-lac.jpg`), bổ sung cơ chế phòng vệ `referrerPolicy="no-referrer"`, `loading="lazy"`, và tự động fallback sang ảnh dự phòng / placeholder đồ họa khi link ngoài gặp sự cố, loại bỏ hoàn toàn hiện tượng vỡ icon ảnh. |
+| **UC37** | Cổng Thanh toán VietQR Napas 247 & PayOS Tự Phục Hồi Lỗi | Gateway / Order / POS | **ĐÃ HOÀN THÀNH** | Gắn decorator `@Public()` cho endpoint `POST /payments/payos/create`, tự động mã hóa `encodeURIComponent` query params khi gọi API PayOS, tích hợp cơ chế tự phục hồi thông tin ngân hàng thụ hưởng MBBank (`970422`, `VQRQAMOXB8388`, `PHAN NHAT QUANG`) khi gặp lỗi trùng đơn PayOS mã `231`, trả về link `checkoutUrl` và fallback QR động qua `qrserver`. |
+| **UC38** | Quản trị & Giám sát Hệ Cơ sở dữ liệu Phân tán (Database-per-Service) | DevOps / Cơ sở dữ liệu | **ĐÃ HOÀN THÀNH** | Định tuyến độc lập 6 cơ sở dữ liệu PostgreSQL (`auth_db`: 5432, `product_db`: 5434, `order_db`: 5435, `inventory_db`: 5436, `branch_db`: 5437, `reporting_db`: 5438) với Named Volumes bền vững, chuẩn hóa thông tin xác thực (`postgres`/`password`), hỗ trợ kết nối trực quan qua VS Code Database Client / DBeaver. |
 
 ---
 
@@ -249,3 +253,45 @@
   1. **Tự động Chốt Phiên Quá Hạn (Stale Session Auto-Close):** Trong `attendance.service.ts`, trước khi kiểm tra bản ghi chưa check-out, hệ thống kiểm tra khoảng cách thời gian giữa thời điểm hiện tại và `checkInAt`. Nếu $\Delta t > 16\text{ giờ}$, hệ thống tự động cập nhật bản ghi cũ: gán `checkOutAt = checkInAt + 8h`, tính `workingHours = 8.0`, ghi chú trạng thái `[Tự động chốt do phiên quá 16h]`, và cho phép nhân viên check-in phiên mới bình thường.
   2. **Nullable Snapshot Photo:** Chuyển đổi thuộc tính `checkInPhoto` và `checkOutPhoto` sang nullable (`@IsOptional()`), cho phép lưu trữ an toàn khi nhân viên điểm danh bằng mã PIN hoặc khi webcam gặp sự cố nhẹ.
   3. **Chuẩn hóa RpcExceptionFilter:** Cải tiến filter tại Gateway bóc tách trực tiếp mã `statusCode` từ payload ngoại lệ của RabbitMQ (`error.status` hoặc `error.statusCode`), phản hồi chính xác mã `400 Bad Request` hoặc `404 Not Found` kèm thông điệp nghiệp vụ trực quan lên giao diện Kiosk.
+
+### Quyết định 22: Mở rộng Menu Chuẩn F&B (26 Món ăn & Đồ uống, 8 Loại Topping)
+* **Bối cảnh:** Thực đơn demo ban đầu chỉ có 8 món đồ uống cơ bản, chưa đủ phong phú để phản ánh quy mô thực tế của một chuỗi quán trà sữa / cà phê / nhà hàng ăn nhanh.
+* **Giải pháp Kỹ thuật:**
+  1. Mở rộng dữ liệu thực đơn tại `ProductController` (API Gateway) lên 26 món được phân bổ đồng đều theo 4 nhóm danh mục chủ đạo:
+     - **Trà sữa (8 món):** Trà Sữa Trân Châu Hoàng Gia, Trà Sữa Matcha Tây Bắc, Trà Sữa Oolong Nướng, Trà Sữa Khoai Môn Hoàng Kim, Trà Sữa Socola Đậm Đà, Trà Sữa Thái Xanh Thơm Mát, Trà Sữa Hạt Dẻ Nướng, Hồng Trà Sữa Truyền Thống.
+     - **Cà phê (6 món):** Cà Phê Muối Cố Đô, Cà Phê Sữa Đá Sài Gòn, Bạc Xỉu 3 Tầng Kem Béo, Cà Phê Đen Đá Đậm Vị, Latte Hạt Dẻ Thơm Bùi, Cà Phê Trứng Béo Ngậy.
+     - **Trà trái cây (6 món):** Trà Đào Cam Sả Tươi, Trà Mãng Cầu Thanh Mát, Trà Vải Hoa Hồng Quý Phái, Trà Dâu Tây Nhiệt Đới, Trà Chanh Giã Tay Quảng Đông, Trà Ổi Hồng Hạt Lựu.
+     - **Đồ ăn vặt (6 món):** Khoai Tây Lắc Phô Mai Giòn Rụm, Gà Popcorn Chiên Giòn Cay, Bánh Tráng Trộn Long An Đặc Biệt, Cá Viên Chiên Nước Mắm Đậm Đà, Bánh Croissant Bơ Tỏi Nướng Giòn, Xúc Xích Phô Mai Đức Nướng.
+  2. Bổ sung danh mục 8 loại Topping thực tế: Trân châu đen dẻo, Trân châu trắng 3Q giòn, Thạch sương sáo thanh mát, Thạch củ năng giòn rụm, Kem Cheese béo ngậy mặn ngọt, Thạch nha đam đường phèn, Pudding trứng mềm mịn, Thạch trái cây nhiệt đới.
+  3. Đồng bộ cấu trúc dữ liệu đa kích cỡ: hỗ trợ định nghĩa giá cơ sở, phụ thu Size M (+0đ), Size L (+6.000đ - 8.000đ), và đơn giá topping độc lập (+5.000đ - 10.000đ).
+
+### Quyết định 23: Đóng gói Tài nguyên Tĩnh Nội bộ (`/products/`) & Cơ chế Render Ảnh Phòng vệ
+* **Bối cảnh:** Sử dụng link ảnh trực tiếp từ dịch vụ bên thứ ba (Unsplash, Pinterest...) thường xuyên gặp các sự cố: đường link bị chặn bởi chính sách CORS/Hotlink protection của nguồn ảnh, lỗi `ERR_BLOCKED_BY_ORB`, hoặc kết nối mạng chập chờn khiến hình ảnh hiển thị dạng biểu tượng vỡ hoặc tải rất chậm.
+* **Giải pháp Kỹ thuật:**
+  1. **Đóng gói Cục bộ (Local Bundling):** Tải các tài nguyên ảnh chuẩn F&B sắc nét về thư mục nội bộ `frontend/pos-web/public/products/` (ví dụ: `tra-sua-tran-chau.jpg`, `khoai-tay-lac.jpg`). Khi build hoặc deploy lên Vercel, các ảnh này được phân phối trực tiếp từ Edge CDN cùng tên miền với ứng dụng.
+  2. **Chính sách Không gửi Referrer (`referrerPolicy="no-referrer"`):** Đối với các ảnh vẫn tải qua đường dẫn ngoài, thêm thuộc tính `referrerPolicy="no-referrer"` vào thẻ `<img>` nhằm vượt qua các cơ chế kiểm tra Hotlinking khắt khe của các server ảnh nước ngoài.
+  3. **Tải lười (Lazy Loading) & Fallback An toàn (`onError`):** Bổ sung `loading="lazy"` giúp tăng tốc độ render lưới thực đơn. Thiết lập callback xử lý sự kiện `onError`: nếu URL ảnh bị hỏng hoặc mất kết nối mạng, trình duyệt tự động tráo đổi `e.currentTarget.src` sang ảnh nội bộ mặc định hoặc SVG placeholder có icon thương hiệu sắc nét.
+
+### Quyết định 24: Cơ chế Tự Phục Hồi Thanh toán VietQR Napas 247 khi PayOS Báo Lỗi Trùng Đơn (Code 231)
+* **Bối cảnh:** Khi khách hàng hoặc thu ngân mở thanh toán PayOS VietQR, nếu đơn hàng được yêu cầu tạo lại với cùng một mã `orderCode` mà đơn trước đó chưa hoàn tất, PayOS API sẽ trả về lỗi `HTTP 400 Bad Request` với mã lỗi `code: "231"` (*"Đơn thanh toán đã tồn tại"*). Ngoài ra, các chuỗi mô tả tiếng Việt có dấu trong query parameter nếu không được mã hóa URL chuẩn sẽ bị PayOS từ chối.
+* **Giải pháp Kỹ thuật:**
+  1. **Public Endpoint & Chuẩn hóa URL Encoding:** Gắn decorator `@Public()` cho `@Post('payments/payos/create')` tại API Gateway để thu ngân hoặc khách quét QR không bị chặn bởi token JWT. Khi gọi API `https://api-merchant.payos.vn/v2/payment-requests`, toàn bộ tham số truy vấn được bọc qua `encodeURIComponent`.
+  2. **Cơ chế Tự Phục Hồi Thông Minh (Self-healing Fallback):** Khi PayOS trả về mã lỗi 231:
+     - API Gateway bắt lỗi ngoại lệ `AxiosError`, không ném lỗi 500/400 làm hỏng giao diện.
+     - Thay vào đó, hệ thống tự động fallback: lấy cấu hình ngân hàng thụ hưởng MBBank của quán (`bin: "970422"`, `accountNumber: "VQRQAMOXB8388"`, `accountName: "PHAN NHAT QUANG"`), sinh trực tiếp chuỗi VietQR chuẩn Napas 247:
+       `https://img.vietqr.io/image/970422-VQRQAMOXB8388-compact2.png?amount=...&addInfo=...&accountName=...`
+     - Bổ sung `checkoutUrl` dự phòng và liên kết `qrserver` động.
+     - Thu ngân và khách hàng vẫn thấy mã QR hiển thị ngay lập tức với đúng số tiền và nội dung chuyển khoản, luồng thanh toán tại quầy diễn ra liên tục 100% không bị gián đoạn.
+
+### Quyết định 25: Quản trị Hệ Thống CSDL Phân Tán (Database-per-Service) Độc Lập Qua 6 Port PostgreSQL
+* **Bối cảnh:** Dự án tuân thủ nghiêm ngặt mô hình Microservices với 6 cơ sở dữ liệu riêng biệt. Khi cần kiểm tra dữ liệu thực tế (dữ liệu nhân viên, chấm công, hóa đơn, tồn kho nguyên liệu...), sinh viên/giảng viên/nhà phát triển cần phương thức kết nối trực quan, tin cậy và không phụ thuộc vào các công cụ GUI nặng nề.
+* **Giải pháp Kỹ thuật:**
+  1. **Định Tuyến Cổng Host Độc Lập:** Phân bổ 6 cổng port host riêng biệt cho từng container PostgreSQL trong `docker-compose.yml`:
+     - Cổng `5432`: `auth_db` (`fnb_postgres_auth`)
+     - Cổng `5434`: `product_db` (`fnb_postgres_product`)
+     - Cổng `5435`: `order_db` (`fnb_postgres_order`)
+     - Cổng `5436`: `inventory_db` (`fnb_postgres_inventory`)
+     - Cổng `5437`: `branch_db` (`fnb_postgres_branch`)
+     - Cổng `5438`: `reporting_db` (`fnb_postgres_reporting`)
+  2. **Chuẩn Hóa Thông Số Kết Nối:** Đặt chung `Host: localhost`, `User: postgres`, `Password: password` cho toàn bộ các database để dễ dàng ghi nhớ và cấu hình kết nối.
+  3. **Tích Hợp Công Cụ Truy Vấn Trực Quan:** Hướng dẫn kết nối trực tiếp thông qua extension tiện lợi **Database Client** (của cweijan) ngay trong giao diện VS Code, hoặc các công cụ chuẩn công nghiệp như **DBeaver / pgAdmin**, cho phép mở đồng thời cả 6 kết nối để xem ERD, duyệt bảng, chạy lệnh SQL query và đối soát dữ liệu đa service thuận tiện.

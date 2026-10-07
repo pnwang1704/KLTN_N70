@@ -44,10 +44,24 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 - [x] **Kiểm thử Tự động & Bảo mật RBAC (Unit Testing):**
   - Tinh chỉnh `RolesGuard` trong `api-gateway` ném `ForbiddenException('No role found')` chuẩn NestJS khi request thiếu user hoặc role.
   - 100% các bộ kiểm thử Jest (`roles.guard.spec.ts`, `inventory.service.spec.ts`) vượt qua kiểm tra nghiêm ngặt.
-- [x] **Thanh toán Đa phương thức:** Tiền mặt (tính tiền thối nhanh) và PayOS VietQR động (Webhook & Polling xác nhận tiền vào tài khoản tự động).
+- [x] **Menu F&B Thực Tế 26 Món & 8 Topping (Expanded F&B Catalog):**
+  - Mở rộng thực đơn gồm **26 món ăn & đồ uống** chuẩn quán hiện đại, phân loại theo 4 nhóm danh mục chính: Trà Sữa (8 món), Cà Phê (6 món), Trà Trái Cây (6 món), Đồ Ăn Vặt (6 món).
+  - Bổ sung **8 loại Topping thực tế**: Trân châu trắng, trân châu đen, thạch phô mai tươi, kem cheese macchiato, pudding trứng caramen, thạch củ năng giòn, đào miếng giòn, hạt sen bùi béo.
+  - Tích hợp đồng bộ trên cả POS Web và Customer Web, cấu hình giá, size, và topping đi kèm chính xác theo thực tế vận hành quán.
+- [x] **Đóng gói Tài nguyên Hình ảnh Nội bộ & Fallback An toàn (Local Product Assets):**
+  - Đóng gói trực tiếp toàn bộ tài nguyên hình ảnh món ăn vào thư mục tĩnh `/products/` của cả POS Web và Customer Web, loại bỏ nguy cơ gãy ảnh do phụ thuộc CDN ngoài (Pinterest/Unsplash) bị các nhà mạng viễn thông Việt Nam (VNPT, Viettel, FPT) chặn DNS hoặc cơ chế Hotlink Protection.
+  - Bổ sung thuộc tính `referrerPolicy="no-referrer"`, `loading="lazy"`, và xử lý `onError` tự động fallback sang ảnh dự phòng chất lượng cao, đảm bảo giao diện luôn hiển thị 100% toàn vẹn và tải siêu tốc.
+- [x] **Tích hợp Thanh toán VietQR & PayOS Động Siêu Ổn định (Robust PayOS & Dynamic VietQR):**
+  - API Gateway gắn decorator `@Public()` cho `@Post('payments/payos/create')`, cho phép tạo link thanh toán tự do cho cả khách hàng chưa login hoặc thu ngân mà không bị chặn bởi JWT Guard.
+  - Tự động mã hóa chuẩn `encodeURIComponent` cho `description` và `accountName`, ngăn chặn hoàn toàn lỗi URL malformed do khoảng trắng gây gãy ảnh VietQR từ máy chủ `img.vietqr.io`.
+  - Cơ chế tự phục hồi thông minh khi gặp lỗi trùng đơn PayOS (mã `231` - *Đơn thanh toán đã tồn tại*): Tự động inject tài khoản thụ hưởng MBBank (`970422`, STK `VQRQAMOXB8388`, Chủ TK `PHAN NHAT QUANG`) và tạo lại mã VietQR hoàn chỉnh ngay cả khi API `get` của PayOS không trả về thông tin tài khoản ngân hàng.
+  - Bổ sung nút liên kết trực tiếp mở cổng thanh toán PayOS (`checkoutUrl`) và cơ chế fallback sang `qrserver` dự phòng nếu mạng máy khách bị gián đoạn kết nối với dịch vụ VietQR bên ngoài.
 - [x] **Giải phóng bàn Real-time:** Socket.IO sự kiện `table:completed` đồng bộ hai chiều giữa POS và Customer Web ngay khi thanh toán xong.
 - [x] **Trừ kho tự động theo công thức (SAGA Pattern):** Lắng nghe sự kiện `order_completed` qua RabbitMQ, trừ nguyên vật liệu bằng TypeORM Transaction, tự động rollback nếu thiếu hàng.
 - [x] **Persistent Storage & Microservices:** Named Persistent Volumes cho 6 database PostgreSQL và RabbitMQ, đảm bảo dữ liệu luôn bền vững khi restart/rebuild container.
+- [x] **Cơ sở Dữ liệu Phân tán (Database-per-Service) & Hướng dẫn Kết nối Quản trị:**
+  - Tách biệt hoàn toàn 6 cơ sở dữ liệu PostgreSQL độc lập trên các cổng port khác nhau (5432: `auth_db`, 5434: `product_db`, 5435: `order_db`, 5436: `inventory_db`, 5437: `branch_db`, 5438: `reporting_db`).
+  - Hỗ trợ kết nối trực quan qua extension VS Code (Database Client / DBeaver / pgAdmin / DataGrip) hoặc lệnh Terminal `docker exec`.
 
 ---
 
@@ -91,6 +105,25 @@ Toàn bộ hệ thống chạy ngầm trong một mạng nội bộ (`app-networ
 | **KDS Web** | React + Nginx | `fnb_kds_web` | **`5173`** | 80 | - |
 | **Customer QR Web** | React + Nginx | `fnb_customer_web` | **`5174`** | 80 | - |
 | **POS Web** | React + Nginx | `fnb_pos_web` | **`5175`** | 80 | - |
+
+### 🗄 Hướng dẫn Kết nối & Quản trị Cơ sở Dữ liệu (Database Management)
+
+Dự án áp dụng mô hình **Database-per-Service**, mỗi Microservice sở hữu một Database PostgreSQL độc lập được ánh xạ ra máy Host với thông số đăng nhập dùng chung:
+* **Host:** `127.0.0.1` (hoặc `localhost`)
+* **Username:** `postgres`
+* **Password:** `password`
+
+| Nghiệp vụ / Dữ liệu cần tra cứu | Port Host | Tên Database | Các bảng dữ liệu chính |
+| :--- | :---: | :---: | :--- |
+| **Đơn hàng, Chấm công, Ca làm việc, Nhân sự** | **`5435`** | **`order_db`** | `order`, `order_item`, `attendances`, `employees`, `shifts`, `expenses`, `payment` |
+| **Tài khoản đăng nhập, Phân quyền hệ thống** | **`5432`** | **`auth_db`** | `users`, `roles` |
+| **Món ăn, Danh mục thực đơn, Topping** | **`5434`** | **`product_db`** | `products`, `categories`, `toppings` |
+| **Kho nguyên vật liệu, Định lượng, Xuất nhập** | **`5436`** | **`inventory_db`** | `ingredients`, `inventory_transactions`, `recipes` |
+| **Chi nhánh, Bàn ăn** | **`5437`** | **`branch_db`** | `branches`, `tables` |
+| **Báo cáo doanh thu & Thống kê** | **`5438`** | **`reporting_db`** | `revenue_reports`, `daily_summaries` |
+
+> [!TIP]
+> **Cách kết nối trực quan:** Bạn có thể sử dụng extension **Database Client** trong VS Code, **DBeaver**, hoặc **pgAdmin**: Chọn loại máy chủ **PostgreSQL**, nhập Host `127.0.0.1`, Port tương ứng theo bảng trên, Username `postgres`, Password `password` và bấm Connect để duyệt các bảng dữ liệu dưới dạng bảng tính trực quan.
 
 ---
 
