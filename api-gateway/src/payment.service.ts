@@ -33,8 +33,16 @@ export class PaymentService {
 
       const paymentLinkRes = await this.payOS.paymentRequests.create(requestData);
       return paymentLinkRes;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating PayOS payment link:', error);
+      if (error?.code === '231' || error?.error?.code === '231') {
+        try {
+          const existing = await this.payOS.paymentRequests.get(Number(body.orderCode));
+          return existing;
+        } catch (fetchErr) {
+          console.error('Error fetching existing PayOS payment link:', fetchErr);
+        }
+      }
       throw new BadRequestException('Failed to create payment link');
     }
   }
