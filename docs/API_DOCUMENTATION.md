@@ -377,6 +377,67 @@ Hệ thống cho phép cấu hình linh hoạt các khung giờ ca chuẩn (toà
 
 ---
 
+### 1.8. Cổng Thanh toán VietQR & PayOS (`/payments/payos/*`, `/webhooks/payos`)
+
+#### Tạo liên kết thanh toán VietQR PayOS (`POST /payments/payos/create`)
+* **Endpoint:** `POST /payments/payos/create`
+* **Quyền thực thi:** `@Public` (Cho phép gọi tự do từ máy POS hoặc Customer Web mà không bị chặn bởi JWT Guard).
+* **Mô tả:** Khởi tạo yêu cầu thanh toán Napas 247 trên PayOS. Tự động mã hóa URL `encodeURIComponent` cho `description` và `accountName` giúp ảnh QR sinh từ `img.vietqr.io` luôn hợp lệ.
+* **Cơ chế tự phục hồi lỗi 231 (Đơn đã tồn tại):** Khi PayOS báo mã `231`, hệ thống tự động gọi `get()`, inject thông tin thụ hưởng MBBank (`970422`, `VQRQAMOXB8388`, `PHAN NHAT QUANG`) và tạo lại mã `qrUrl` hợp lệ thay vì trả về lỗi.
+* **Request Body:**
+  ```json
+  {
+    "orderId": "2c246ea2-d7de-453e-81cd-8f5ddf3f5691",
+    "orderCode": 1791340951682,
+    "totalAmount": 39000,
+    "returnUrl": "http://localhost:5174/success",
+    "cancelUrl": "http://localhost:5174/cancel"
+  }
+  ```
+* **Response (200 OK / 201 Created):**
+  ```json
+  {
+    "bin": "970422",
+    "accountNumber": "VQRQAMOXB8388",
+    "accountName": "PHAN NHAT QUANG",
+    "amount": 39000,
+    "description": "Thanh toan DON 1791340951682",
+    "orderCode": 1791340951682,
+    "currency": "VND",
+    "paymentLinkId": "ca8a48c9903842c4adad1b8626b08c8d",
+    "status": "PENDING",
+    "checkoutUrl": "https://pay.payos.vn/web/ca8a48c9903842c4adad1b8626b08c8d",
+    "qrCode": "00020101021238570010A000000727012700069704220113VQRQAMOXB83880208QRIBFTTA53037045405390005802VN62250821Thanh toan DON 179134095168263041B00",
+    "qrUrl": "https://img.vietqr.io/image/970422-VQRQAMOXB8388-compact2.png?amount=39000&addInfo=Thanh%20toan%20DON%201791340951682&accountName=PHAN%20NHAT%20QUANG"
+  }
+  ```
+
+#### Kiểm tra trạng thái thanh toán PayOS (`POST /payments/payos/status`)
+* **Endpoint:** `POST /payments/payos/status`
+* **Quyền thực thi:** `@Public`
+* **Mô tả:** Polling kiểm tra trạng thái thanh toán của đơn hàng khi khách chuyển khoản qua ứng dụng Mobile Banking. Nếu trạng thái là `PAID`, Gateway tự động phát sự kiện `process_payos_webhook` qua RabbitMQ để hoàn tất đơn hàng.
+* **Request Body:**
+  ```json
+  {
+    "orderCode": 1791340951682
+  }
+  ```
+* **Response (200 OK):**
+  ```json
+  {
+    "paid": true,
+    "status": "PAID"
+  }
+  ```
+
+#### Webhook tự động từ PayOS (`POST /webhooks/payos`)
+* **Endpoint:** `POST /webhooks/payos`
+* **Quyền thực thi:** `@Public`
+* **Mô tả:** Nhận dữ liệu tức thời từ máy chủ PayOS khi giao dịch chuyển khoản thành công. Gateway kiểm tra chữ ký điện tử (`payOS.webhooks.verify`) và phát sự kiện `process_payos_webhook` đến `order-service` để tự động chốt đơn và phát Socket.IO `order:paid`.
+* **Response (200 OK):** `{ "success": true }`.
+
+---
+
 ## 2. Message Pattern RPC (Giao tiếp đồng bộ Request-Response qua RabbitMQ)
 
 API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để gửi yêu cầu và đợi kết quả phản hồi từ các Microservices.

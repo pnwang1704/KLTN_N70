@@ -702,5 +702,155 @@ sequenceDiagram
     end
 ```
 
+---
+
+## 11. Luồng Thanh Toán VietQR Napas 247 Qua PayOS & Cơ Chế Tự Phục Hồi Lỗi Trùng Đơn (PayOS VietQR Payment & Auto Fallback Flow)
+
+Quy trình thanh toán không tiền mặt bằng mã VietQR động chuẩn Napas 247 tích hợp cơ chế tự phục hồi (Self-healing) đảm bảo giao dịch thông suốt ngay cả khi PayOS báo lỗi đơn đã tồn tại (mã lỗi 231).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Customer as Khách hàng
+    actor Cashier as Thu ngân POS
+    participant Client as POS / Customer Web
+    participant GW as API Gateway (Port 3000)
+    participant PayOS as PayOS Cloud Server
+    participant VietQR as VietQR API (img.vietqr.io)
+    participant OS as Order Service (Port 3004)
+    participant DB as Order DB
+
+    %% Giai đoạn 1: Mở thanh toán QR
+    Note over Cashier, GW: Giai đoạn 1: Khởi tạo yêu cầu thanh toán VietQR
+    Cashier->>Client: Bấm chọn "Chuyển khoản VietQR (PayOS)"
+    Client->>GW: POST /payments/payos/create (orderCode: 171829, amount: 95000, description: "Don #171829")
+    GW->>GW: Chuẩn hóa tham số (encodeURIComponent mô tả tiếng Việt)
+    GW->>PayOS: POST /v2/payment-requests (Header: Client-Id, Api-Key, Checksum)
+
+    %% Giai đoạn 2: Phản hồi từ PayOS & Fallback
+    alt PayOS tạo đơn thành công (Response code 00)
+        PayOS-->>GW: HTTP 200 { code: '00', data: { qrCode: '000201...', checkoutUrl: 'https://pay.payos.vn/...' } }
+        GW-->>Client: HTTP 200 OK (qrCode, checkoutUrl)
+    else PayOS báo lỗi trùng đơn (Response code 231) hoặc sự cố mạng
+        PayOS-->>GW: HTTP 400 Bad Request { code: '231', desc: 'Đơn thanh toán đã tồn tại' }
+        GW->>GW: Bắt ngoại lệ AxiosError, kích hoạt Self-healing Fallback
+        GW->>VietQR: Sinh trực tiếp URL mã VietQR Napas 247 động<br/>(MBBank: 970422, TK: VQRQAMOXB8388, Chủ TK: PHAN NHAT QUANG)
+        VietQR-->>GW: Chuỗi URL ảnh: https://img.vietqr.io/image/970422-VQRQAMOXB8388-compact2.png?...
+        GW-->>Client: HTTP 200 OK (qrCode dạng VietQR image URL, checkoutUrl dự phòng)
+    end
+
+    %% Giai đoạn 3: Khách hàng quét mã & Webhook xác nhận
+    Note over Customer, DB: Giai đoạn 3: Khách quét mã thanh toán & Nhận Webhook xác nhận
+    Client->>Customer: Hiển thị mã QR động trên màn hình kèm số tiền 95.000 đ
+    Customer->>Customer: Mở App Ngân hàng (MB, VCB, Techcombank, Momo...) quét mã & chuyển khoản
+    PayOS->>GW: POST /webhooks/payos (Dữ liệu giao dịch đã ký Checksum)
+    GW->>GW: Xác thực chữ ký số Webhook bằng PAYOS_CHECKSUM_KEY
+    GW->>OS: RabbitMQ RPC: { cmd: 'update_payment_status', orderCode: 171829, status: 'PAID' }
+    OS->>DB: Cập nhật Payment (status = 'COMPLETED') & Order (status = 'COMPLETED')
+    OS->>Client: Socket.IO Emit 'order:paid' (orderId: 'xxx', orderCode: 171829)
+    Client->>Client: Tự động đóng Modal thanh toán QR
+    Client->>Cashier: Bật thông báo "Đã nhận tiền thành công" & Kích hoạt in hóa đơn nhiệt 80mm
+```
+
+---
+
+## 12. Luồng Chấm Công Sinh Trắc Học Kiosk AI & Chụp Ảnh Snapshot Đối Soát (Edge AI Face Attendance Workflow)
+
+Quy trình nhận diện khuôn mặt 1:1 chạy hoàn toàn trên trình duyệt máy POS (Client-side Edge AI) bằng `@vladmandic/face-api`, tính toán khoảng cách Euclid so khớp với vector mẫu 128D, kiểm soát ca làm việc và chụp ảnh đối soát.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Staff as Nhân viên quầy
+    participant Kiosk as Màn hình Kiosk Chấm công (pos-web)
+    participant FaceAPI as Engine AI (@vladmandic/face-api)
+    participant GW as API Gateway (Port 3000)
+    participant OS as Order Service (Port 3004)
+    participant DB as Order DB
+
+    %% Giai đoạn 1: Khởi động Kiosk & Nạp Model AI
+    Note over Staff, FaceAPI: Giai đoạn 1: Khởi động Camera & Tải trọng số AI
+    Staff->>Kiosk: Bấm "⏰ Chấm công Kiosk" (tại LoginScreen hoặc Header POS)
+    Kiosk->>FaceAPI: Nạp các mô hình AI từ /models (SSD MobileNet V1, 68 Landmarks, FaceRecognition)
+    FaceAPI-->>Kiosk: ✅ AI models loaded successfully
+    Kiosk->>Kiosk: Bật Webcam (navigator.mediaDevices.getUserMedia)
+    Kiosk->>GW: GET /employees?branchId=1 (@Public() bypass JWT)
+    GW->>OS: RabbitMQ RPC: { cmd: 'get_employees' }
+    OS->>DB: Lấy danh sách nhân viên chi nhánh (kèm faceEmbedding 128D mẫu)
+    DB-->>OS: Danh sách nhân viên
+    OS-->>Kiosk: Trả về danh sách nhân sự
+
+    %% Giai đoạn 2: Quét khuôn mặt Real-time & So khớp 1:1
+    Note over Staff, FaceAPI: Giai đoạn 2: Nhận diện khuôn mặt & Đo khoảng cách Euclid
+    Staff->>Kiosk: Chọn tên mình (ví dụ: NV01 - Nguyễn Văn A)
+    loop Quét liên tục 200ms / frame
+        Kiosk->>FaceAPI: Phân tích khung hình webcam (detectSingleFace, withFaceLandmarks, withFaceDescriptor)
+        FaceAPI-->>Kiosk: Trả về vector 128D của khuôn mặt hiện tại
+        Kiosk->>Kiosk: Tính khoảng cách Euclid d giữa vector hiện tại và vector mẫu đã lưu
+        alt Khoảng cách d < 0.500 (Đúng chính chủ)
+            Kiosk->>Kiosk: Vẽ khung xanh, hiển thị "Chính chủ (Độ khớp: X%)", Bật sáng nút "Vào ca" / "Tan ca"
+        else Khoảng cách d >= 0.500 (Không khớp)
+            Kiosk->>Kiosk: Vẽ khung đỏ "Khuôn mặt không khớp", Vô hiệu hóa nút bấm
+        end
+    end
+
+    %% Giai đoạn 3: Xác nhận Chấm công & Ghi nhận
+    Note over Staff, DB: Giai đoạn 3: Gửi dữ liệu điểm danh & Chụp ảnh đối soát
+    Staff->>Kiosk: Bấm nút "Vào ca" (hoặc "Tan ca")
+    Kiosk->>Kiosk: Chụp snapshot khung hình webcam hiện tại (toDataURL('image/jpeg', 0.8))
+    Kiosk->>GW: POST /attendances/check-in (@Public())<br/>{ employeeId, shiftId, faceDescriptor, photo: 'data:image/jpeg;base64,...' }
+    GW->>OS: RabbitMQ RPC: { cmd: 'attendance_check_in' }
+    OS->>DB: Kiểm tra ca làm việc & phiên cũ của nhân viên
+    alt Phát hiện phiên làm việc cũ chưa check-out quá 16h
+        OS->>DB: Tự động chốt phiên cũ (checkOutAt = checkInAt + 8h, note: '[Tự động chốt do phiên quá 16h]')
+    end
+    OS->>DB: Lưu bản ghi Attendance mới (checkInAt = NOW(), photo, status: ON_TIME hoặc LATE)
+    DB-->>OS: Bản ghi điểm danh thành công
+    OS-->>GW: Trả về kết quả điểm danh
+    GW-->>Kiosk: HTTP 201 Created { success: true, employeeName: 'Nguyễn Văn A', status: 'ON_TIME' }
+    Kiosk->>Staff: Hiển thị âm thanh ting ting & Banner "Điểm danh thành công! Chúc bạn ca làm việc vui vẻ"
+```
+
+---
+
+## 13. Luồng Quản Trị & Tra Cứu Dữ Liệu Đa Dịch Vụ Phân Tán (Database-per-Service Administration Workflow)
+
+Quy trình kết nối, tra cứu và đối soát dữ liệu chéo giữa 6 cơ sở dữ liệu PostgreSQL độc lập thông qua công cụ Database Client / DBeaver:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Admin as Quản trị viên / Sinh viên KLTN
+    participant Tool as VS Code Database Client / DBeaver
+    participant PortAuth as Port 5432 (auth_db)
+    participant PortProduct as Port 5434 (product_db)
+    participant PortOrder as Port 5435 (order_db)
+    participant PortInven as Port 5436 (inventory_db)
+
+    %% Kết nối đồng thời
+    Note over Admin, PortInven: Giai đoạn 1: Thiết lập kết nối đồng thời 6 Database độc lập
+    Admin->>Tool: Cấu hình kết nối auth_db (Host: localhost, Port: 5432, User: postgres, Pass: password)
+    Tool->>PortAuth: Bắt tay TCP PostgreSQL -> Kết nối thành công
+    Admin->>Tool: Cấu hình kết nối order_db (Host: localhost, Port: 5435, User: postgres, Pass: password)
+    Tool->>PortOrder: Bắt tay TCP PostgreSQL -> Kết nối thành công
+    Admin->>Tool: Cấu hình kết nối inventory_db (Host: localhost, Port: 5436, User: postgres, Pass: password)
+    Tool->>PortInven: Bắt tay TCP PostgreSQL -> Kết nối thành công
+
+    %% Đối soát dữ liệu chéo
+    Note over Admin, PortInven: Giai đoạn 2: Đối soát dữ liệu nghiệp vụ theo kiến trúc phân tán
+    Admin->>Tool: Truy vấn tài khoản: SELECT * FROM users WHERE role = 'CASHIER';
+    Tool->>PortAuth: Thực thi truy vấn
+    PortAuth-->>Tool: Trả về danh sách thu ngân
+
+    Admin->>Tool: Truy vấn đơn hàng & ca trực: SELECT * FROM orders ORDER BY created_at DESC LIMIT 10;
+    Tool->>PortOrder: Thực thi truy vấn
+    PortOrder-->>Tool: Trả về 10 đơn hàng mới nhất (tiền mặt, chiết khấu, VietQR)
+
+    Admin->>Tool: Kiểm tra trừ tồn kho: SELECT * FROM branch_stocks WHERE branch_id = '1';
+    Tool->>PortInven: Thực thi truy vấn
+    PortInven-->>Tool: Trả về số lượng tồn kho nguyên liệu thực tế sau khi nhận sự kiện order_completed
+```
+
+
 
 
