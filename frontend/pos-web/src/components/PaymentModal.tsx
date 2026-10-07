@@ -30,6 +30,8 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
   const [isSuccess, setIsSuccess] = useState(false);
   const [completedOrder, setCompletedOrder] = useState<any>(null);
   const [payOsQr, setPayOsQr] = useState<string>('');
+  const [payOsCheckoutUrl, setPayOsCheckoutUrl] = useState<string>('');
+  const [payOsRawQr, setPayOsRawQr] = useState<string>('');
   const [orderCode, setOrderCode] = useState<number | null>(orderData?.orderCode || orderData?.orders?.[0]?.orderCode || null);
   const [activeOrderId, setActiveOrderId] = useState<string | null>(orderId || null);
   const [tempQrCreatedId, setTempQrCreatedId] = useState<string | null>(null);
@@ -260,12 +262,28 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
               totalAmount: normalizedTotal
             });
             const data = res.data;
-            // Generate VietQR image from PayOS response
-            const qrUrl = `https://img.vietqr.io/image/${data.bin}-${data.accountNumber}-compact2.png?amount=${data.amount}&addInfo=${data.description}&accountName=${encodeURIComponent(data.accountName)}`;
+            const desc = data.description || `Thanh toan DON ${targetOrderCode}`;
+            const bin = data.bin || '970422';
+            const accNo = data.accountNumber || 'VQRQAMOXB8388';
+            const accName = data.accountName || 'PHAN NHAT QUANG';
+            const amount = data.amount || normalizedTotal;
+            
+            // Prefer backend qrUrl or properly encode params
+            const qrUrl = data.qrUrl || `https://img.vietqr.io/image/${bin}-${accNo}-compact2.png?amount=${amount}&addInfo=${encodeURIComponent(desc)}&accountName=${encodeURIComponent(accName)}`;
+            
             setPayOsQr(qrUrl);
+            if (data.qrCode) {
+              setPayOsRawQr(data.qrCode);
+            }
+            if (data.checkoutUrl) {
+              setPayOsCheckoutUrl(data.checkoutUrl);
+            }
           }
         } catch (e) {
           console.error('Failed to init PayOS', e);
+          const fallbackDesc = `Thanh toan DON ${orderCode || Date.now().toString().slice(-6)}`;
+          const fallbackQr = `https://img.vietqr.io/image/970422-VQRQAMOXB8388-compact2.png?amount=${normalizedTotal}&addInfo=${encodeURIComponent(fallbackDesc)}&accountName=${encodeURIComponent('PHAN NHAT QUANG')}`;
+          setPayOsQr(fallbackQr);
         }
       };
       initPayOs();
@@ -655,6 +673,14 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
                   <img 
                     src={payOsQr}
                     alt="VietQR"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      if (!target.src.includes('qrserver')) {
+                        const fallbackText = payOsRawQr || `2|99|0970422|PHAN NHAT QUANG|VQRQAMOXB8388|0|0|${normalizedTotal}|Thanh toan|WND_TRANSFER|`;
+                        target.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(fallbackText)}`;
+                      }
+                    }}
                     className="w-48 h-48 object-contain"
                   />
                 ) : (
@@ -664,6 +690,16 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
               <p className="text-sm font-medium text-zinc-600 text-center px-4">
                 Quét mã để thanh toán. Hệ thống sẽ tự động chốt đơn khi nhận được tiền.
               </p>
+              {payOsCheckoutUrl && (
+                <a 
+                  href={payOsCheckoutUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="mt-2 text-xs text-blue-600 hover:text-blue-700 underline font-medium"
+                >
+                  🔗 Mở trang thanh toán PayOS
+                </a>
+              )}
             </div>
           )}
 

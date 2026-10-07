@@ -6,6 +6,7 @@ import { Public } from './common/decorators/public.decorator';
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
+  @Public()
   @Post('payos/create')
   async createPayOSPayment(
     @Body() body: { orderId: string; orderCode: number; totalAmount: number; returnUrl?: string; cancelUrl?: string }
