@@ -217,3 +217,20 @@ Mỗi microservice sở hữu một container cơ sở dữ liệu PostgreSQL đ
    - **Database:** Tên DB tương ứng (ví dụ: `order_db`)
 5. Nhấp **Save and Connect**. Bạn có thể mở đồng thời cả 6 kết nối để duyệt bảng, xem ERD, truy vấn SQL và chỉnh sửa dữ liệu trực quan.
 
+### 7.3. Kết Nối Cụm Cơ Sở Dữ Liệu Neon Cloud (Singapore)
+Khi chuyển đổi từ PostgreSQL local sang Neon Cloud để giải phóng RAM cho máy phát triển:
+- **Host:** `ep-spring-resonance-ao2usi8g-pooler.c-2.ap-southeast-1.aws.neon.tech`
+- **Port:** `5432`
+- **Username:** `neondb_owner`
+- **Password:** `<Cấu hình trong file .env>`
+- **Database Names:** `auth_db`, `order_db`, `inventory_db`
+- **SSL Configuration:** Bắt buộc kích hoạt SSL (`sslmode=require` và `rejectUnauthorized: false`).
+- **Script kiểm tra & nạp dữ liệu:**
+  ```bash
+  # Đồng bộ schema và nạp dữ liệu mẫu ban đầu
+  node scripts/sync-and-seed-neon.js
+
+  # Kiểm tra kết nối và truy vấn đối soát dữ liệu
+  node scripts/verify-neon-services.js
+  ```
+

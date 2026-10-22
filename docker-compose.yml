@@ -26,119 +26,123 @@ services:
       timeout: 5s
       retries: 5
 
-  postgres-auth:
-    image: postgres:15
-    container_name: fnb_postgres_auth
-    ports:
-      - '5432:5432'
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: auth_db
-    volumes:
-      - postgres_auth_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # ==============================================================================
+  # LOCAL POSTGRES DATABASES (TẠM TẮT ĐỂ GIẢI PHÓNG RAM - CHUYỂN SANG NEON CLOUD)
+  # ==============================================================================
+  # postgres-auth:
+  #   image: postgres:15
+  #   container_name: fnb_postgres_auth
+  #   ports:
+  #     - '5432:5432'
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: auth_db
+  #   volumes:
+  #     - postgres_auth_data:/var/lib/postgresql/data
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  postgres-product:
-    image: postgres:15
-    container_name: fnb_postgres_product
-    ports:
-      - '5434:5432'
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: product_db
-    volumes:
-      - postgres_product_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d product_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # postgres-product:
+  #   image: postgres:15
+  #   container_name: fnb_postgres_product
+  #   ports:
+  #     - '5434:5432'
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: product_db
+  #   volumes:
+  #     - postgres_product_data:/var/lib/postgresql/data
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres -d product_db"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  postgres-order:
-    image: postgres:15
-    container_name: fnb_postgres_order
-    ports:
-      - '5435:5432'
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: order_db
-    volumes:
-      - postgres_order_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d order_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # postgres-order:
+  #   image: postgres:15
+  #   container_name: fnb_postgres_order
+  #   ports:
+  #     - '5435:5432'
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: order_db
+  #   volumes:
+  #     - postgres_order_data:/var/lib/postgresql/data
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres -d order_db"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  postgres-inventory:
-    image: postgres:15
-    container_name: fnb_postgres_inventory
-    ports:
-      - '5436:5432'
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: inventory_db
-    volumes:
-      - postgres_inventory_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d inventory_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # postgres-inventory:
+  #   image: postgres:15
+  #   container_name: fnb_postgres_inventory
+  #   ports:
+  #     - '5436:5432'
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: inventory_db
+  #   volumes:
+  #     - postgres_inventory_data:/var/lib/postgresql/data
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres -d inventory_db"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  postgres-branch:
-    image: postgres:15
-    container_name: fnb_postgres_branch
-    ports:
-      - '5437:5432'
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: branch_db
-    volumes:
-      - postgres_branch_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d branch_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # postgres-branch:
+  #   image: postgres:15
+  #   container_name: fnb_postgres_branch
+  #   ports:
+  #     - '5437:5432'
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: branch_db
+  #   volumes:
+  #     - postgres_branch_data:/var/lib/postgresql/data
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres -d branch_db"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
 
-  postgres-reporting:
-    image: postgres:15
-    container_name: fnb_postgres_reporting
-    ports:
-      - '5438:5432'
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: reporting_db
-    volumes:
-      - postgres_reporting_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d reporting_db"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # postgres-reporting:
+  #   image: postgres:15
+  #   container_name: fnb_postgres_reporting
+  #   ports:
+  #     - '5438:5432'
+  #   environment:
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: password
+  #     POSTGRES_DB: reporting_db
+  #   volumes:
+  #     - postgres_reporting_data:/var/lib/postgresql/data
+  #   networks:
+  #     - app-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres -d reporting_db"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
 
   # ==========================================
   # BACKEND SERVICES
@@ -169,12 +173,11 @@ services:
     container_name: fnb_auth_service
     environment:
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-      - DATABASE_URL=postgres://postgres:password@postgres-auth:5432/auth_db
+      - DATABASE_URL=${AUTH_DATABASE_URL}
+      - DATABASE_SSL=true
       - JWT_SECRET=super-secret-key
     depends_on:
       rabbitmq:
-        condition: service_healthy
-      postgres-auth:
         condition: service_healthy
     networks:
       - app-network
@@ -187,12 +190,11 @@ services:
       - '3004:3004' # Socket.IO port
     environment:
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-      - DATABASE_URL=postgres://postgres:password@postgres-order:5432/order_db
+      - DATABASE_URL=${ORDER_DATABASE_URL}
+      - DATABASE_SSL=true
       - FRONTEND_URL=http://localhost:5173,http://localhost:5174,http://localhost:5175
     depends_on:
       rabbitmq:
-        condition: service_healthy
-      postgres-order:
         condition: service_healthy
     networks:
       - app-network
@@ -203,11 +205,10 @@ services:
     container_name: fnb_inventory_service
     environment:
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-      - DATABASE_URL=postgres://postgres:password@postgres-inventory:5432/inventory_db
+      - DATABASE_URL=${INVENTORY_DATABASE_URL}
+      - DATABASE_SSL=true
     depends_on:
       rabbitmq:
-        condition: service_healthy
-      postgres-inventory:
         condition: service_healthy
     networks:
       - app-network
