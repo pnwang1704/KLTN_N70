@@ -15,13 +15,18 @@ import { EmployeeModule } from './employee/employee.module';
 import { Attendance } from './attendance/entities/attendance.entity';
 import { AttendanceModule } from './attendance/attendance.module';
 
+const dbUrl = process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/db';
+const isSsl = process.env.DATABASE_SSL === 'true' || dbUrl.includes('sslmode=require') || dbUrl.includes('neon.tech');
+
 @Module({
   imports: [
     TypeOrmModule.forRoot({
       type: 'postgres',
-      url: process.env.DATABASE_URL || 'postgres://user:password@localhost:5432/db',
+      url: dbUrl,
       entities: [Order, OrderItem, OrderItemTopping, Payment, Expense, Shift, Employee, Attendance],
       synchronize: true, // dev only
+      ssl: isSsl ? { rejectUnauthorized: false } : false,
+      extra: isSsl ? { ssl: { rejectUnauthorized: false } } : undefined,
     }),
     OrderModule,
     ShiftModule,
