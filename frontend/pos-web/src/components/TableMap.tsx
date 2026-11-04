@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { X, Users, CheckCircle, RefreshCw, Receipt } from 'lucide-react';
+import { X, Users, CheckCircle, RefreshCw, Receipt, QrCode } from 'lucide-react';
 import { io } from 'socket.io-client';
 import api from '../lib/axios';
 import { formatCurrency } from '../lib/utils';
 import { cn } from '../lib/utils';
+import { TableQrModal } from './TableQrModal';
 
 interface TableMapProps {
   branchId: string;
@@ -16,6 +17,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedOccupiedTable, setSelectedOccupiedTable] = useState<any>(null);
+  const [qrTableId, setQrTableId] = useState<string | null>(null);
 
   const fetchActiveOrders = useCallback(async () => {
     setIsLoading(true);
@@ -51,6 +53,14 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
       fetchActiveOrders();
     });
 
+    socket.on('QR_ORDER_PENDING', () => {
+      fetchActiveOrders();
+    });
+
+    socket.on('QR_ORDER_UPDATED', () => {
+      fetchActiveOrders();
+    });
+
     socket.on('table:completed', () => {
       fetchActiveOrders();
     });
@@ -64,25 +74,62 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
     };
   }, [branchId, fetchActiveOrders]);
 
+  const openTableSummaryModal = (tableId: string, sourceOrders: any[]) => {
+    const tableOrders = sourceOrders.filter(o => o.tableId === tableId);
+    const confirmedOrders = tableOrders.filter(o => o.status !== 'WAITING_CONFIRM');
+    const waitingOrders = tableOrders.filter(o => o.status === 'WAITING_CONFIRM');
+
+    const confirmedItems = confirmedOrders.flatMap(o => o.items || []);
+    const combinedTotal = confirmedOrders.reduce(
+      (sum, o) => sum + Number(o.finalAmount || o.totalAmount || 0),
+      0
+    );
+
+    setSelectedOccupiedTable({
+      tableId,
+      orders: tableOrders,
+      confirmedOrders,
+      waitingOrders,
+      allOrderIds: confirmedOrders.map(o => o.id),
+      primaryOrderId: confirmedOrders[0]?.id,
+      allItems: confirmedItems,
+      totalAmount: Math.round(combinedTotal),
+    });
+  };
+
+  const handleConfirmWaitingQr = async (orderId: string, tableId: string) => {
+    await api.post(`/orders/${orderId}/confirm-qr`);
+    const res = await api.get(`/orders?branchId=${branchId}`);
+    const activeAtTable = res.data.filter(
+      (o: any) => o.status !== 'COMPLETED' && o.status !== 'CANCELLED' && o.orderType === 'AT_TABLE'
+    );
+    setActiveOrders(activeAtTable);
+    openTableSummaryModal(tableId, activeAtTable);
+  };
+
+  const handleRejectWaitingQr = async (orderId: string, tableId: string) => {
+    await api.post(`/orders/${orderId}/reject-qr`, {
+      reason: 'Thu ngân từ chối đơn từ sơ đồ bàn',
+    });
+    const res = await api.get(`/orders?branchId=${branchId}`);
+    const activeAtTable = res.data.filter(
+      (o: any) => o.status !== 'COMPLETED' && o.status !== 'CANCELLED' && o.orderType === 'AT_TABLE'
+    );
+    setActiveOrders(activeAtTable);
+    const remaining = activeAtTable.filter((o: any) => o.tableId === tableId);
+    if (remaining.length === 0) {
+      setSelectedOccupiedTable(null);
+    } else {
+      openTableSummaryModal(tableId, activeAtTable);
+    }
+  };
+
   const handleTableClick = (tableNum: number) => {
     const tableId = tableNum.toString();
     const tableOrders = activeOrders.filter(o => o.tableId === tableId);
-    
-    if (tableOrders.length > 0) {
-      const allItems = tableOrders.flatMap(o => o.items || []);
-      const combinedTotal = tableOrders.reduce(
-        (sum, o) => sum + Number(o.finalAmount || o.totalAmount || 0),
-        0
-      );
 
-      setSelectedOccupiedTable({
-        tableId,
-        orders: tableOrders,
-        allOrderIds: tableOrders.map(o => o.id),
-        primaryOrderId: tableOrders[0].id,
-        allItems,
-        totalAmount: Math.round(combinedTotal),
-      });
+    if (tableOrders.length > 0) {
+      openTableSummaryModal(tableId, activeOrders);
     } else {
       onSelectTable(tableId);
     }
@@ -100,6 +147,9 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
               </span>
               <span className="flex items-center gap-1.5 font-medium text-blue-600">
                 <span className="w-3 h-3 rounded-full bg-blue-100 border border-blue-500"></span> Đang phục vụ
+              </span>
+              <span className="flex items-center gap-1.5 font-medium text-amber-700">
+                <span className="w-3 h-3 rounded-full bg-amber-100 border border-amber-500"></span> Chờ duyệt QR
               </span>
             </div>
           </div>
@@ -131,44 +181,83 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
             {Array.from({ length: 20 }, (_, i) => i + 1).map(num => {
               const tableId = num.toString();
               const tableOrders = activeOrders.filter(o => o.tableId === tableId);
-              const isOccupied = tableOrders.length > 0;
-              const tableTotal = tableOrders.reduce(
+              const confirmedOrders = tableOrders.filter(o => o.status !== 'WAITING_CONFIRM');
+              const waitingOrders = tableOrders.filter(o => o.status === 'WAITING_CONFIRM');
+              const isOccupied = confirmedOrders.length > 0;
+              const hasWaitingQr = waitingOrders.length > 0;
+              const tableTotal = confirmedOrders.reduce(
                 (sum, o) => sum + Number(o.finalAmount || o.totalAmount || 0),
                 0
               );
-              const totalItemsCount = tableOrders.reduce(
+              const totalItemsCount = confirmedOrders.reduce(
                 (sum, o) => sum + (o.items?.reduce((iSum: number, it: any) => iSum + Number(it.quantity || 1), 0) || 0),
                 0
               );
 
               return (
-                <button
-                  key={num}
-                  onClick={() => handleTableClick(num)}
-                  className={cn(
-                    "relative p-3 h-32 rounded-2xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 group cursor-pointer",
-                    isOccupied 
-                      ? "bg-blue-50 border-blue-400 hover:bg-blue-100 hover:border-blue-500 shadow-sm" 
-                      : "bg-white border-zinc-200 hover:border-blue-300 hover:shadow-md"
-                  )}
-                >
-                  <span className={cn("text-2xl font-black", isOccupied ? "text-blue-600" : "text-zinc-400 group-hover:text-zinc-600")}>
-                    {num}
-                  </span>
-                  
-                  {isOccupied ? (
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full mb-1">
-                        {tableOrders.length > 1 ? `${tableOrders.length} đợt • ${totalItemsCount} món` : `${totalItemsCount} món`}
-                      </span>
-                      <span className="text-xs font-bold text-zinc-900">{formatCurrency(tableTotal)}</span>
-                    </div>
-                  ) : (
-                    <span className="text-xs font-semibold text-zinc-400 group-hover:text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                      Mở đơn
+                <div key={num} className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => handleTableClick(num)}
+                    className={cn(
+                      "w-full p-3 h-32 rounded-2xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer",
+                      hasWaitingQr
+                        ? "bg-amber-50 border-amber-400 hover:bg-amber-100 hover:border-amber-500 shadow-sm ring-2 ring-amber-300/40"
+                        : isOccupied
+                        ? "bg-blue-50 border-blue-400 hover:bg-blue-100 hover:border-blue-500 shadow-sm"
+                        : "bg-white border-zinc-200 hover:border-blue-300 hover:shadow-md"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-2xl font-black",
+                        hasWaitingQr
+                          ? "text-amber-600"
+                          : isOccupied
+                          ? "text-blue-600"
+                          : "text-zinc-400 group-hover:text-zinc-600"
+                      )}
+                    >
+                      {num}
                     </span>
-                  )}
-                </button>
+
+                    {hasWaitingQr ? (
+                      <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-black px-2 py-0.5 bg-amber-500 text-white rounded-full mb-1 animate-pulse">
+                          Chờ duyệt QR ({waitingOrders.length})
+                        </span>
+                        {isOccupied && (
+                          <span className="text-xs font-bold text-zinc-900">{formatCurrency(tableTotal)}</span>
+                        )}
+                      </div>
+                    ) : isOccupied ? (
+                      <div className="flex flex-col items-center">
+                        <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full mb-1">
+                          {confirmedOrders.length > 1 ? `${confirmedOrders.length} đợt • ${totalItemsCount} món` : `${totalItemsCount} món`}
+                        </span>
+                        <span className="text-xs font-bold text-zinc-900">{formatCurrency(tableTotal)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs font-semibold text-zinc-400 group-hover:text-zinc-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                        Mở đơn
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Nút Tạo QR cho từng bàn */}
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setQrTableId(tableId);
+                    }}
+                    title={`Tạo mã QR gọi món cho Bàn ${tableId}`}
+                    className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-zinc-100/90 hover:bg-blue-600 text-zinc-600 hover:text-white border border-zinc-200/80 hover:border-blue-600 text-[10px] font-bold transition-all shadow-2xs cursor-pointer"
+                  >
+                    <QrCode size={12} />
+                    <span>Tạo QR</span>
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -215,12 +304,36 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                   
                   return (
                     <div key={ord.id || ordIdx} className="py-2.5 first:pt-1 last:pb-1">
-                      {selectedOccupiedTable.orders.length > 1 && (
-                        <div className="flex justify-between items-center text-[11px] font-bold text-zinc-500 mb-1.5 px-2 bg-zinc-100/70 py-1 rounded-lg">
+                      <div className="flex justify-between items-center text-[11px] font-bold text-zinc-600 mb-1.5 px-2 bg-zinc-100/80 py-1.5 rounded-lg">
+                        <div className="flex items-center gap-2">
                           <span>Đợt {ordIdx + 1} {ordTime && `• ${ordTime}`}</span>
-                          <span className="font-mono text-[10px] text-zinc-400">#{ord.id.split('-')[0]}</span>
+                          {ord.status === 'WAITING_CONFIRM' && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-black">
+                              Chờ duyệt QR
+                            </span>
+                          )}
                         </div>
-                      )}
+                        {ord.status === 'WAITING_CONFIRM' ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleRejectWaitingQr(ord.id, selectedOccupiedTable.tableId)}
+                              className="px-2 py-0.5 rounded bg-red-100 hover:bg-red-200 text-red-700 text-[10px] font-bold cursor-pointer"
+                            >
+                              Từ chối
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmWaitingQr(ord.id, selectedOccupiedTable.tableId)}
+                              className="px-2.5 py-0.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold cursor-pointer"
+                            >
+                              Duyệt vào bếp
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="font-mono text-[10px] text-zinc-400">#{ord.id.split('-')[0]}</span>
+                        )}
+                      </div>
 
                       <div className="space-y-2">
                         {ord.items?.map((item: any, itemIdx: number) => {
@@ -277,9 +390,9 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
               {/* Total Summary */}
               <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4 flex justify-between items-center">
                 <div>
-                  <span className="text-xs text-blue-800 font-medium block">Tổng tiền cần thanh toán</span>
+                  <span className="text-xs text-blue-800 font-medium block">Tổng tiền đã xác nhận cần thu</span>
                   <span className="text-xs text-blue-950 font-bold">
-                    {selectedOccupiedTable.orders.length} đợt gọi • {selectedOccupiedTable.allItems.reduce((s: number, it: any) => s + Number(it.quantity || 1), 0)} món
+                    {(selectedOccupiedTable.confirmedOrders || []).length} đợt đã duyệt • {selectedOccupiedTable.allItems.reduce((s: number, it: any) => s + Number(it.quantity || 1), 0)} món
                   </span>
                 </div>
                 <span className="text-2xl font-black text-blue-600">
@@ -297,6 +410,7 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                 Đóng
               </button>
               <button 
+                disabled={!selectedOccupiedTable.confirmedOrders || selectedOccupiedTable.confirmedOrders.length === 0}
                 onClick={() => {
                   const amount = Math.round(Number(selectedOccupiedTable.totalAmount || 0));
                   onPayTable(
@@ -306,24 +420,38 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
                       tableId: selectedOccupiedTable.tableId,
                       branchId,
                       orderIds: selectedOccupiedTable.allOrderIds,
-                      orders: selectedOccupiedTable.orders,
+                      orders: selectedOccupiedTable.confirmedOrders,
                       items: selectedOccupiedTable.allItems,
                       totalAmount: amount,
                       finalAmount: amount,
                       orderType: 'AT_TABLE',
-                      orderCode: selectedOccupiedTable.orders?.[0]?.orderCode,
+                      orderCode: selectedOccupiedTable.confirmedOrders?.[0]?.orderCode,
                     }
                   );
                   setSelectedOccupiedTable(null);
                   onClose();
                 }}
-                className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition-all shadow-md cursor-pointer text-sm"
+                className="flex-[2] py-3 bg-blue-600 text-white font-bold rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 active:scale-95 transition-all shadow-md cursor-pointer text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <CheckCircle size={18} /> Thanh toán bàn này
+                <CheckCircle size={18} />
+                <span>
+                  {selectedOccupiedTable.confirmedOrders?.length > 0
+                    ? 'Thanh toán bàn này'
+                    : 'Duyệt đơn QR trước khi thanh toán'}
+                </span>
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Table QR Code Generator & Print Modal */}
+      {qrTableId && (
+        <TableQrModal
+          tableId={qrTableId}
+          branchId={branchId}
+          onClose={() => setQrTableId(null)}
+        />
       )}
     </div>
   );
