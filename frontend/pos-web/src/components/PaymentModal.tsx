@@ -704,7 +704,7 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
           )}
 
           <div className="flex justify-between items-center mb-8 px-1">
-            <span className="text-sm font-medium text-zinc-500">Tiền thối lại</span>
+            <span className="text-sm font-medium text-zinc-500">Trả lại khách</span>
             <span className={cn("text-lg font-bold", changeAmount < 0 ? "text-red-500" : "text-emerald-600")}>
               {changeAmount < 0 ? 'Chưa đủ tiền' : formatCurrency(changeAmount)}
             </span>

@@ -162,7 +162,7 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
               <span>{formatCurrency(amountPaid)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Tiền thối:</span>
+              <span>Trả lại khách:</span>
               <span>{formatCurrency(changeAmount)}</span>
             </div>
           </>
