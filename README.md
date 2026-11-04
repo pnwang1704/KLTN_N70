@@ -6,13 +6,22 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 
 ## 🚀 Tính năng nổi bật & Lộ trình thực hiện (Features Roadmap)
 
-- [x] **Customer QR Web (Mobile-First):** Quét mã QR tại bàn tự động nhận diện bàn qua URL (`?branchId=1&tableId=5`), fallback giao diện sang trọng; mô hình **Thanh toán sau tại quầy (Post-pay)**; hỗ trợ gọi nhiều đợt trong bữa ăn và tra cứu "Món đã gọi tại bàn" (Active order drawer).
-- [x] **KDS Web:** Màn hình hiển thị bếp Realtime (đồng bộ Socket.IO sự kiện `NEW_ORDER_CREATED` và `ITEM_READY`).
+- [x] **Customer QR Web (Mobile-First & Vercel Ready):**
+  - Quét mã QR tại bàn tự động bắt tham số `tableId` / `table` qua URL (`/?tableId=5`, `/?tableId=B05` hoặc `/table/5`), chuẩn hóa mã bàn và lưu bền vững vào `sessionStorage` (`useTableSession.ts`) để không mất phiên khi reload trang hoặc chuyển danh mục.
+  - Hiển thị rõ huy hiệu **"Bàn số: B05"** trên Header; tự động hiện thông báo nhắc nhở *"Vui lòng quét mã QR tại bàn để đặt món"* khi khách truy cập trực tiếp không qua mã QR.
+  - Mô hình **Thanh toán sau tại quầy (Post-pay)**; hỗ trợ gọi nhiều đợt trong bữa ăn, theo dõi trạng thái duyệt đơn thời gian thực và tra cứu "Món đã gọi tại bàn" (Active order modal).
+  - Triển khai trực tuyến tại `https://customer-web-lac.vercel.app` kèm cấu hình `vercel.json` SPA rewrites, header mặc định `ngrok-skip-browser-warning: "true"` giúp điện thoại quét mã không bị chặn bởi trang cảnh báo ngrok, và đồng bộ Socket.IO qua API Gateway.
+- [x] **Cơ chế Bảo vệ Chống Đơn Ảo QR 3 Lớp & Duyệt Đơn Tại Quầy (`WAITING_CONFIRM`):**
+  - **Lớp 1 - Kiểm tra Ca hoạt động & Chống Spam:** Chỉ cho phép gửi đơn QR khi chi nhánh có ca làm việc đang mở (`Shift.isActive = true`) và giới hạn tối đa **3 đơn chờ duyệt / bàn** để chặn đứng hành vi spam đơn từ xa.
+  - **Lớp 2 - Trạng thái Chờ xác nhận (`WAITING_CONFIRM`):** Đơn từ QR chưa đẩy thẳng xuống màn hình bếp KDS nhằm bảo vệ nguyên vật liệu pha chế trước các đơn ảo (khách chụp ảnh mã QR mang về nhà đặt thử).
+  - **Lớp 3 - Thu ngân Duyệt đơn Realtime tại POS (`QrOrderApprovalModal.tsx`):** Phát sự kiện Socket.IO `QR_ORDER_PENDING` tới quầy POS kèm âm báo chuông 2 nốt (Web Audio API), thẻ cảnh báo nổi, badge **`[ 📱 Duyệt đơn QR (N) ]`** trên Top Header và nhãn **"Chờ duyệt QR"** trên sơ đồ bàn. Khi thu ngân bấm **"Xác nhận & Gửi bếp"** (`POST /orders/:id/confirm-qr`), đơn chuyển sang `PENDING`, bắn lệnh `NEW_ORDER_CREATED` xuống KDS và cập nhật tức thời giao diện điện thoại khách qua `QR_ORDER_UPDATED` (hoặc từ chối đơn ảo qua `POST /orders/:id/reject-qr`).
+- [x] **KDS Web:** Màn hình hiển thị bếp Realtime (đồng bộ Socket.IO sự kiện `NEW_ORDER_CREATED` sau khi đơn được xác nhận và `ITEM_READY` khi hoàn thành món).
 - [x] **POS Web (Thu ngân quầy):**
-  - **Chuẩn hóa Bảng màu POS:** Chuyển đổi 100% giao diện sang tông Xanh dương chuyên nghiệp (`#0070ba`, `blue-600`, `sky-600`) & Trắng sáng (`bg-white`, `bg-zinc-50`), sạch 100% class `orange-` và `amber-`, tối ưu công thái học thị giác.
-  - Quản lý sơ đồ bàn (đang phục vụ màu xanh dương / bàn trống màu trắng xám).
+  - **Chuẩn hóa Bảng màu POS:** Chuyển đổi 100% giao diện sang tông Xanh dương chuyên nghiệp (`#0070ba`, `blue-600`, `sky-600`) & Trắng sáng (`bg-white`, `bg-zinc-50`), tối ưu công thái học thị giác.
+  - **Tạo & In tem mã QR bàn (`TableQrModal.tsx`):** Nút **"Tạo QR"** trực tiếp trên từng thẻ bàn (`1..20`) tại `TableMap.tsx`, sinh mã QR SVG sắc nét (`qrcode.react`) dẫn tới `https://customer-web-lac.vercel.app/?tableId=<ID_BÀN>`, hỗ trợ sao chép liên kết và in tem QR khổ nhiệt 80mm (`window.print()`) để dán lên bàn.
+  - Quản lý sơ đồ bàn trực quan (Đang phục vụ màu xanh dương / Chờ duyệt QR viền vàng hổ phách / Bàn trống màu trắng xám).
   - Chiết khấu linh hoạt (% và VNĐ) tại chân giỏ hàng.
-  - Thanh toán bàn gộp các đợt gọi thành 1 hóa đơn và in hóa đơn nhiệt 80mm.
+  - Thanh toán bàn gộp các đợt gọi đã xác nhận thành 1 hóa đơn, hiển thị rõ mục **"Trả lại khách"** trên modal thanh toán lẫn phiếu in nhiệt 80mm (`PaymentModal.tsx` & `Receipt.tsx`).
   - Quản lý quỹ tiền mặt (Cash In / Cash Out qua phiếu chi khẩn cấp), đối soát kết ca 3 chiều (`ShiftSummaryModal`).
 - [x] **Lưu & Quản lý Hóa đơn Tạm tính (Hold / Draft Orders):**
   - Nút **`[ 💾 Lưu tạm ]`** tại chân giỏ hàng `OrderPanel.tsx` (tự vô hiệu hóa khi giỏ rỗng).
@@ -59,9 +68,10 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 - [x] **Giải phóng bàn Real-time:** Socket.IO sự kiện `table:completed` đồng bộ hai chiều giữa POS và Customer Web ngay khi thanh toán xong.
 - [x] **Trừ kho tự động theo công thức (SAGA Pattern):** Lắng nghe sự kiện `order_completed` qua RabbitMQ, trừ nguyên vật liệu bằng TypeORM Transaction, tự động rollback nếu thiếu hàng.
 - [x] **Persistent Storage & Microservices:** Named Persistent Volumes cho 6 database PostgreSQL và RabbitMQ, đảm bảo dữ liệu luôn bền vững khi restart/rebuild container.
-- [x] **Cơ sở Dữ liệu Phân tán (Database-per-Service) & Hướng dẫn Kết nối Quản trị:**
-  - Tách biệt hoàn toàn 6 cơ sở dữ liệu PostgreSQL độc lập trên các cổng port khác nhau (5432: `auth_db`, 5434: `product_db`, 5435: `order_db`, 5436: `inventory_db`, 5437: `branch_db`, 5438: `reporting_db`).
-  - Hỗ trợ kết nối trực quan qua extension VS Code (Database Client / DBeaver / pgAdmin / DataGrip) hoặc lệnh Terminal `docker exec`.
+- [x] **Cơ sở Dữ liệu Phân tán (Database-per-Service) & Đám mây Neon PostgreSQL:**
+  - Tách biệt hoàn toàn các cơ sở dữ liệu PostgreSQL độc lập theo đúng chuẩn Microservices (`auth_db`, `product_db`, `order_db`, `inventory_db`, `branch_db`, `reporting_db`).
+  - **Tích hợp Neon Cloud Serverless PostgreSQL (AWS Singapore `ap-southeast-1`):** Mặc định kết nối cụm Neon Cloud qua SSL (`sslmode=require`) giúp giải phóng hàng GB RAM trên máy phát triển mà vẫn bảo toàn tách biệt Database-per-Service; đồng thời giữ sẵn cấu hình 6 container PostgreSQL cục bộ (port `5432..5438`) trong `docker-compose.yml` khi cần chạy Offline 100%.
+  - Hỗ trợ script đồng bộ & kiểm chứng dữ liệu (`scripts/sync-and-seed-neon.js`, `scripts/verify-neon-services.js`) và kết nối trực quan qua VS Code Database Client / DBeaver / pgAdmin.
 
 ---
 
@@ -70,14 +80,14 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 ### Frontend Applications (`pos-web`, `customer-web`, `kds-web`)
 * **Core:** React 19, TypeScript, Vite
 * **Styling:** Tailwind CSS v4, Tailwind Merge, CLSX
-* **Icons:** Lucide React
+* **Icons & QR Generation:** Lucide React, `qrcode.react` (Render mã QR SVG độ nét cao cho tem bàn 80mm)
 * **AI & Computer Vision:** `@vladmandic/face-api` (^1.7.15) — Client-side Face Detection (SSD MobileNet V1), Face Landmarks (68 points), Face Recognition (128D embeddings vector), tính khoảng cách Euclid (Euclidean Distance).
-* **Networking & Realtime:** Axios, Socket.IO Client (^4.8.3)
-* **Web Server:** Nginx Alpine (Multi-stage Docker builds)
+* **Networking & Realtime:** Axios (kèm header `ngrok-skip-browser-warning`), Socket.IO Client (^4.8.3)
+* **Web Server & Hosting:** Nginx Alpine (Multi-stage Docker builds) & Vercel Edge CDN (`vercel.json` SPA rewrites)
 
 ### Backend Microservices & API Gateway
 * **Framework:** NestJS (TypeScript), TypeORM
-* **Databases:** PostgreSQL (Database-per-Service: `auth_db`, `product_db`, `order_db`, `inventory_db`, `branch_db`, `reporting_db`)
+* **Databases:** PostgreSQL 15 & **Neon Cloud Serverless PostgreSQL** (Database-per-Service: `auth_db`, `product_db`, `order_db`, `inventory_db`, `branch_db`, `reporting_db`)
 * **Message Broker:** RabbitMQ (RPC Request-Response patterns & Asynchronous Pub/Sub events)
 * **Realtime Server:** Socket.IO Server (Cổng 3004, phân tách Room theo từng `branchId`)
 * **Security & Auth:** Stateless JWT, Passport-JWT, Bcrypt, RBAC Guards (`RolesGuard`)
@@ -123,7 +133,9 @@ Dự án áp dụng mô hình **Database-per-Service**, mỗi Microservice sở 
 | **Báo cáo doanh thu & Thống kê** | **`5438`** | **`reporting_db`** | `revenue_reports`, `daily_summaries` |
 
 > [!TIP]
-> **Cách kết nối trực quan:** Bạn có thể sử dụng extension **Database Client** trong VS Code, **DBeaver**, hoặc **pgAdmin**: Chọn loại máy chủ **PostgreSQL**, nhập Host `127.0.0.1`, Port tương ứng theo bảng trên, Username `postgres`, Password `password` và bấm Connect để duyệt các bảng dữ liệu dưới dạng bảng tính trực quan.
+> **Hai chế độ kết nối Cơ sở Dữ liệu (Neon Cloud & Local Docker):**
+> - **Mặc định hiện tại (Neon Cloud Singapore - Tiết kiệm RAM):** Các Microservices kết nối tới cụm PostgreSQL Serverless tại `ep-spring-resonance-ao2usi8g-pooler.c-2.ap-southeast-1.aws.neon.tech` (Port `5432`, User `neondb_owner`, SSL `sslmode=require`) được cấu hình trong file `.env`.
+> - **Chế độ Local Docker:** Khi mở comment khối `postgres-*` trong `docker-compose.yml`, bạn có thể kết nối qua **Database Client** (VS Code), **DBeaver**, hoặc **pgAdmin** với Host `127.0.0.1`, Port tương ứng theo bảng trên (`5432..5438`), Username `postgres`, Password `password`.
 
 ---
 
@@ -151,23 +163,23 @@ docker compose up -d
 
 #### 🔹 Mô hình 2: Triển khai Phân tán Production (Backend VPS + Frontend Vercel)
 Dành cho môi trường sản xuất thực tế:
-- **Backend & Database trên VPS:**
+- **Backend & Database trên VPS (hoặc kết hợp Neon Cloud DB):**
   ```bash
   chmod +x scripts/init-multiple-dbs.sh
   docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
   ```
-- **Frontend `pos-web` trên Vercel:**
-  - Nhập repository vào Vercel, chọn Root Directory là `frontend/pos-web`.
-  - Khai báo Environment Variable: `VITE_API_GATEWAY_URL = https://api.yourdomain.com`.
+- **Frontend `pos-web` & `customer-web` trên Vercel:**
+  - **POS Web:** Chọn Root Directory là `frontend/pos-web`, cấu hình `VITE_API_GATEWAY_URL` và `VITE_CUSTOMER_WEB_URL = https://customer-web-lac.vercel.app`.
+  - **Customer QR Web:** Chọn Root Directory là `frontend/customer-web` (tên miền triển khai: `https://customer-web-lac.vercel.app`), cấu hình `VITE_API_GATEWAY_URL`.
   - Xem chi tiết tại [Hướng dẫn Triển khai Hệ thống Phân tán (docs/DEPLOYMENT_GUIDE.md)](docs/DEPLOYMENT_GUIDE.md).
 
 #### 🔹 Mô hình 3: Thử nghiệm ngrok (Backend Local + Frontend Vercel)
-Nhờ tính năng **Reverse Proxy WebSocket** tại API Gateway, bạn **chỉ cần mở DUY NHẤT 1 tunnel ngrok tới cổng 3000**:
+Nhờ tính năng **Reverse Proxy WebSocket** tại API Gateway và header `ngrok-skip-browser-warning: "true"` tích hợp sẵn trên Axios, bạn **chỉ cần mở DUY NHẤT 1 tunnel ngrok tới cổng 3000**:
 ```bash
 ngrok http 3000
 ```
-- Trên Vercel, chỉ cần đặt: `VITE_API_GATEWAY_URL = https://your-domain.ngrok-free.app`.
-- Toàn bộ cuộc gọi REST API và kết nối WebSocket Socket.IO thời gian thực tự động đi chung qua domain ngrok này!
+- Trên Vercel (cho cả `pos-web` và `customer-web`), chỉ cần đặt: `VITE_API_GATEWAY_URL = https://your-domain.ngrok-free.app`.
+- Điện thoại khách hàng quét mã QR bàn (`https://customer-web-lac.vercel.app/?tableId=5`) sẽ gọi API & kết nối Socket.IO mượt mà xuyên qua ngrok mà không bị chặn bởi màn hình cảnh báo trình duyệt!
 
 ### 3. Cấu hình Biến Môi Trường (`.env`)
 Hệ thống cung cấp file mẫu `.env.production.example` và tự động đọc các biến cấu hình từ `.env`:
@@ -213,25 +225,27 @@ Toàn bộ nhân sự tại quầy dùng chung Kiosk chấm công tại máy POS
 
 Sau khi các Container `Started`, mở 3 tab trình duyệt để mô phỏng thực tế:
 
-1. **Khách hàng quét mã QR tại bàn (Customer Web):** `http://localhost:5174/?branchId=1&tableId=5`
-   - Hệ thống tự động nhận diện Bàn 5 và chuyển thẳng vào màn hình Menu chọn món.
-   - Chọn món, chọn Size/Topping/Ghi chú -> Bấm "Gửi đơn gọi món" (Đợt 1).
-   - Tiếp tục chọn thêm món và gửi tiếp Đợt 2.
-   - Bấm icon "Món đã gọi" trên Header: Drawer hiển thị gộp đầy đủ các món qua 2 đợt gọi và tổng tiền bàn.
-2. **Nhà Bếp tiếp nhận chế biến (KDS):** `http://localhost:5173`
-   - Đăng nhập bếp. Các đợt gọi món vừa gửi sẽ **lập tức nảy lên (Realtime)** trên màn hình KDS kèm chuông báo.
-   - Bếp bấm "Bắt đầu làm" -> "Hoàn thành" từng món (POS sẽ nhận được Toast thông báo `ITEM_READY`).
-3. **Thu ngân thao tác và thanh toán tại quầy (POS):** `http://localhost:5175`
-   - Đăng nhập `thungancn1` (mật khẩu: `123456`). Modal chọn ca hiển thị gợi ý thông minh ca đang diễn ra (`Ca 1: 06:00 - 14:00` hoặc `Ca 2: 14:00 - 22:00`), nhập số tiền nhận bàn giao đầu ca.
-   - Chuyển sang Tab "Sơ đồ bàn", Bàn 5 đổi sang màu xanh dương (Đang phục vụ).
-   - Nhấp vào Bàn 5: Hiển thị đầy đủ danh sách món gộp từ các đợt gọi.
-   - Nhập chiết khấu (nếu có) -> Bấm "Thanh toán bàn này".
-   - Chọn Tiền mặt (nhập tiền khách đưa / chọn mệnh giá nhanh) hoặc Chuyển khoản VietQR PayOS -> Bấm "Xác nhận".
-   - Hóa đơn nhiệt (80mm) hiển thị trọn vẹn toàn bộ món của tất cả đợt gọi để in.
-   - **Realtime Sync:** Bàn 5 trên POS chuyển về màu xám nhạt (Trống); điện thoại khách hàng tự động đóng modal và giải phóng bàn ăn.
+1. **Tạo mã QR bàn & Khách hàng quét QR đặt món (POS -> Customer Web):**
+   - Trên **POS Web** (`http://localhost:5175`), chuyển sang Tab **"Sơ đồ bàn"**, bấm nút **"Tạo QR"** tại Bàn 05 để mở Modal mã QR (`https://customer-web-lac.vercel.app/?tableId=5` hoặc bản local `http://localhost:5174/?tableId=5`) và in tem 80mm.
+   - Khách hàng mở link QR: `customer-web` tự động nhận diện, lưu `tableId = 5` vào `sessionStorage`, hiển thị huy hiệu **"Bàn số: B05"** trên Header.
+   - Chọn món, chọn Size/Topping/Ghi chú -> Bấm **"Gửi đơn gọi món"** (`source: 'QR'`).
+   - Đơn khởi tạo ở trạng thái **`WAITING_CONFIRM`** (chưa vào bếp ngay để chống đơn ảo); màn hình điện thoại khách hiển thị trạng thái *"Đang chờ quầy thu ngân xác nhận"*.
+2. **Thu ngân xác nhận đơn QR tại quầy (Chống đơn ảo):**
+   - POS Web lập tức phát âm báo 2 nốt, hiển thị thẻ cảnh báo nổi, badge **`[ 📱 Duyệt đơn QR (1) ]`** trên Header và đổi viền Bàn 05 sang vàng hổ phách (**"Chờ duyệt QR"**).
+   - Thu ngân mở modal duyệt đơn, kiểm tra bàn có khách thật và bấm **"Xác nhận & Gửi bếp"**.
+   - Điện thoại khách hàng tự động chuyển sang trạng thái xanh **"Đã duyệt & gửi món vào bếp!"** theo thời gian thực (`QR_ORDER_UPDATED`). Khách có thể gọi thêm Đợt 2 và bấm nút **"Đơn bàn"** trên Header để xem gộp các đợt gọi.
+3. **Nhà Bếp tiếp nhận chế biến (KDS):** `http://localhost:5173`
+   - Ngay khi thu ngân bấm duyệt (hoặc tạo đơn trực tiếp tại quầy), đơn hàng **lập tức nảy lên (Realtime)** trên màn hình KDS kèm chuông báo (`NEW_ORDER_CREATED`).
+   - Bếp bấm "Bắt đầu làm" -> "Hoàn thành" từng món (POS nhận được Toast thông báo `ITEM_READY`).
+4. **Thu ngân thanh toán gộp bàn tại quầy (POS):** `http://localhost:5175`
+   - Nhấp vào Bàn 05 (Đang phục vụ): Hiển thị đầy đủ danh sách món gộp từ các đợt gọi đã duyệt.
+   - Nhập chiết khấu (nếu có) -> Bấm **"Thanh toán bàn này"**.
+   - Chọn Tiền mặt (nhập tiền khách đưa / chọn mệnh giá nhanh, hệ thống tính chính xác số tiền **"Trả lại khách"**) hoặc Chuyển khoản VietQR PayOS -> Bấm **"Xác nhận Thanh toán"**.
+   - Hóa đơn nhiệt (80mm) in trọn vẹn toàn bộ món của tất cả đợt gọi kèm dòng **"Trả lại khách"**.
+   - **Realtime Sync:** Bàn 05 trên POS chuyển về màu xám nhạt (Trống); điện thoại khách hàng tự động đóng modal và giải phóng bàn ăn (`table:completed`).
    - Chuyển sang Tab "Quản lý Kho", số lượng nguyên liệu tự động bị trừ ngầm qua hệ thống RabbitMQ (Transactional SAGA).
    - Khi hết ca, bấm Menu tiện ích -> "Báo cáo kết ca" (`ShiftSummaryModal`) để kiểm kê tiền két 3 chiều và in phiếu bàn giao kết ca 80mm.
-4. **Thử nghiệm Lưu & Phục hồi Hóa đơn tạm tính (Hold Orders):**
+5. **Thử nghiệm Lưu & Phục hồi Hóa đơn tạm tính (Hold Orders):**
    - Tại Tab "Bán hàng", chọn một vài món vào giỏ hàng (kèm Size, Topping, Chiết khấu).
    - Bấm nút **[💾 Lưu tạm]** ở đáy giỏ hàng: Giỏ hàng được làm sạch tức thì, hệ thống tự sinh mã `#TAM-01`, lưu vào `localStorage.pos_held_orders`, và badge **[📄 Đơn tạm tính (1)]** trên Header nhấp nháy xanh `animate-pulse`.
    - Thu ngân có thể phục vụ bán hàng cho khách tiếp theo bình thường.
@@ -251,13 +265,17 @@ npm install --prefix services/order-service
 npm install --prefix services/inventory-service
 npm install --prefix api-gateway
 npm install --prefix frontend/pos-web
+npm install --prefix frontend/customer-web
+npm install --prefix frontend/kds-web
 
-# Build kiểm tra mã nguồn
+# Build kiểm tra mã nguồn (TypeScript & Vite)
 npm run build --prefix services/auth-service
 npm run build --prefix services/order-service
 npm run build --prefix services/inventory-service
 npm run build --prefix api-gateway
 npm run build --prefix frontend/pos-web
+npm run build --prefix frontend/customer-web
+npm run build --prefix frontend/kds-web
 ```
 
 ---

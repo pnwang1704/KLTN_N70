@@ -1,9 +1,9 @@
 # HƯỚNG DẪN TRIỂN KHAI HỆ THỐNG PHÂN TÁN (DEPLOYMENT GUIDE)
 
 Tài liệu này hướng dẫn chi tiết quy trình chuẩn bị, cấu hình và vận hành hệ thống POS N70 theo kiến trúc phân tán:
-- **Backend & Database:** Đóng gói Docker đa tầng và vận hành qua Docker Compose trên Máy chủ ảo (VPS Ubuntu/Debian) hoặc máy local kết nối ngrok.
-- **Frontend (`pos-web`):** Triển khai dưới dạng Single Page Application (SPA) tối ưu trên nền tảng Vercel Edge Network.
-- **Reverse Proxy WebSocket Single-Domain:** Gom toàn bộ luồng REST API và WebSocket / Socket.IO qua duy nhất một cổng API Gateway (port 3000), tối ưu cho triển khai qua tên miền duy nhất hoặc ngrok free.
+- **Backend & Database:** Đóng gói Docker đa tầng và vận hành qua Docker Compose trên Máy chủ ảo (VPS Ubuntu/Debian) hoặc máy local kết nối ngrok, hỗ trợ linh hoạt cả **PostgreSQL Container cục bộ** lẫn **Neon Cloud Serverless PostgreSQL (Singapore)**.
+- **Frontend (`pos-web` & `customer-web`):** Triển khai dưới dạng Single Page Application (SPA) tối ưu trên nền tảng **Vercel Edge Network** (`https://customer-web-lac.vercel.app` cho khách quét mã QR tại bàn).
+- **Reverse Proxy WebSocket Single-Domain & Bypass Ngrok Warning:** Gom toàn bộ luồng REST API và WebSocket / Socket.IO qua duy nhất một cổng API Gateway (port 3000) kèm header `ngrok-skip-browser-warning: "true"`, tối ưu cho điện thoại khách hàng quét mã QR thực tế.
 
 ---
 
@@ -11,21 +11,25 @@ Tài liệu này hướng dẫn chi tiết quy trình chuẩn bị, cấu hình 
 
 ```mermaid
 graph TD
-    Client["Client / Thu ngân (Trình duyệt / Thiết bị POS)"]
-    Vercel["Frontend (pos-web) - Vercel Edge CDN"]
+    Client["Thu ngân POS (Trình duyệt / Máy POS)"]
+    Mobile["Điện thoại Khách hàng (Quét mã QR tại bàn)"]
+    VercelPOS["Frontend (pos-web) - Vercel Edge CDN"]
+    VercelCW["Frontend (customer-web) - customer-web-lac.vercel.app"]
     Host["VPS Host (Linux) / Local ngrok Tunnel"]
     
     subgraph Docker_Network ["Docker Internal Network (pos-network / app-network)"]
         Gateway["api-gateway :3000<br/>(REST API + WebSocket Reverse Proxy /socket.io)"]
-        AuthSvc["auth-service (TCP Microservice)"]
-        OrderSvc["order-service :3004<br/>(Socket.IO Realtime + Microservice)"]
-        InvenSvc["inventory-service (TCP Microservice)"]
-        Postgres["PostgreSQL :5432<br/>(auth_db, order_db, inventory_db)"]
+        AuthSvc["auth-service (RabbitMQ RPC)"]
+        OrderSvc["order-service :3004<br/>(Socket.IO Realtime + QR Approval)"]
+        InvenSvc["inventory-service (RabbitMQ RPC + SAGA)"]
+        Postgres["PostgreSQL / Neon Cloud Serverless<br/>(auth_db, order_db, inventory_db)"]
         RabbitMQ["RabbitMQ :5672 / :15672"]
     end
 
-    Client -->|"HTTPS"| Vercel
+    Client -->|"HTTPS"| VercelPOS
+    Mobile -->|"Quét QR (?tableId=5)"| VercelCW
     Client -->|"REST API & WebSocket /socket.io (Port 3000)"| Gateway
+    Mobile -->|"REST API (ngrok-skip-browser-warning) & /socket.io"| Gateway
 
     Gateway -->|"TCP Microservice"| AuthSvc
     Gateway -->|"TCP Microservice"| OrderSvc
@@ -129,9 +133,9 @@ Cả REST API và kết nối WebSocket `/socket.io` đều tự động chạy 
 
 ---
 
-## 4. TRIỂN KHAI FRONTEND (`pos-web`) TRÊN VERCEL
+## 4. TRIỂN KHAI FRONTEND (`pos-web` & `customer-web`) TRÊN VERCEL
 
-### 4.1. Cấu hình dự án trên Vercel Dashboard
+### 4.1. Cấu hình dự án `pos-web` trên Vercel Dashboard
 1. Truy cập [https://vercel.com](https://vercel.com) và đăng nhập bằng tài khoản GitHub.
 2. Chọn **Add New...** -> **Project** -> Chọn kho lưu trữ `KLTN_N70`.
 3. Trong phần **Project Settings**:
@@ -141,21 +145,31 @@ Cả REST API và kết nối WebSocket `/socket.io` đều tự động chạy 
    - **Output Directory:** `dist` (mặc định).
    - **Install Command:** `npm install` (mặc định).
 
-### 4.2. Cấu hình Environment Variables trên Vercel
-Bạn chỉ cần cấu hình duy nhất 1 biến môi trường:
+### 4.2. Cấu hình Environment Variables cho `pos-web` trên Vercel
 | Tên Biến | Giá trị ví dụ | Giải thích |
 |---|---|---|
 | `VITE_API_GATEWAY_URL` | `https://abcdef-123.ngrok-free.app` (hoặc `https://api.yourdomain.com`) | Địa chỉ duy nhất của API Gateway tiếp nhận cả REST API và WebSocket |
+| `VITE_CUSTOMER_WEB_URL` | `https://customer-web-lac.vercel.app` | Tên miền ứng dụng đặt món QR để `TableQrModal.tsx` tạo đúng liên kết mã QR bàn (`/?tableId=<ID_BÀN>`) |
 
 *(Biến `VITE_SOCKET_URL` là tùy chọn: nếu bỏ trống, Frontend sẽ tự động dùng chung domain với `VITE_API_GATEWAY_URL`).*
 
-### 4.3. Các tệp cấu hình cốt lõi đã tích hợp
+### 4.3. Các tệp cấu hình cốt lõi của `pos-web`
 1. **`frontend/pos-web/vercel.json`:**
    Đã cấu hình rewrite toàn bộ request về `/index.html` nhằm đảm bảo cơ chế Single Page Application (SPA Routing) hoạt động ổn định khi người dùng tải lại trang (`F5`) hoặc truy cập trực tiếp các route con.
 2. **AI Weight Models (`frontend/pos-web/public/models/`):**
    Toàn bộ 14 tệp trọng số phục vụ nhận diện khuôn mặt điểm danh kiosk (`@vladmandic/face-api`) đã được cấu hình track đầy đủ, Vercel sẽ tự động phân phối qua Vercel Edge CDN với tốc độ cao.
 3. **Tài nguyên Ảnh Món Ăn & Đồ Uống Nội Bộ (`frontend/pos-web/public/products/`):**
    Thư mục tĩnh chứa các hình ảnh thực tế chất lượng cao (`tra-sua-tran-chau.jpg`, `khoai-tay-lac.jpg`...) được đóng gói và phục vụ trực tiếp từ Edge CDN cùng origin với web app, giải quyết dứt điểm các lỗi CORS, chặn hotlinking hoặc tải chậm từ bên thứ ba.
+
+### 4.4. Triển khai Ứng dụng Đặt món QR (`frontend/customer-web`) trên Vercel
+1. Tạo một Project mới trên Vercel từ cùng kho lưu trữ `KLTN_N70`, đặt **Root Directory** là `frontend/customer-web` (tên miền triển khai hiện tại: `https://customer-web-lac.vercel.app`).
+2. Khai báo **Environment Variable**:
+   - `VITE_API_GATEWAY_URL`: Trỏ về cùng địa chỉ API Gateway / ngrok (`https://abcdef-123.ngrok-free.app`).
+   - `VITE_SOCKET_URL` *(tùy chọn)*: Bỏ trống để tự động kế thừa từ `VITE_API_GATEWAY_URL` kèm `transports: ['websocket', 'polling']`.
+3. **Các cấu hình chuyên biệt cho Thiết bị Di động Quét QR:**
+   - **`frontend/customer-web/vercel.json`:** Cấu hình SPA Rewrite `{"rewrites": [{"source": "/(.*)", "destination": "/"}]}` giúp cả hai dạng URL `/?tableId=5` và `/table/5` đều hoạt động không báo lỗi `404 Not Found`.
+   - **Vượt rào cảnh báo ngrok (`src/lib/axios.ts`):** Đính kèm header mặc định `'ngrok-skip-browser-warning': 'true'` vào mọi request Axios, đảm bảo trình duyệt Safari/Chrome trên điện thoại khách hàng nhận đúng JSON thực đơn thay vì trang cảnh báo HTML của ngrok.
+   - **Lưu trữ phiên bàn (`src/hooks/useTableSession.ts`):** Lưu `tableId` vào `sessionStorage` để khách hàng reload trang hoặc chuyển tab danh mục không bị mất số bàn.
 
 
 ---
@@ -184,6 +198,8 @@ Nhằm đảm bảo giao diện POS không bị treo hoặc gặp lỗi 502 Bad 
 | **Không nhận được Socket thông báo** | Quên cấu hình proxy WebSocket hoặc sai URL. | Kiểm tra `ORDER_SERVICE_URL` trong API Gateway trỏ đúng `http://order-service:3004` trong Docker hoặc `http://localhost:3004` ở local. |
 | **PayOS báo lỗi 231 (Đơn thanh toán đã tồn tại)** | Đơn hàng được tạo lại với cùng một `orderCode` đã có trên hệ thống PayOS. | Hệ thống đã tích hợp cơ chế Self-healing Fallback tự động bắt lỗi và sinh mã VietQR Napas 247 động (MBBank `970422`), không làm gián đoạn thanh toán. |
 | **Lỗi CORS trên Vercel / ngrok** | Domain chưa được Gateway nhận diện hoặc thiếu `credentials: true`. | Gateway đã tự động cho phép `*.vercel.app` và `*.ngrok-free.app`. Nếu dùng domain riêng, khai báo vào `FRONTEND_URL`. |
+| **Điện thoại quét QR không tải được thực đơn qua ngrok** | Trang cảnh báo trình duyệt của ngrok chặn API trả về HTML thay vì JSON, hoặc biến `VITE_API_GATEWAY_URL` trên Vercel chưa cập nhật theo tunnel mới. | Header `ngrok-skip-browser-warning: "true"` đã được tích hợp sẵn trong `axios.ts`. Kiểm tra cập nhật lại `VITE_API_GATEWAY_URL` trên Vercel Dashboard và bấm **Redeploy** khi đổi phiên ngrok mới. |
+| **Khách quét QR báo "Hiện tại quán chưa mở ca phục vụ"** | Trong bảng `shifts` của chi nhánh chưa có ca làm việc nào bật `isActive = true`. | Vào POS Web -> Quản lý ca làm việc (hoặc chạy seed) để kích hoạt ít nhất 1 ca làm việc đang hoạt động. |
 | **Ảnh món ăn hiển thị icon vỡ** | URL ảnh bên thứ ba bị chặn Hotlink hoặc mất mạng. | Toàn bộ ảnh đã được gán `referrerPolicy="no-referrer"` và fallback sang ảnh cục bộ `/products/` khi gặp lỗi `onError`. |
 | **Lỗi Docker BuildKit: `snapshot does not exist`** | Bộ nhớ đệm BuildKit của Docker Desktop bị lỗi phân mảnh. | Chạy `docker builder prune -a -f` sau đó chạy lại lệnh build. |
 | **Lỗi `lookup mirror.gcr.io: no such host`** | DNS của Docker Desktop bị kẹt hoặc mất mạng internet tạm thời. | Bỏ cờ `--build` (chỉ chạy `docker compose up -d`) hoặc chạy `wsl --shutdown` rồi mở lại Docker Desktop. |

@@ -26,6 +26,17 @@ export class EventsGateway {
     this.server.to(branchId).emit('NEW_ORDER_CREATED', orderData);
   }
 
+  emitQrOrderPending(branchId: string, orderData: any) {
+    this.server.to(branchId).emit('QR_ORDER_PENDING', orderData);
+  }
+
+  emitQrOrderUpdated(
+    branchId: string,
+    payload: { orderId: string; branchId: string; tableId?: string; status: string; reason?: string; order?: any },
+  ) {
+    this.server.to(branchId).emit('QR_ORDER_UPDATED', payload);
+  }
+
   emitItemReady(branchId: string, itemData: any) {
     this.server.to(branchId).emit('ITEM_READY', itemData);
   }

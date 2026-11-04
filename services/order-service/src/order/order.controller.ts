@@ -19,6 +19,30 @@ export class OrderController {
     return this.orderService.getActiveOrders({ branchId: branchId || '1', tableId });
   }
 
+  // HTTP endpoint for getting QR orders waiting for cashier confirmation
+  @Get('qr-pending')
+  async getPendingQrOrdersHttp(@Query('branchId') branchId: string) {
+    return this.orderService.getPendingQrOrders(branchId || '1');
+  }
+
+  // HTTP endpoint for cashier confirming a QR order
+  @Post(':id/confirm-qr')
+  async confirmQrOrderHttp(
+    @Param('id') id: string,
+    @Body() body?: { cashierId?: string },
+  ) {
+    return this.orderService.confirmQrOrder(id, body?.cashierId);
+  }
+
+  // HTTP endpoint for cashier rejecting a QR order
+  @Post(':id/reject-qr')
+  async rejectQrOrderHttp(
+    @Param('id') id: string,
+    @Body() body?: { cashierId?: string; reason?: string },
+  ) {
+    return this.orderService.rejectQrOrder(id, body);
+  }
+
   // HTTP endpoint for processing payment for all table orders
   @Post('pay-table')
   async processTablePaymentHttp(
@@ -110,6 +134,26 @@ export class OrderController {
   @MessagePattern('get_active_orders')
   async handleGetActiveOrders(@Payload() payload: { branchId: string; tableId?: string }) {
     return this.orderService.getActiveOrders(payload);
+  }
+
+  // Message Pattern for getting pending QR orders
+  @MessagePattern('get_pending_qr_orders')
+  async handleGetPendingQrOrders(@Payload() payload: { branchId: string }) {
+    return this.orderService.getPendingQrOrders(payload?.branchId || '1');
+  }
+
+  // Message Pattern for confirming QR order
+  @MessagePattern('confirm_qr_order')
+  async handleConfirmQrOrder(@Payload() payload: { orderId: string; cashierId?: string }) {
+    return this.orderService.confirmQrOrder(payload.orderId, payload.cashierId);
+  }
+
+  // Message Pattern for rejecting QR order
+  @MessagePattern('reject_qr_order')
+  async handleRejectQrOrder(
+    @Payload() payload: { orderId: string; cashierId?: string; reason?: string },
+  ) {
+    return this.orderService.rejectQrOrder(payload.orderId, payload);
   }
 
   // Message Pattern for paying table orders

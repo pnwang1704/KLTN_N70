@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import { CheckCircle2, Sparkles } from 'lucide-react';
+import { CheckCircle2, Sparkles, QrCode } from 'lucide-react';
 import api from './lib/axios';
 import { Header } from './components/Header';
 import { ProductCard } from './components/ProductCard';
@@ -10,62 +10,27 @@ import { ActiveOrderModal } from './components/ActiveOrderModal';
 import { SuccessScreen } from './components/SuccessScreen';
 import { TableSelectScreen } from './components/TableSelectScreen';
 import { useCart } from './context/CartContext';
+import { useTableSession, formatTableBadge } from './hooks/useTableSession';
 import { mockCategories, mockProducts } from './data/mockData';
 import type { Product } from './types';
 import { cn } from './lib/utils';
 
-const STORAGE_KEY_BRANCH = 'customer_branch_id';
-const STORAGE_KEY_TABLE = 'customer_table_id';
 const SOCKET_URL =
   import.meta.env.VITE_SOCKET_URL ||
   import.meta.env.VITE_API_GATEWAY_URL ||
   'http://localhost:3000';
 
-/**
- * Extracts branchId and tableId from current URL (Query params or Path)
- * Supports:
- * - ?branchId=1&tableId=5
- * - ?branch=1&table=5
- * - ?tableId=5 (defaults branchId to '1')
- * - /table/5?branch=1
- * - /table/5
- */
-function parseTableFromUrl(): { branchId: string; tableId: string } | null {
-  try {
-    const url = new URL(window.location.href);
-    const searchParams = url.searchParams;
-
-    let tableId = searchParams.get('tableId') || searchParams.get('table') || '';
-    let branchId = searchParams.get('branchId') || searchParams.get('branch') || '';
-
-    // Check path pattern: /table/:tableId
-    const pathMatch = url.pathname.match(/\/table\/([^/?#]+)/i);
-    if (pathMatch && pathMatch[1]) {
-      tableId = decodeURIComponent(pathMatch[1]);
-    }
-
-    if (tableId.trim()) {
-      let cleanTableId = tableId.trim();
-      if (/^\d+$/.test(cleanTableId)) {
-        cleanTableId = String(parseInt(cleanTableId, 10));
-      }
-      return {
-        tableId: cleanTableId,
-        branchId: (branchId || '1').trim(),
-      };
-    }
-  } catch (e) {
-    console.warn('Could not parse URL params', e);
-  }
-
-  return null;
-}
-
 function MainApp() {
-  const [branchId, setBranchId] = useState<string>('1');
-  const [tableId, setTableId] = useState<string>('');
-  const [isReady, setIsReady] = useState(false);
-  
+  const {
+    branchId,
+    tableId,
+    tableBadge,
+    hasTable,
+    setTableSession,
+    clearTableSession,
+  } = useTableSession();
+
+  const [showManualTableSelect, setShowManualTableSelect] = useState(false);
   const [activeCategoryId, setActiveCategoryId] = useState(mockCategories[0].id);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -74,6 +39,7 @@ function MainApp() {
   const [isLoadingActiveOrders, setIsLoadingActiveOrders] = useState(false);
   const [successOrder, setSuccessOrder] = useState<any>(null);
   const [paymentSuccessNotice, setPaymentSuccessNotice] = useState<{ show: boolean; message: string } | null>(null);
+  const [qrRejectedNotice, setQrRejectedNotice] = useState<string | null>(null);
 
   const { clearCart } = useCart();
 
@@ -81,7 +47,10 @@ function MainApp() {
   const fetchActiveOrders = useCallback(async (bId?: string, tId?: string) => {
     const targetBranch = bId || branchId || '1';
     const targetTable = tId || tableId;
-    if (!targetTable) return;
+    if (!targetTable) {
+      setActiveOrders([]);
+      return;
+    }
 
     setIsLoadingActiveOrders(true);
     try {
@@ -94,69 +63,17 @@ function MainApp() {
     }
   }, [branchId, tableId]);
 
-  // Sync state & routing
-  const applyTableSession = useCallback((bId: string, tId: string, pushToMenu = true) => {
-    const cleanBranchId = bId || '1';
-    const cleanTableId = tId.trim();
-
-    setBranchId(cleanBranchId);
-    setTableId(cleanTableId);
-    localStorage.setItem(STORAGE_KEY_BRANCH, cleanBranchId);
-    localStorage.setItem(STORAGE_KEY_TABLE, cleanTableId);
-    setIsReady(true);
-
-    fetchActiveOrders(cleanBranchId, cleanTableId);
-
-    if (pushToMenu) {
-      const targetUrl = `/menu?branchId=${cleanBranchId}&tableId=${cleanTableId}`;
-      if (window.location.pathname !== '/menu' || window.location.search !== `?branchId=${cleanBranchId}&tableId=${cleanTableId}`) {
-        window.history.replaceState({ page: 'menu', branchId: cleanBranchId, tableId: cleanTableId }, '', targetUrl);
-      }
-    }
-  }, [fetchActiveOrders]);
-
-  // Handle URL identification & session restore
   useEffect(() => {
-    const urlInfo = parseTableFromUrl();
-    const storedTableId = localStorage.getItem(STORAGE_KEY_TABLE);
-    const storedBranchId = localStorage.getItem(STORAGE_KEY_BRANCH) || '1';
-
-    if (urlInfo && urlInfo.tableId) {
-      // 1. Auto-redirect when URL contains table info (e.g. ?branchId=1&tableId=5 or /table/5)
-      applyTableSession(urlInfo.branchId, urlInfo.tableId, true);
-    } else if (window.location.pathname.startsWith('/menu') && storedTableId) {
-      // 2. Refresh on /menu with stored session
-      applyTableSession(storedBranchId, storedTableId, false);
+    if (hasTable && tableId) {
+      fetchActiveOrders(branchId, tableId);
     } else {
-      // 3. Fallback screen: Show manual entry
-      if (storedTableId) {
-        setTableId(storedTableId);
-      }
-      if (storedBranchId) {
-        setBranchId(storedBranchId);
-      }
-      setIsReady(false);
+      setActiveOrders([]);
     }
-  }, [applyTableSession]);
-
-  // Handle browser back/forward buttons
-  useEffect(() => {
-    const handlePopState = () => {
-      const urlInfo = parseTableFromUrl();
-      if (urlInfo && urlInfo.tableId) {
-        applyTableSession(urlInfo.branchId, urlInfo.tableId, false);
-      } else if (window.location.pathname === '/' || window.location.pathname === '') {
-        setIsReady(false);
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [applyTableSession]);
+  }, [hasTable, branchId, tableId, fetchActiveOrders]);
 
   // Socket.IO real-time synchronization
   useEffect(() => {
-    if (!isReady || !tableId) return;
+    if (!hasTable || !tableId) return;
 
     const socket: Socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
@@ -169,15 +86,15 @@ function MainApp() {
     // Listen for table completion event from POS (cashier completed payment)
     socket.on('table:completed', (data: { branchId: string; tableId: string; orderId?: string }) => {
       if (String(data.branchId) === String(branchId) && String(data.tableId) === String(tableId)) {
-        // Clear active orders, cart, and local table session
+        const currentBadge = formatTableBadge(tableId);
         setActiveOrders([]);
         clearCart();
-        localStorage.removeItem(STORAGE_KEY_TABLE);
+        clearTableSession();
         setIsActiveOrderOpen(false);
         setSuccessOrder(null);
         setPaymentSuccessNotice({
           show: true,
-          message: `Bàn ${tableId} của bạn đã hoàn tất thanh toán. Cảm ơn quý khách!`
+          message: `Bàn số ${currentBadge} của bạn đã hoàn tất thanh toán. Cảm ơn quý khách!`
         });
       }
     });
@@ -186,6 +103,23 @@ function MainApp() {
     socket.on('NEW_ORDER_CREATED', (orderData: any) => {
       if (String(orderData?.branchId) === String(branchId) && String(orderData?.tableId) === String(tableId)) {
         fetchActiveOrders();
+      }
+    });
+
+    // Listen for cashier confirming or rejecting QR order
+    socket.on('QR_ORDER_UPDATED', (payload: { orderId: string; branchId: string; tableId?: string; status: string; reason?: string }) => {
+      if (String(payload?.branchId) === String(branchId) && String(payload?.tableId) === String(tableId)) {
+        fetchActiveOrders();
+        if (payload.status === 'PENDING') {
+          setSuccessOrder((prev: any) =>
+            prev && prev.id === payload.orderId ? { ...prev, status: 'PENDING' } : prev
+          );
+        } else if (payload.status === 'CANCELLED') {
+          setSuccessOrder((prev: any) => (prev && prev.id === payload.orderId ? null : prev));
+          setQrRejectedNotice(
+            payload.reason || 'Đơn đặt món vừa rồi chưa được quầy thu ngân xác nhận. Vui lòng liên hệ nhân viên nếu bạn đang ngồi tại bàn!'
+          );
+        }
       }
     });
 
@@ -198,38 +132,27 @@ function MainApp() {
     return () => {
       socket.disconnect();
     };
-  }, [isReady, branchId, tableId, clearCart, fetchActiveOrders]);
+  }, [hasTable, branchId, tableId, clearCart, clearTableSession, fetchActiveOrders]);
 
   // Total active items count across all orders of this table
   const totalActiveItems = activeOrders.reduce((sum, o) => {
     return sum + (o.items?.reduce((itemSum: number, item: any) => itemSum + Number(item.quantity || 1), 0) || 0);
   }, 0);
 
-  // User manually confirms table on Fallback Screen
   const handleConfirmManualTable = (manualTableId: string) => {
-    applyTableSession(branchId || '1', manualTableId, true);
+    setTableSession(branchId || '1', manualTableId, true);
+    setShowManualTableSelect(false);
   };
 
-  // User clicks "Đổi bàn" in Header
-  const handleChangeTable = () => {
-    window.history.pushState({ page: 'table-select' }, '', '/');
-    setIsReady(false);
-  };
-
-  // Reset table after payment completed notice
   const handleAcknowledgePaymentCompleted = () => {
     setPaymentSuccessNotice(null);
-    setTableId('');
-    setIsReady(false);
-    window.history.pushState({ page: 'table-select' }, '', '/');
   };
 
   const filteredProducts = mockProducts.filter(p => p.categoryId === activeCategoryId);
 
-  // Fallback Screen for manual entry
-  if (!isReady) {
+  if (showManualTableSelect) {
     return (
-      <TableSelectScreen 
+      <TableSelectScreen
         initialTableId={tableId}
         branchName="Chi nhánh 1: Quận Gò Vấp (12 Nguyễn Văn Bảo)"
         onConfirmTable={handleConfirmManualTable}
@@ -237,19 +160,39 @@ function MainApp() {
     );
   }
 
-  // Main Menu & Ordering Screen (Mobile-First Frame)
   return (
     <div className="min-h-screen bg-zinc-900/90 sm:bg-zinc-100 flex items-start justify-center sm:py-6 sm:px-4">
       <div className="relative min-h-screen sm:min-h-[720px] sm:max-h-[92vh] sm:rounded-3xl w-full max-w-md bg-white shadow-2xl pb-24 flex flex-col overflow-y-auto animate-in fade-in duration-200">
-        
-        <Header 
-          branchId={branchId} 
-          tableId={tableId} 
+
+        <Header
+          branchId={branchId}
+          tableId={tableId}
           onOpenCart={() => setIsCartOpen(true)}
           onOpenActiveOrders={() => setIsActiveOrderOpen(true)}
           activeItemsCount={totalActiveItems}
-          onChangeTable={handleChangeTable}
+          onChangeTable={() => setShowManualTableSelect(true)}
         />
+
+        {/* Gentle Reminder Banner when visiting without tableId in URL or sessionStorage */}
+        {!hasTable && (
+          <div className="mx-4 mt-3 px-3.5 py-3 rounded-2xl bg-amber-50 border border-amber-200/90 flex items-center justify-between gap-3 shadow-2xs animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <QrCode size={18} />
+              </div>
+              <p className="text-xs font-semibold text-amber-900 leading-snug">
+                Vui lòng quét mã QR tại bàn để đặt món
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowManualTableSelect(true)}
+              className="shrink-0 px-2.5 py-1.5 rounded-xl bg-white border border-amber-300 text-[11px] font-bold text-amber-800 hover:bg-amber-100 transition-colors cursor-pointer"
+            >
+              Nhập bàn
+            </button>
+          </div>
+        )}
 
         {/* Category Horizontal Scroll */}
         <div className="sticky top-[61px] z-30 bg-white/90 backdrop-blur-md border-b border-zinc-100 py-3 shadow-xs">
@@ -260,8 +203,8 @@ function MainApp() {
                 onClick={() => setActiveCategoryId(cat.id)}
                 className={cn(
                   "whitespace-nowrap px-4 py-2 rounded-full text-xs sm:text-sm font-semibold snap-start transition-all cursor-pointer shrink-0 active:scale-95",
-                  activeCategoryId === cat.id 
-                    ? "bg-zinc-900 text-white shadow-xs" 
+                  activeCategoryId === cat.id
+                    ? "bg-zinc-900 text-white shadow-xs"
                     : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900"
                 )}
               >
@@ -274,27 +217,28 @@ function MainApp() {
         {/* Product List */}
         <div className="p-4 grid grid-cols-2 gap-3.5 flex-1">
           {filteredProducts.map(product => (
-            <ProductCard 
-              key={product.id} 
-              product={product} 
-              onClick={setSelectedProduct} 
+            <ProductCard
+              key={product.id}
+              product={product}
+              onClick={setSelectedProduct}
             />
           ))}
         </div>
 
         {/* Modals */}
         {selectedProduct && (
-          <ProductDetailModal 
-            product={selectedProduct} 
-            onClose={() => setSelectedProduct(null)} 
+          <ProductDetailModal
+            product={selectedProduct}
+            onClose={() => setSelectedProduct(null)}
           />
         )}
 
         {isCartOpen && (
-          <CartModal 
+          <CartModal
             branchId={branchId}
             tableId={tableId}
             onClose={() => setIsCartOpen(false)}
+            onRequestSelectTable={() => setShowManualTableSelect(true)}
             onSuccess={(order) => {
               setIsCartOpen(false);
               setSuccessOrder(order);
@@ -304,9 +248,9 @@ function MainApp() {
         )}
 
         {isActiveOrderOpen && (
-          <ActiveOrderModal 
+          <ActiveOrderModal
             orders={activeOrders}
-            tableId={tableId}
+            tableId={tableBadge || tableId}
             onClose={() => setIsActiveOrderOpen(false)}
             onRefresh={() => fetchActiveOrders()}
             isLoading={isLoadingActiveOrders}
@@ -314,12 +258,12 @@ function MainApp() {
         )}
 
         {successOrder && (
-          <SuccessScreen 
-            order={successOrder} 
+          <SuccessScreen
+            order={successOrder}
             onBackToMenu={() => {
               setSuccessOrder(null);
               fetchActiveOrders();
-            }} 
+            }}
           />
         )}
 
@@ -341,7 +285,27 @@ function MainApp() {
                 onClick={handleAcknowledgePaymentCompleted}
                 className="w-full py-3.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-2xl shadow-md active:scale-95 transition-all cursor-pointer"
               >
-                Về trang bắt đầu
+                Về thực đơn
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Real-time QR Order Rejected Notice */}
+        {qrRejectedNotice && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl p-6 w-full max-w-sm text-center shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="w-14 h-14 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-3 font-black text-2xl">
+                !
+              </div>
+              <h3 className="text-lg font-extrabold text-zinc-900 mb-2">Đơn chưa được xác nhận</h3>
+              <p className="text-sm text-zinc-600 mb-5 leading-relaxed">
+                {qrRejectedNotice}
+              </p>
+              <button
+                onClick={() => setQrRejectedNotice(null)}
+                className="w-full py-3 bg-zinc-900 hover:bg-zinc-800 text-white font-bold rounded-2xl transition-colors cursor-pointer"
+              >
+                Đã hiểu
               </button>
             </div>
           </div>
@@ -352,4 +316,3 @@ function MainApp() {
 }
 
 export default MainApp;
-

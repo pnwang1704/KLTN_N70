@@ -50,63 +50,74 @@ sequenceDiagram
 
 ---
 
-## 2. Luồng Khách Đặt Món Tại Bàn (Dine-in Post-pay) & Tự Động Nhận Diện Bàn (Auto-redirect)
+## 2. Luồng Khách Đặt Món Tại Bàn (Dine-in Post-pay), Nhận Diện Phiên Bàn & Duyệt Đơn QR Chống Đơn Ảo
 
-Khách hàng quét mã QR tại bàn ăn để gọi món theo mô hình **Thanh toán sau tại quầy (Post-pay)**. Hệ thống hỗ trợ tự động nhận diện bàn qua URL, gọi nhiều đợt trong bữa ăn và tra cứu danh sách món đã gọi theo thời gian thực.
+Khách hàng quét mã QR tại bàn ăn để gọi món theo mô hình **Thanh toán sau tại quầy (Post-pay)**. Hệ thống tự động bắt và lưu mã bàn vào `sessionStorage`, áp dụng cơ chế phòng vệ **3 lớp chống đơn ảo** (`WAITING_CONFIRM` -> Thu ngân duyệt tại POS -> Đẩy lệnh xuống KDS) và đồng bộ trạng thái đơn trực tiếp lên màn hình điện thoại khách hàng.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor Customer as Khách hàng tại bàn
-    participant Mobile as Customer Web (QR / Port 5174)
+    actor Cashier as Thu ngân POS
+    participant Mobile as Customer Web (Vercel / :5174)
     participant GW as API Gateway (Port 3000)
     participant OS as Order Service (Port 3004)
+    participant POS as POS Web (Quầy thu ngân)
     participant KDS as KDS Web (Port 5173)
     participant DB as Order DB
 
-    %% Giai đoạn 1: Quét QR & Tự động nhận diện bàn
-    Note over Customer, Mobile: Giai đoạn 1: Quét mã QR & Tự động chuyển hướng (Auto-redirect)
-    Customer->>Mobile: Quét mã QR tại bàn (vd: http://localhost:5174/?branchId=1&tableId=5)
-    alt URL có chứa branchId & tableId
-        Mobile->>Mobile: Tự động lưu branchId=1, tableId=5 vào LocalStorage
-        Mobile->>Mobile: Tự động chuyển hướng thẳng vào Menu món (/menu)
-    else URL không có tham số (Fallback Screen)
-        Mobile->>Customer: Hiển thị giao diện Mobile-first có Hero Banner & lưới chọn nhanh số bàn (1, 2, 3...)
-        Customer->>Mobile: Bấm chọn Bàn 5 -> Chuyển sang Menu món
+    %% Giai đoạn 1: Quét QR & Lưu phiên bàn vào sessionStorage
+    Note over Customer, Mobile: Giai đoạn 1: Quét mã QR & Nhận diện phiên bàn (useTableSession)
+    Customer->>Mobile: Quét mã QR tại bàn (vd: https://customer-web-lac.vercel.app/?tableId=5)
+    alt URL có chứa tableId / table (Query hoặc /table/:id)
+        Mobile->>Mobile: Chuẩn hóa mã bàn (B05 -> '5') & lưu vào sessionStorage ('customer_table_id')
+        Mobile->>Customer: Hiển thị huy hiệu "Bàn số: B05" trên Header & mở Menu chọn món
+    else Truy cập trực tiếp không có mã bàn trong URL & sessionStorage
+        Mobile->>Customer: Hiển thị thanh nhắc nhở "Vui lòng quét mã QR tại bàn để đặt món"
     end
 
-    %% Giai đoạn 2: Gọi món đợt 1
-    Note over Customer, DB: Giai đoạn 2: Khách gửi đơn đợt 1 (Đồ uống)
-    Customer->>Mobile: Chọn món, chọn Size (M/L), Topping, Ghi chú
-    Customer->>Mobile: Bấm "Gửi đơn gọi món" (Đợt 1)
-    Mobile->>GW: POST /orders (orderType: 'AT_TABLE', tableId: '5', items, totalAmount)
-    GW->>OS: RabbitMQ RPC: { cmd: 'create_order' }
-    OS->>DB: Lưu đơn hàng (status = 'PENDING', items.itemStatus = 'PENDING')
-    DB-->>OS: Đơn hàng mới (id_1, orderCode_1)
-    OS->>KDS: Socket.IO Emit 'NEW_ORDER_CREATED' tới room branch_1
-    OS-->>GW: Trả về thông tin Order đợt 1
-    GW-->>Mobile: HTTP 201 Created (Order data)
-    KDS->>KDS: Chuông báo ting ting & hiện thẻ đơn Bàn 5 trên màn hình bếp
-    Mobile->>Customer: Màn hình "Đặt món thành công! Vui lòng thanh toán tại quầy khi dùng bữa xong"
+    %% Giai đoạn 2: Gọi món QR & Phòng vệ chống đơn ảo
+    Note over Customer, DB: Giai đoạn 2: Khách gửi đơn QR (WAITING_CONFIRM) & Thu ngân xác nhận
+    Customer->>Mobile: Chọn món, chọn Size (M/L), Topping, Ghi chú -> Bấm "Gửi đơn gọi món"
+    Mobile->>GW: POST /orders (source: 'QR', orderType: 'AT_TABLE', tableId: '5', header: ngrok-skip-browser-warning)
+    GW->>OS: RabbitMQ RPC: 'create_order'
+    OS->>DB: Kiểm tra có Ca làm việc đang mở (Shift.isActive = true) & Bàn <= 3 đơn chờ duyệt
+    OS->>DB: Lưu đơn hàng với status = 'WAITING_CONFIRM' (Chưa bắn xuống KDS)
+    DB-->>OS: Đơn hàng mới (id_1, orderCode_1, status: 'WAITING_CONFIRM')
+    OS->>POS: Socket.IO Emit 'QR_ORDER_PENDING' tới room branch_1
+    OS-->>GW: Trả về thông tin Order
+    GW-->>Mobile: HTTP 201 Created
+    Mobile->>Customer: Màn hình báo vàng: "Đã gửi yêu cầu! Đang chờ quầy thu ngân xác nhận"
+
+    POS->>POS: Phát âm báo chuông 2 nốt, bật thẻ cảnh báo nổi, Badge "Duyệt đơn QR (1)" & viền vàng Bàn 05
+    Cashier->>POS: Mở QrOrderApprovalModal -> Kiểm tra Bàn 05 có khách thật
+    alt Bàn có khách thật -> Thu ngân bấm "Xác nhận & Gửi bếp"
+        POS->>GW: POST /orders/:id/confirm-qr
+        GW->>OS: RabbitMQ RPC: 'confirm_qr_order'
+        OS->>DB: Cập nhật status = 'PENDING', gán cashierId
+        OS->>KDS: Socket.IO Emit 'NEW_ORDER_CREATED' tới room branch_1
+        OS->>Mobile: Socket.IO Emit 'QR_ORDER_UPDATED' (status: 'CONFIRMED')
+        OS->>POS: Socket.IO Emit 'QR_ORDER_UPDATED' (status: 'CONFIRMED')
+        KDS->>KDS: Chuông báo & hiện thẻ đơn Bàn 05 trên màn hình bếp để pha chế
+        Mobile->>Customer: Tự động đổi sang thẻ xanh: "Đã duyệt & gửi món vào bếp!"
+    else Bàn trống (Đơn ảo từ xa) -> Thu ngân bấm "Từ chối"
+        POS->>GW: POST /orders/:id/reject-qr (reason)
+        GW->>OS: RabbitMQ RPC: 'reject_qr_order'
+        OS->>DB: Cập nhật status = 'CANCELLED' (Bếp KDS không bị ảnh hưởng)
+        OS->>Mobile: Socket.IO Emit 'QR_ORDER_UPDATED' (status: 'REJECTED', reason)
+        Mobile->>Customer: Hiển thị thông báo đơn bị từ chối kèm lý do
+    end
 
     %% Giai đoạn 3: Gọi món đợt 2 & Tra cứu món đã gọi
     Note over Customer, DB: Giai đoạn 3: Khách gọi thêm đợt 2 & Tra cứu lịch sử món tại bàn
-    Customer->>Mobile: Chọn thêm món đợt 2 (Cà phê / Bánh ngọt)
-    Customer->>Mobile: Bấm "Gửi đơn gọi món" (Đợt 2)
-    Mobile->>GW: POST /orders (orderType: 'AT_TABLE', tableId: '5', items_2)
-    GW->>OS: RabbitMQ RPC: { cmd: 'create_order' }
-    OS->>DB: Lưu đơn đợt 2 (id_2, status = 'PENDING')
-    OS->>KDS: Socket.IO Emit 'NEW_ORDER_CREATED' (Đợt 2)
-    GW-->>Mobile: HTTP 201 Created
-    
-    Customer->>Mobile: Bấm nút "Món đã gọi" (Receipt Icon trên Header)
+    Customer->>Mobile: Bấm nút "Đơn bàn" trên Header (ActiveOrderModal)
     Mobile->>GW: GET /orders/active?branchId=1&tableId=5
-    GW->>OS: RabbitMQ RPC: { cmd: 'get_active_orders' }
+    GW->>OS: RabbitMQ RPC: 'get_active_orders'
     OS->>DB: Truy vấn các đơn của Bàn 5 có status != COMPLETED && status != CANCELLED
-    DB-->>OS: Trả về danh sách [Order đợt 1, Order đợt 2]
+    DB-->>OS: Trả về danh sách các đợt gọi kèm trạng thái (Chờ xác nhận / Đã gửi bếp)
     OS-->>GW: Active Orders data
     GW-->>Mobile: HTTP 200 OK
-    Mobile->>Customer: Mở Drawer hiển thị gộp tất cả món qua các đợt gọi & Tổng tạm tính chung của bàn
+    Mobile->>Customer: Hiển thị gộp tất cả món qua các đợt gọi & Tổng tạm tính chung của bàn
 ```
 
 ---
@@ -176,11 +187,11 @@ sequenceDiagram
 
     alt Phương thức: TIỀN MẶT (CASH)
         Cashier->>POS: Chọn mệnh giá nhanh hoặc nhập tiền khách đưa
-        POS->>POS: Hiển thị tiền thối lại (changeAmount = amountPaid - finalTotal)
+        POS->>POS: Hiển thị số tiền Trả lại khách (changeAmount = amountPaid - finalTotal)
         Cashier->>POS: Bấm "Xác nhận Thanh toán"
         POS->>GW: POST /orders/pay-table (branchId: '1', tableId: '5', paymentMethod: 'CASH', amountPaid)
         GW->>OS: RabbitMQ RPC: 'pay_table_orders'
-        OS->>DB_O: Tìm các đơn active của Bàn 5 (status != COMPLETED && status != CANCELLED)
+        OS->>DB_O: Tìm các đơn đã duyệt của Bàn 5 (status IN ['PENDING', 'IN_PROGRESS']) & tự hủy đơn WAITING_CONFIRM tồn đọng
         Note over OS, DB_O: Hợp nhất các đợt gọi thành 1 hóa đơn:<br/>- Gán toàn bộ món của đợt phụ vào primaryOrder<br/>- Cập nhật totalAmount & finalAmount gộp<br/>- Đổi status = COMPLETED & Xóa đơn phụ rỗng
         OS->>DB_O: Lưu primaryOrder & Payment
         OS-->>GW: Trả về kết quả thanh toán thành công
@@ -210,7 +221,7 @@ sequenceDiagram
     POS->>POS: Đổi trạng thái Bàn 5 trên Sơ đồ bàn sang Bàn trống (Màu xanh)
 
     %% In hóa đơn
-    POS->>POS: Kích hoạt in hóa đơn nhiệt tự động (Receipt khổ 80mm):<br/>Hiển thị đầy đủ tất cả món của các đợt gọi, Tạm tính, Chiết khấu, TỔNG CỘNG, Tiền khách đưa, Tiền thối
+    POS->>POS: Kích hoạt in hóa đơn nhiệt tự động (Receipt khổ 80mm):<br/>Hiển thị đầy đủ tất cả món của các đợt gọi, Tạm tính, Chiết khấu, TỔNG CỘNG, Tiền khách đưa, Trả lại khách
 
     %% Trừ kho bất đồng bộ SAGA
     Note over OS, DB_I: Cơ chế Event-Driven Trừ kho ngầm (Background Task)
@@ -690,7 +701,13 @@ sequenceDiagram
     Client->>OS: Socket Emit: 'join' (branchId: '1')
     OS->>Room: Thêm socket client vào Room 'branch_1'
     
-    alt Bếp hoàn thành món ăn
+    alt Khách quét QR gửi đơn mới tại bàn
+        OS->>Room: Socket Emit 'QR_ORDER_PENDING' (order)
+        Room-->>Client: POS Web: Phát âm báo 2 nốt, bật thẻ cảnh báo nổi & Badge "Duyệt đơn QR"
+    else Thu ngân xác nhận / từ chối đơn QR
+        OS->>Room: Socket Emit 'QR_ORDER_UPDATED' (status: 'CONFIRMED' | 'REJECTED')
+        Room-->>Client: Customer Web: Cập nhật tức thời trạng thái đơn trên điện thoại khách hàng
+    else Bếp hoàn thành món ăn
         OS->>Room: Socket Emit 'ITEM_READY' (branchId: '1', item: 'Trà Sữa Matcha')
         Room-->>Client: POS Web nhận sự kiện: Hiển thị Toast nổi & Cập nhật Chuông thông báo
     else Thanh toán hóa đơn bàn
@@ -850,6 +867,42 @@ sequenceDiagram
     Tool->>PortInven: Thực thi truy vấn
     PortInven-->>Tool: Trả về số lượng tồn kho nguyên liệu thực tế sau khi nhận sự kiện order_completed
 ```
+
+---
+
+## 14. Luồng Sinh & In Tem Mã QR Bàn 80mm Tại Quầy POS (Table QR Generation & Sticker Printing Workflow)
+
+Quy trình cho phép nhân viên thu ngân hoặc quản lý tự tạo và in tem mã QR định danh cho từng bàn ăn ngay trên giao diện Sơ đồ bàn của `pos-web`, kết nối liền mạch với ứng dụng `customer-web` trên Vercel Edge CDN:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Staff as Nhân viên / Quản lý POS
+    participant Map as POS TableMap.tsx
+    participant Modal as TableQrModal.tsx (qrcode.react)
+    participant PrintRoot as React Portal (#print-root)
+    participant Printer as Máy in nhiệt 80mm
+    actor Customer as Khách hàng tại bàn
+    participant VercelCW as Customer Web (customer-web-lac.vercel.app)
+
+    Staff->>Map: Mở Tab "Sơ đồ bàn" -> Bấm nút "[Tạo QR]" trên thẻ Bàn 05
+    Map->>Modal: Mở TableQrModal(tableId = '5', tableCode = 'B05')
+    Modal->>Modal: Tạo URL đích: https://customer-web-lac.vercel.app/?tableId=5
+    Modal->>Modal: Render <QRCodeSVG level="H" includeMargin /> sắc nét
+    Modal-->>Staff: Hiển thị mã QR Bàn B05 kèm nút "Sao chép link", "Mở thử" & "In tem QR (80mm)"
+
+    Staff->>Modal: Bấm nút "In tem QR (80mm)"
+    Modal->>PrintRoot: Render khối #table-qr-print vào #print-root ngoài #root
+    Modal->>Printer: Kích hoạt window.print() (@media print khổ 80mm)
+    Printer-->>Staff: Xuất tem nhãn QR Bàn B05 (Tên quán, Số bàn lớn, Mã QR Vector, Hướng dẫn quét)
+    Staff->>Staff: Dán cố định tem mã QR lên mặt Bàn 05
+
+    Customer->>Customer: Dùng Camera điện thoại / Zalo quét tem QR trên mặt Bàn 05
+    Customer->>VercelCW: Mở https://customer-web-lac.vercel.app/?tableId=5
+    VercelCW->>VercelCW: vercel.json SPA Rewrite -> useTableSession lưu tableId='5' vào sessionStorage
+    VercelCW-->>Customer: Hiển thị "Bàn số: B05" & tải thực đơn qua ngrok (header ngrok-skip-browser-warning)
+```
+
 
 
 

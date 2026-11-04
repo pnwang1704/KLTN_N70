@@ -74,4 +74,12 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   cashierId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  discountPercent?: number;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
 }

@@ -26,7 +26,14 @@ export const ActiveOrderModal: React.FC<ActiveOrderModalProps> = ({
     return sum + Number(o.finalAmount || o.totalAmount || 0);
   }, 0);
 
-  const renderStatusBadge = (status: string) => {
+  const renderStatusBadge = (status: string, orderStatus?: string) => {
+    if (orderStatus === 'WAITING_CONFIRM' || status === 'WAITING_CONFIRM') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+          <Clock size={10} /> Chờ quầy xác nhận
+        </span>
+      );
+    }
     switch (status) {
       case 'IN_PROGRESS':
         return (
@@ -42,8 +49,8 @@ export const ActiveOrderModal: React.FC<ActiveOrderModalProps> = ({
         );
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-            <Clock size={10} /> Đã gửi bếp
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            <CheckCircle2 size={10} /> Đã gửi bếp
           </span>
         );
     }
@@ -169,7 +176,7 @@ export const ActiveOrderModal: React.FC<ActiveOrderModalProps> = ({
 
                             {/* Status tag */}
                             <div className="mt-1.5">
-                              {renderStatusBadge(item.itemStatus || order.status)}
+                              {renderStatusBadge(item.itemStatus || order.status, order.status)}
                             </div>
                           </div>
 

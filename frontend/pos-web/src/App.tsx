@@ -14,6 +14,7 @@ import { ShiftManagementModal } from './components/ShiftManagementModal';
 import { AttendanceKioskModal } from './components/AttendanceKioskModal';
 import { TimesheetModal } from './components/TimesheetModal';
 import { HeldOrdersDrawer } from './components/HeldOrdersDrawer';
+import { QrOrderApprovalModal } from './components/QrOrderApprovalModal';
 import { useSocket } from './hooks/useSocket';
 import type { Product } from './types';
 
@@ -27,6 +28,7 @@ function App() {
   const [showShiftManagementModal, setShowShiftManagementModal] = useState<boolean>(false);
   const [showAttendanceKiosk, setShowAttendanceKiosk] = useState<boolean>(false);
   const [showTimesheetModal, setShowTimesheetModal] = useState<boolean>(false);
+  const [showQrApprovalModal, setShowQrApprovalModal] = useState<boolean>(false);
   
   useEffect(() => {
     // Check if user is already logged in
@@ -57,7 +59,18 @@ function App() {
   }, []);
 
   const branchId = user?.branchId || '1';
-  const { isConnected, toastMessage, clearToast, notifications, markAsRead } = useSocket(branchId);
+  const {
+    isConnected,
+    toastMessage,
+    clearToast,
+    notifications,
+    markAsRead,
+    pendingQrOrders,
+    qrAlertOrder,
+    clearQrAlert,
+    confirmQrOrder,
+    rejectQrOrder,
+  } = useSocket(branchId, Boolean(user));
   
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [paymentInfo, setPaymentInfo] = useState<OpenPaymentParams | null>(null);
@@ -96,6 +109,8 @@ function App() {
         onOpenShiftManagement={() => setShowShiftManagementModal(true)}
         onOpenAttendanceKiosk={() => setShowAttendanceKiosk(true)}
         onOpenTimesheet={() => setShowTimesheetModal(true)}
+        pendingQrCount={pendingQrOrders.length}
+        onOpenQrApproval={() => setShowQrApprovalModal(true)}
       />
       
       {activeTab === 'POS' && (
@@ -194,6 +209,57 @@ function App() {
 
       {/* Held / Draft Orders Drawer */}
       <HeldOrdersDrawer onNavigatePOS={() => setActiveTab('POS')} />
+
+      {/* QR Order Approval Modal */}
+      <QrOrderApprovalModal
+        isOpen={showQrApprovalModal}
+        orders={pendingQrOrders}
+        onClose={() => setShowQrApprovalModal(false)}
+        onConfirm={confirmQrOrder}
+        onReject={rejectQrOrder}
+      />
+
+      {/* Instant Floating Alert when a Customer scans QR & submits order */}
+      {qrAlertOrder && !showQrApprovalModal && (
+        <div className="absolute bottom-6 right-6 z-50 bg-white border-2 border-amber-400 rounded-2xl shadow-2xl p-4 w-88 animate-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-xs font-black">
+              🔔 Đơn QR mới • Bàn {qrAlertOrder.tableId}
+            </span>
+            <button
+              onClick={clearQrAlert}
+              className="text-zinc-400 hover:text-zinc-700 text-lg leading-none px-1 cursor-pointer"
+            >
+              &times;
+            </button>
+          </div>
+          <p className="text-xs text-zinc-600 mb-3">
+            Khách tại <strong>Bàn {qrAlertOrder.tableId}</strong> vừa đặt{' '}
+            <strong>{(qrAlertOrder.items || []).reduce((s: number, i: any) => s + Number(i.quantity || 1), 0)} món</strong> qua mã QR. Vui lòng kiểm tra và xác nhận!
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                await confirmQrOrder(qrAlertOrder.id);
+              }}
+              className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+            >
+              Duyệt ngay
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                clearQrAlert();
+                setShowQrApprovalModal(true);
+              }}
+              className="flex-1 py-2 bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+            >
+              Xem chi tiết
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Toast Notification for Realtime ITEM_READY */}
       {toastMessage && (

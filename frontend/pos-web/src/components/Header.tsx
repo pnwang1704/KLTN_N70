@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wifi, WifiOff, LogOut, Bell, Clock, Menu, Store, History, BarChart3, Receipt, Package, Users, X, Check, FileText } from 'lucide-react';
+import { Wifi, WifiOff, LogOut, Bell, Clock, Menu, Store, History, BarChart3, Receipt, Package, Users, X, Check, FileText, QrCode } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { NotificationItem } from '../hooks/useSocket';
 import type { ShiftSession } from './ShiftSelectModal';
@@ -20,6 +20,8 @@ interface HeaderProps {
   onOpenShiftManagement?: () => void;
   onOpenAttendanceKiosk?: () => void;
   onOpenTimesheet?: () => void;
+  pendingQrCount?: number;
+  onOpenQrApproval?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ 
@@ -37,6 +39,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenShiftManagement,
   onOpenAttendanceKiosk,
   onOpenTimesheet,
+  pendingQrCount = 0,
+  onOpenQrApproval,
 }) => {
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
@@ -128,6 +132,29 @@ export const Header: React.FC<HeaderProps> = ({
               <span className="text-zinc-400 text-xs font-medium">
                 (0)
               </span>
+            )}
+          </button>
+
+          {/* Pending QR Orders Approval Button */}
+          <button
+            type="button"
+            onClick={onOpenQrApproval}
+            className={cn(
+              "rounded-lg px-3 py-1.5 font-semibold flex items-center gap-2 transition-all cursor-pointer active:scale-95 text-xs sm:text-sm border",
+              pendingQrCount > 0
+                ? "border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100 shadow-sm ring-2 ring-amber-300/50"
+                : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+            )}
+            title="Duyệt đơn khách đặt qua mã QR tại bàn"
+          >
+            <QrCode size={16} className={pendingQrCount > 0 ? "text-amber-600" : "text-zinc-500"} />
+            <span>Duyệt đơn QR</span>
+            {pendingQrCount > 0 ? (
+              <span className="bg-amber-500 text-white text-xs px-2 py-0.5 rounded-full font-black animate-bounce shadow-xs">
+                {pendingQrCount}
+              </span>
+            ) : (
+              <span className="text-zinc-400 text-xs font-medium">(0)</span>
             )}
           </button>
         </div>

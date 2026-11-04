@@ -182,6 +182,7 @@ classDiagram
 
     class OrderStatus {
         <<enumeration>>
+        WAITING_CONFIRM
         PENDING
         IN_PROGRESS
         COMPLETED
@@ -434,7 +435,7 @@ classDiagram
 | :--- | :--- | :--- |
 | **Auth** | `User` | Tài khoản nhân sự đăng nhập vào hệ thống POS / KDS. Thuộc về một chi nhánh và có một vai trò cụ thể. |
 | **Auth** | `Role` | Enum định nghĩa vai trò RBAC: `ADMIN` (Quản trị viên), `MANAGER` (Quản lý chi nhánh), `CASHIER` (Thu ngân), `KITCHEN` (Đầu bếp), `WAITER` (Nhân viên phục vụ bàn). |
-| **Order** | `Order` | Thực thể đơn hàng cốt lõi. Chứa thông tin tổng tiền tạm tính (`totalAmount`), số tiền thực thu sau chiết khấu (`finalAmount`), tỷ lệ chiết khấu (`discountPercent`), bàn số (`tableId`), thu ngân phụ trách (`cashierId`) và trạng thái đơn (`status`). |
+| **Order** | `Order` | Thực thể đơn hàng cốt lõi. Chứa thông tin tổng tiền tạm tính (`totalAmount`), số tiền thực thu sau chiết khấu (`finalAmount`), tỷ lệ chiết khấu (`discountPercent`), bàn số (`tableId`), thu ngân phụ trách (`cashierId`) và trạng thái vòng đời đơn (`status`: `WAITING_CONFIRM` khi khách vừa đặt qua QR chờ thu ngân duyệt, `PENDING`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`). |
 | **Order** | `OrderItem` | Chi tiết món ăn trong đơn, kích cỡ (Size), số lượng, đơn giá và ghi chú riêng của khách hàng. Có trạng thái chế biến riêng (`itemStatus`). |
 | **Order** | `OrderItemTopping` | Các món thêm (trân châu, thạch, phô mai...) gắn kèm với một món ăn cụ thể trong đơn. |
 | **Order** | `Payment` | Giao dịch tài chính gắn với đơn hàng. Lưu trữ phương thức thanh toán (`CASH`, `BANK_TRANSFER`), số tiền khách trả và thời điểm hoàn tất. |

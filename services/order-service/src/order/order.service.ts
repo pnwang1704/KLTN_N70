@@ -7,6 +7,7 @@ import { OrderItem, ItemStatus } from './entities/order-item.entity';
 import { OrderItemTopping } from './entities/order-item-topping.entity';
 import { Payment, PaymentMethod } from './entities/payment.entity';
 import { Expense } from './entities/expense.entity';
+import { Shift } from '../shift/entities/shift.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateItemStatusDto } from './dto/update-item-status.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
@@ -22,15 +23,55 @@ export class OrderService {
     private orderItemRepository: Repository<OrderItem>,
     @InjectRepository(Expense)
     private expenseRepository: Repository<Expense>,
+    @InjectRepository(Shift)
+    private shiftRepository: Repository<Shift>,
     private eventsGateway: EventsGateway,
     @Inject('INVENTORY_SERVICE') private inventoryClient: ClientProxy,
   ) {}
 
   async createOrder(createOrderDto: CreateOrderDto): Promise<Order> {
-    const { items, paymentMethod, ...orderData } = createOrderDto;
+    const { items, paymentMethod, source, ...orderData } = createOrderDto;
+    const isQrOrder = source === 'QR';
+
+    if (isQrOrder) {
+      // 1. Kiểm tra chi nhánh có ca làm việc nào đang kích hoạt không
+      const totalShifts = await this.shiftRepository.count();
+      if (totalShifts > 0) {
+        const activeShifts = await this.shiftRepository
+          .createQueryBuilder('shift')
+          .where('shift.isActive = :isActive', { isActive: true })
+          .andWhere('(shift.branchId = :branchId OR shift.branchId IS NULL)', {
+            branchId: orderData.branchId || '1',
+          })
+          .getCount();
+
+        if (activeShifts === 0) {
+          throw new BadRequestException(
+            'Quán hiện đang đóng ca phục vụ, tạm ngưng nhận đơn gọi món qua mã QR!',
+          );
+        }
+      }
+
+      // 2. Chống spam đơn ảo từ xa: tối đa 3 đợt chờ duyệt trên cùng 1 bàn
+      if (orderData.tableId) {
+        const waitingCount = await this.orderRepository.count({
+          where: {
+            branchId: orderData.branchId || '1',
+            tableId: orderData.tableId,
+            status: OrderStatus.WAITING_CONFIRM,
+          },
+        });
+        if (waitingCount >= 3) {
+          throw new BadRequestException(
+            'Bàn của bạn đang có đơn chờ thu ngân xác nhận. Vui lòng đợi nhân viên duyệt trước khi đặt thêm!',
+          );
+        }
+      }
+    }
 
     const order = this.orderRepository.create({
       ...orderData,
+      status: isQrOrder ? OrderStatus.WAITING_CONFIRM : OrderStatus.PENDING,
       orderCode: Date.now(), // Generate PayOS orderCode
       items: items.map(item => {
         const orderItem = new OrderItem();
@@ -60,11 +101,107 @@ export class OrderService {
     }
 
     const savedOrder = await this.orderRepository.save(order);
-    
-    // Phát sự kiện Socket.IO tới KDS của chi nhánh
-    this.eventsGateway.emitNewOrder(savedOrder.branchId, savedOrder);
 
-    //TODO: Gửi message tới Inventory Service và Reporting Service qua RabbitMQ (có thể emit từ Gateway/Controller)
+    if (isQrOrder) {
+      // Đơn từ QR khách quét: Báo về quầy POS để thu ngân xác nhận trước, CHƯA đẩy thẳng vào KDS bếp
+      this.eventsGateway.emitQrOrderPending(savedOrder.branchId, savedOrder);
+    } else {
+      // Đơn tạo trực tiếp tại POS: Phát sự kiện tới KDS của chi nhánh ngay
+      this.eventsGateway.emitNewOrder(savedOrder.branchId, savedOrder);
+    }
+
+    return savedOrder;
+  }
+
+  async getPendingQrOrders(branchId: string): Promise<Order[]> {
+    return this.orderRepository.find({
+      where: {
+        branchId: branchId || '1',
+        status: OrderStatus.WAITING_CONFIRM,
+      },
+      relations: {
+        items: { toppings: true },
+      },
+      order: {
+        createdAt: 'ASC',
+      },
+    });
+  }
+
+  async confirmQrOrder(orderId: string, cashierId?: string): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: {
+        items: { toppings: true },
+        payment: true,
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Không tìm thấy đơn hàng QR');
+    }
+
+    if (order.status === OrderStatus.PENDING) {
+      return order;
+    }
+
+    if (order.status !== OrderStatus.WAITING_CONFIRM) {
+      throw new BadRequestException('Đơn hàng này đã được xử lý trước đó');
+    }
+
+    order.status = OrderStatus.PENDING;
+    if (cashierId) {
+      order.cashierId = cashierId;
+    }
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Sau khi thu ngân duyệt -> Đẩy đơn xuống màn hình bếp KDS & đồng bộ POS / Customer Web
+    this.eventsGateway.emitNewOrder(savedOrder.branchId, savedOrder);
+    this.eventsGateway.emitQrOrderUpdated(savedOrder.branchId, {
+      orderId: savedOrder.id,
+      branchId: savedOrder.branchId,
+      tableId: savedOrder.tableId,
+      status: OrderStatus.PENDING,
+      order: savedOrder,
+    });
+
+    return savedOrder;
+  }
+
+  async rejectQrOrder(
+    orderId: string,
+    payload?: { cashierId?: string; reason?: string },
+  ): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: {
+        items: { toppings: true },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Không tìm thấy đơn hàng QR');
+    }
+
+    if (order.status !== OrderStatus.WAITING_CONFIRM) {
+      throw new BadRequestException('Chỉ có thể từ chối đơn QR đang ở trạng thái chờ duyệt');
+    }
+
+    order.status = OrderStatus.CANCELLED;
+    if (payload?.cashierId) {
+      order.cashierId = payload.cashierId;
+    }
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    this.eventsGateway.emitQrOrderUpdated(savedOrder.branchId, {
+      orderId: savedOrder.id,
+      branchId: savedOrder.branchId,
+      tableId: savedOrder.tableId,
+      status: OrderStatus.CANCELLED,
+      reason: payload?.reason || 'Thu ngân từ chối đơn (Bàn chưa có khách hoặc đơn không hợp lệ)',
+    });
 
     return savedOrder;
   }
@@ -241,8 +378,8 @@ export class OrderService {
       throw new NotFoundException('Order not found');
     }
 
-    if (order.status !== OrderStatus.PENDING) {
-      throw new BadRequestException('Chỉ được phép xóa đơn hàng đang ở trạng thái PENDING');
+    if (order.status !== OrderStatus.PENDING && order.status !== OrderStatus.WAITING_CONFIRM) {
+      throw new BadRequestException('Chỉ được phép xóa đơn hàng đang ở trạng thái chờ xử lý');
     }
 
     await this.orderRepository.remove(order);
@@ -285,7 +422,11 @@ export class OrderService {
     let orders: Order[] = [];
     if (orderIds && orderIds.length > 0) {
       orders = await this.orderRepository.find({
-        where: { id: In(orderIds), branchId },
+        where: {
+          id: In(orderIds),
+          branchId,
+          status: In([OrderStatus.PENDING, OrderStatus.IN_PROGRESS]),
+        },
         relations: { items: { toppings: true }, payment: true },
         order: { createdAt: 'ASC' },
       });
@@ -294,7 +435,7 @@ export class OrderService {
         where: {
           branchId,
           tableId,
-          status: Not(In([OrderStatus.COMPLETED, OrderStatus.CANCELLED])),
+          status: In([OrderStatus.PENDING, OrderStatus.IN_PROGRESS]),
         },
         relations: { items: { toppings: true }, payment: true },
         order: { createdAt: 'ASC' },
@@ -302,8 +443,14 @@ export class OrderService {
     }
 
     if (orders.length === 0) {
-      throw new NotFoundException(`Không tìm thấy đơn hàng đang hoạt động cho bàn ${tableId}`);
+      throw new NotFoundException(`Không tìm thấy đơn hàng đã xác nhận để thanh toán cho bàn ${tableId}`);
     }
+
+    // Tự động hủy các đơn QR chưa được duyệt còn tồn của bàn này khi kết thúc bàn
+    await this.orderRepository.update(
+      { branchId, tableId, status: OrderStatus.WAITING_CONFIRM },
+      { status: OrderStatus.CANCELLED },
+    );
 
     // If table has multiple orders (e.g. 2 or more rounds from customer-web),
     // merge them into 1 single consolidated Order in the database so order history only shows 1 bill!

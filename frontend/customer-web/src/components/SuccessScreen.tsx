@@ -10,6 +10,7 @@ import {
   Store
 } from 'lucide-react';
 import { formatCurrency } from '../lib/utils';
+import { formatTableBadge } from '../hooks/useTableSession';
 
 interface SuccessScreenProps {
   order: any;
@@ -23,6 +24,7 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ order, onBackToMen
     : new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 
   const totalAmount = order?.finalAmount ?? order?.totalAmount ?? 0;
+  const isWaitingConfirm = order?.status === 'WAITING_CONFIRM';
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-zinc-50 animate-in fade-in duration-300">
@@ -31,16 +33,33 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ order, onBackToMen
         
         {/* Header Icon & Message */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-20 h-20 bg-emerald-100/80 rounded-full flex items-center justify-center mb-4 ring-8 ring-emerald-50">
-            <CheckCircle2 size={44} className="text-emerald-600 animate-in zoom-in-50 duration-300" strokeWidth={2} />
-          </div>
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 mb-2">
-            <ChefHat size={14} /> Đã gửi món vào bếp
-          </span>
-          <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight">Đặt món thành công!</h1>
-          <p className="text-zinc-500 text-sm mt-1 max-w-[280px]">
-            Đơn của bạn đã được chuyển tới Bếp và quầy Thu ngân.
-          </p>
+          {isWaitingConfirm ? (
+            <>
+              <div className="w-20 h-20 bg-amber-100/90 rounded-full flex items-center justify-center mb-4 ring-8 ring-amber-50">
+                <Clock size={42} className="text-amber-600 animate-pulse" strokeWidth={2} />
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 mb-2">
+                <Clock size={14} /> Đang chờ quầy thu ngân xác nhận
+              </span>
+              <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight">Đã gửi yêu cầu đặt món!</h1>
+              <p className="text-zinc-500 text-sm mt-1 max-w-[300px]">
+                Nhân viên quầy đang xác nhận bàn của bạn và sẽ chuyển đơn vào Bếp ngay lập tức.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="w-20 h-20 bg-emerald-100/80 rounded-full flex items-center justify-center mb-4 ring-8 ring-emerald-50">
+                <CheckCircle2 size={44} className="text-emerald-600 animate-in zoom-in-50 duration-300" strokeWidth={2} />
+              </div>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 mb-2">
+                <ChefHat size={14} /> Đã duyệt & gửi món vào bếp
+              </span>
+              <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight">Đặt món thành công!</h1>
+              <p className="text-zinc-500 text-sm mt-1 max-w-[280px]">
+                Đơn của bạn đã được xác nhận và chuyển tới Bếp pha chế.
+              </p>
+            </>
+          )}
         </div>
 
         {/* Thông tin Bàn & Đơn hàng Card */}
@@ -53,7 +72,7 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ order, onBackToMen
               </div>
               <div>
                 <div className="text-xs text-zinc-500 font-medium">Bàn phục vụ</div>
-                <div className="text-lg font-bold text-zinc-900">Bàn {order?.tableId || '1'}</div>
+                <div className="text-lg font-bold text-zinc-900">Bàn {formatTableBadge(String(order?.tableId || '1'))}</div>
               </div>
             </div>
 
@@ -92,7 +111,7 @@ export const SuccessScreen: React.FC<SuccessScreenProps> = ({ order, onBackToMen
               Bếp đã tiếp nhận đơn và đang chuẩn bị món. Quý khách vui lòng thanh toán tại quầy thu ngân khi dùng bữa xong.
             </p>
             <p className="text-[11px] text-amber-700 mt-1.5 italic">
-              * Quý khách chỉ cần báo <strong>Bàn {order?.tableId || '1'}</strong> cho nhân viên thu ngân.
+              * Quý khách chỉ cần báo <strong>Bàn {formatTableBadge(String(order?.tableId || '1'))}</strong> cho nhân viên thu ngân.
             </p>
           </div>
         </div>
