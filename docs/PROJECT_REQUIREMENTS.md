@@ -19,12 +19,12 @@
 ## 2. Công Nghệ Sử Dụng (Tech Stack)
 
 * **Backend Framework:** NestJS (TypeScript), TypeORM cho các Microservices và API Gateway.
-* **Database:** PostgreSQL (Mỗi service quản lý một database độc lập: `auth_db`, `branch_db`, `product_db`, `order_db`, `inventory_db`, `reporting_db`).
+* **Database:** PostgreSQL 15 & **Neon Cloud Serverless PostgreSQL (AWS Singapore)** — Mỗi service quản lý một database độc lập (`auth_db`, `branch_db`, `product_db`, `order_db`, `inventory_db`, `reporting_db`).
 * **Message Broker:** RabbitMQ (Xử lý đồng bộ RPC qua Message Pattern và bất đồng bộ Pub/Sub Event `order_completed`).
-* **Realtime Communication:** Socket.IO Server (Port `3004`, phân tách Room theo từng `branchId`).
+* **Realtime Communication:** Socket.IO Server (Port `3004`, phân tách Room theo từng `branchId`, được Reverse Proxy qua API Gateway Port `3000`).
 * **Cổng thanh toán:** PayOS API (Sinh mã VietQR động theo chuẩn Napas 247).
-* **Frontend:** React 19, TypeScript, Tailwind CSS, Vite, Lucide Icons, Socket.IO Client.
-* **Hạ tầng & Devops:** Docker, Docker Compose với hệ thống **Named Persistent Volumes** cho toàn bộ cơ sở dữ liệu và message broker.
+* **Frontend:** React 19, TypeScript, Tailwind CSS, Vite, Lucide Icons, `qrcode.react` (SVG QR), Socket.IO Client, Axios (`ngrok-skip-browser-warning`).
+* **Hạ tầng & Devops:** Docker, Docker Compose với hệ thống **Named Persistent Volumes**, triển khai SPA trên **Vercel Edge CDN** (`pos-web` & `customer-web`).
 * **Testing:** Jest Unit Testing cho RBAC Guards và Transactional Inventory Service.
 
 ---
@@ -35,7 +35,7 @@
 2. **Auth Service (`auth_db` - 5432):** Quản lý tài khoản nhân viên, mã hóa mật khẩu Bcrypt, cấp phát JWT và phân quyền theo 5 vai trò: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `WAITER`.
 3. **Branch Service (`branch_db` - 5437):** Quản lý danh mục chi nhánh, sơ đồ bàn ăn theo trạng thái (Bàn trống, Đang phục vụ).
 4. **Product Service (`product_db` - 5434):** Quản lý danh mục món ăn, giá bán cơ sở, biến thể kích thước (Size M, L), Topping và cấu hình bật/tắt món cục bộ tại từng chi nhánh (`branch_product_availabilities`).
-5. **Order Service (`order_db` - 5435):** Quản lý vòng đời đơn hàng, chiết khấu (% / tiền mặt), thanh toán hóa đơn, hợp nhất đơn gọi nhiều đợt, dọn dẹp đơn tạm (`DELETE /orders/:id`), quản lý ca làm việc (`Shift`), nhân viên (`Employee`), sinh mã NV tự động (`get_next_employee_code`), chấm công sinh trắc học (`Attendance`), chi tiền mặt két (`Expense`), đối soát kết ca (`shift-summary`) và lưu trữ Socket.IO Realtime Gateway (Port 3004).
+5. **Order Service (`order_db` - 5435 / Neon Cloud):** Quản lý vòng đời đơn hàng, kiểm duyệt đơn QR chống đơn ảo (`WAITING_CONFIRM`, `get_pending_qr_orders`, `confirm_qr_order`, `reject_qr_order`), chiết khấu (% / tiền mặt), thanh toán hóa đơn, hợp nhất đơn gọi nhiều đợt, dọn dẹp đơn tạm (`DELETE /orders/:id`), quản lý ca làm việc (`Shift`), nhân viên (`Employee`), sinh mã NV tự động (`get_next_employee_code`), chấm công sinh trắc học (`Attendance`), chi tiền mặt két (`Expense`), đối soát kết ca (`shift-summary`) và lưu trữ Socket.IO Realtime Gateway (Port 3004).
 6. **Inventory Service (`inventory_db` - 5436):** Quản lý danh mục nguyên liệu thô, định mức tồn kho an toàn, công thức chế biến (`Recipe`) và tự động trừ kho nguyên liệu bằng Database Transaction khi nhận sự kiện `order_completed`.
 7. **Reporting Service (`reporting_db` - 5438):** Tổng hợp và truy xuất báo cáo doanh thu, sản lượng món bán chạy và tỷ lệ tiêu hao nguyên liệu.
 
@@ -48,11 +48,11 @@
 | **UC01** | Đăng nhập & Xác thực hệ thống | Auth / Gateway | **ĐÃ HOÀN THÀNH** | JWT Stateless Token, mật khẩu Bcrypt, Auto-redirect theo trạng thái đăng nhập. |
 | **UC02** | Phân quyền vai trò người dùng (RBAC) | Auth / Gateway | **ĐÃ HOÀN THÀNH** | Hỗ trợ 5 Roles: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `WAITER`. Có bộ Jest Unit Test cho `RolesGuard`. |
 | **UC03** | Quản lý nhân viên chi nhánh | Auth / POS Web | **ĐÃ HOÀN THÀNH** | Xem danh sách, tạo mới, khóa/mở khóa tài khoản; `MANAGER` chỉ quản lý nhân viên thuộc chi nhánh mình. |
-| **UC04** | Đặt món tại bàn qua QR Code (Dine-in) | Customer Web | **ĐÃ HOÀN THÀNH** | Mô hình **Post-pay (Thanh toán sau)**. Khách chọn món gửi bếp trực tiếp, tự động nhận diện bàn qua URL (`?branchId=&tableId=`), fallback Mobile-first sang trọng. |
+| **UC04** | Đặt món tại bàn qua QR Code (Dine-in) | Customer Web | **ĐÃ HOÀN THÀNH** | Mô hình **Post-pay (Thanh toán sau)**. Bắt mã bàn qua URL (`/?tableId=`, `/table/:id`) lưu vào `sessionStorage` (`useTableSession.ts`), hiển thị `"Bàn số: Bxx"` trên Header và nhắc nhở khi chưa quét QR. |
 | **UC05** | Tạo đơn hàng tại quầy (POS) | POS Web / Order | **ĐÃ HOÀN THÀNH** | Chọn món, chọn Size, Topping, ghi chú, đổi loại đơn (Tại bàn / Mang về). |
 | **UC06** | Chiết khấu đơn hàng tại giỏ hàng | POS Web / Order | **ĐÃ HOÀN THÀNH** | Tích hợp trực tiếp tại `OrderPanel.tsx`: hỗ trợ chọn chiết khấu theo `%` hoặc `VNĐ`, tính trừ tự động ra `finalTotal`. |
-| **UC07** | Thanh toán đơn hàng tại quầy POS | POS Web / Order | **ĐÃ HOÀN THÀNH** | `PaymentModal.tsx` tinh giản: Hỗ trợ Tiền mặt (mệnh giá nhanh, tính tiền thối lại) và VietQR PayOS động. |
-| **UC08** | In hóa đơn thanh toán (Receipt) | POS Web | **ĐÃ HOÀN THÀNH** | In nhiệt khổ 80mm qua React Portal + CSS `@media print`: Tạm tính, Chiết khấu, Tổng cộng, Tiền khách đưa, Tiền thối. |
+| **UC07** | Thanh toán đơn hàng tại quầy POS | POS Web / Order | **ĐÃ HOÀN THÀNH** | `PaymentModal.tsx` tinh giản: Hỗ trợ Tiền mặt (mệnh giá nhanh, tính số tiền **"Trả lại khách"**) và VietQR PayOS động. |
+| **UC08** | In hóa đơn thanh toán (Receipt) | POS Web | **ĐÃ HOÀN THÀNH** | In nhiệt khổ 80mm qua React Portal + CSS `@media print`: Tạm tính, Chiết khấu, Tổng cộng, Tiền khách đưa, **"Trả lại khách"**. |
 | **UC09** | Hủy đơn hàng tạm chưa thanh toán | POS Web / Order | **ĐÃ HOÀN THÀNH** | Endpoint `DELETE /orders/:id` dọn dẹp đơn tạm khi đóng modal, có điều kiện chặn không cho xóa đơn đã hoàn thành. |
 | **UC10** | Điều phối chế biến Bếp Realtime (KDS) | KDS Web / Order | **ĐÃ HOÀN THÀNH** | Đồng bộ Socket.IO sự kiện `NEW_ORDER_CREATED`, cập nhật trạng thái món ("Bắt đầu làm", "Hoàn thành") kèm đồng hồ đếm giờ. |
 | **UC11** | Thông báo món sẵn sàng phục vụ | Order / POS Web | **ĐÃ HOÀN THÀNH** | KDS bấm hoàn thành món, server emit `ITEM_READY` tới POS Web hiển thị Toast thông báo và badge chuông thông báo. |
@@ -83,6 +83,10 @@
 | **UC36** | Đóng gói Tài nguyên Hình ảnh Nội bộ & Chiến lược Render Tối ưu | POS Web / Customer Web | **ĐÃ HOÀN THÀNH** | Đóng gói tài nguyên tĩnh nội bộ tại `/products/` (`tra-sua-tran-chau.jpg`, `khoai-tay-lac.jpg`), bổ sung cơ chế phòng vệ `referrerPolicy="no-referrer"`, `loading="lazy"`, và tự động fallback sang ảnh dự phòng / placeholder đồ họa khi link ngoài gặp sự cố, loại bỏ hoàn toàn hiện tượng vỡ icon ảnh. |
 | **UC37** | Cổng Thanh toán VietQR Napas 247 & PayOS Tự Phục Hồi Lỗi | Gateway / Order / POS | **ĐÃ HOÀN THÀNH** | Gắn decorator `@Public()` cho endpoint `POST /payments/payos/create`, tự động mã hóa `encodeURIComponent` query params khi gọi API PayOS, tích hợp cơ chế tự phục hồi thông tin ngân hàng thụ hưởng MBBank (`970422`, `VQRQAMOXB8388`, `PHAN NHAT QUANG`) khi gặp lỗi trùng đơn PayOS mã `231`, trả về link `checkoutUrl` và fallback QR động qua `qrserver`. |
 | **UC38** | Quản trị & Giám sát Hệ Cơ sở dữ liệu Phân tán (Database-per-Service) | DevOps / Cơ sở dữ liệu | **ĐÃ HOÀN THÀNH** | Định tuyến độc lập 6 cơ sở dữ liệu PostgreSQL (`auth_db`: 5432, `product_db`: 5434, `order_db`: 5435, `inventory_db`: 5436, `branch_db`: 5437, `reporting_db`: 5438) với Named Volumes bền vững, chuẩn hóa thông tin xác thực (`postgres`/`password`), hỗ trợ kết nối trực quan qua VS Code Database Client / DBeaver. |
+| **UC39** | Tạo & In tem mã QR bàn 80mm tại POS | POS Web | **ĐÃ HOÀN THÀNH** | Nút `"Tạo QR"` cạnh từng bàn (`1..20`) trên `TableMap.tsx`, mở `TableQrModal.tsx` render mã SVG sắc nét bằng `qrcode.react` trỏ tới `https://customer-web-lac.vercel.app/?tableId=<ID_BÀN>`, hỗ trợ sao chép liên kết và in tem nhiệt 80mm (`#table-qr-print`) qua `window.print()`. |
+| **UC40** | Nhận diện Phiên bàn `sessionStorage` & Triển khai `customer-web` Vercel | Customer Web / DevOps | **ĐÃ HOÀN THÀNH** | Hook `useTableSession.ts` bắt `tableId`/`table` từ URL lưu vào `sessionStorage`, tự động đính kèm khi `POST /orders`. Cấu hình `vercel.json` SPA rewrites, header mặc định `ngrok-skip-browser-warning: "true"` trên Axios và đồng bộ Socket.IO `transports: ['websocket', 'polling']`. |
+| **UC41** | Duyệt đơn QR tại quầy & Phòng vệ Chống đơn ảo 3 lớp | Order / Gateway / POS / Customer | **ĐÃ HOÀN THÀNH** | Trạng thái `OrderStatus.WAITING_CONFIRM`, chặn đặt ngoài giờ mở ca (`Shift.isActive`) & giới hạn tối đa 3 đơn chờ/bàn. Phát Socket `QR_ORDER_PENDING` kèm chuông báo Web Audio 2 nốt, thẻ nổi & modal `QrOrderApprovalModal.tsx` trên POS; chỉ bắn `NEW_ORDER_CREATED` xuống KDS khi thu ngân bấm xác nhận (`confirm-qr`) và đồng bộ tức thời sang màn hình khách (`QR_ORDER_UPDATED`). |
+| **UC42** | Tích hợp Cụm CSDL Đám mây Neon Serverless PostgreSQL | DevOps / Cơ sở dữ liệu | **ĐÃ HOÀN THÀNH** | Kết nối `auth_db`, `order_db`, `inventory_db` lên cụm Neon Cloud Singapore (`ap-southeast-1`, SSL `sslmode=require`) giúp giải phóng hàng GB RAM máy cục bộ mà vẫn giữ chuẩn Database-per-Service; trang bị script tự động `sync-and-seed-neon.js` và `verify-neon-services.js`. |
 
 ---
 
@@ -295,3 +299,29 @@
      - Cổng `5438`: `reporting_db` (`fnb_postgres_reporting`)
   2. **Chuẩn Hóa Thông Số Kết Nối:** Đặt chung `Host: localhost`, `User: postgres`, `Password: password` cho toàn bộ các database để dễ dàng ghi nhớ và cấu hình kết nối.
   3. **Tích Hợp Công Cụ Truy Vấn Trực Quan:** Hướng dẫn kết nối trực tiếp thông qua extension tiện lợi **Database Client** (của cweijan) ngay trong giao diện VS Code, hoặc các công cụ chuẩn công nghiệp như **DBeaver / pgAdmin**, cho phép mở đồng thời cả 6 kết nối để xem ERD, duyệt bảng, chạy lệnh SQL query và đối soát dữ liệu đa service thuận tiện.
+
+
+### Quyết định 26: Kiến trúc Mã QR Bàn Tĩnh kết hợp `sessionStorage` & Triển khai `customer-web` Xuyên Ngrok / Vercel
+* **Bối cảnh:** Khi khách hàng dùng điện thoại di động quét mã QR dán trên bàn để truy cập `customer-web` (triển khai trên Vercel tại `https://customer-web-lac.vercel.app`) kết nối về Backend qua tunnel ngrok, có 3 rào cản thực tế phát sinh:
+  1. Trang cảnh báo trung gian của ngrok (*ngrok browser warning interstitial*) trả về mã HTML thay vì JSON khiến Axios trên điện thoại không tải được danh mục món ăn.
+  2. Khách hàng chuyển đổi danh mục thực đơn hoặc nhấn tải lại trang làm mất tham số `?tableId=` trên thanh địa chỉ, nhưng nếu lưu cứng vào `localStorage` thì lần ghé quán hôm sau lại bị dính nhầm số bàn cũ.
+  3. Nhân viên quán cần công cụ tự tạo và in lại tem QR cho từng bàn ngay trên máy POS khi tem cũ bị mờ/rách.
+* **Giải pháp Kỹ thuật:**
+  1. **Tạo & In Tem QR Vector trên POS (`TableQrModal.tsx`):** Tích hợp nút `"Tạo QR"` trực tiếp trên từng bàn tại `TableMap.tsx`, dùng `qrcode.react` sinh mã SVG độ phân giải cao trỏ về `<VITE_CUSTOMER_WEB_URL>/?tableId=<ID_BÀN>` và in tem khổ nhiệt 80mm qua React Portal `#print-root`.
+  2. **Lưu Phiên Bàn bằng `sessionStorage` (`useTableSession.ts`):** Tự động trích xuất `tableId` / `table` từ cả Query String lẫn Path (`/table/:id`), chuẩn hóa mã bàn (`B05` -> `"5"`) và lưu vào `sessionStorage`. Phiên bàn tồn tại xuyên suốt quá trình chọn món/reload nhưng tự hủy sạch ngay khi khách đóng tab trình duyệt.
+  3. **Hạ tầng SPA & Ngrok Bypass:** Bổ sung `frontend/customer-web/vercel.json` rewrite SPA, gắn header mặc định `'ngrok-skip-browser-warning': 'true'` vào Axios instance và đồng bộ Socket.IO qua `VITE_SOCKET_URL || VITE_API_GATEWAY_URL` kèm `transports: ['websocket', 'polling']`.
+
+### Quyết định 27: Cơ chế Phòng vệ Chống Đơn Ảo QR 3 Lớp & Quy trình Thu ngân Duyệt Đơn (`WAITING_CONFIRM`)
+* **Bối cảnh:** Vì tem mã QR dán cố định trên mặt bàn không tự hết hạn (nhằm tránh việc nhân viên phải in dán lại giấy mỗi ngày), kẻ xấu hoặc khách hàng hiếu kỳ có thể chụp ảnh mã QR mang về nhà rồi bấm đặt hàng chục ly đồ uống ảo. Nếu đơn QR bắn thẳng xuống màn hình bếp KDS như đơn tại quầy, bộ phận pha chế sẽ làm ra sản phẩm không có người nhận, gây thất thoát nghiêm trọng nguyên vật liệu.
+* **Giải pháp Kỹ thuật (Mô hình 3 Lớp Phòng Vệ):**
+  1. **Lớp 1 - Chặn Ngoài Giờ Mở Ca & Chống Spam Theo Bàn:** Khi `POST /orders` có `source === 'QR'`, `OrderService` kiểm tra chi nhánh bắt buộc phải có ít nhất một ca làm việc đang hoạt động (`Shift.isActive = true`) và giới hạn tối đa **3 đơn đang chờ duyệt (`WAITING_CONFIRM`) trên mỗi bàn**.
+  2. **Lớp 2 - Trạng thái Chờ Xác Nhận (`OrderStatus.WAITING_CONFIRM`):** Đơn khách đặt từ QR khởi tạo ở trạng thái `WAITING_CONFIRM` và **tuyệt đối chưa phát sự kiện `NEW_ORDER_CREATED` xuống KDS**, bảo vệ 100% nguyên liệu kho/bếp trước khi được xác thực.
+  3. **Lớp 3 - Kiểm Duyệt Realtime 1-Chạm tại Quầy POS (`QrOrderApprovalModal.tsx`):**
+     - `order-service` phát sự kiện Socket.IO `QR_ORDER_PENDING` tới quầy POS. Máy POS phát âm báo chuông 2 nốt (Web Audio API), hiện thẻ nổi góc màn hình, badge vàng `Duyệt đơn QR (N)` trên Header và đổi viền bàn tương ứng sang vàng hổ phách (`Chờ duyệt QR`).
+     - Thu ngân nhìn ra bàn thực tế (hoặc xác nhận với khách): bấm **"Xác nhận & Gửi bếp"** (`POST /orders/:id/confirm-qr`) để chuyển đơn sang `PENDING`, lúc này hệ thống mới bắn lệnh chế biến xuống KDS và phát `QR_ORDER_UPDATED` cập nhật màn hình điện thoại khách sang trạng thái xanh *"Đã duyệt & gửi món vào bếp!"*. Nếu bàn trống không có khách, thu ngân bấm **"Từ chối"** (`POST /orders/:id/reject-qr`) để hủy đơn ảo ngay lập tức.
+
+### Quyết định 28: Tích hợp Cụm Cơ sở Dữ liệu Đám mây Neon Serverless PostgreSQL Song Song Docker Local
+* **Bối cảnh:** Khi vận hành đồng thời toàn bộ hệ sinh thái trên máy cá nhân (RabbitMQ, API Gateway, 3 Microservices, 3 ứng dụng Web và 6 container PostgreSQL), lượng bộ nhớ RAM tiêu thụ bởi Docker Desktop lên tới 4GB - 6GB.
+* **Giải pháp Kỹ thuật:**
+  1. Triển khai các database độc lập (`auth_db`, `order_db`, `inventory_db`) lên nền tảng **Neon Cloud Serverless PostgreSQL** đặt tại vùng AWS Singapore (`ap-southeast-1`) có độ trễ thấp về Việt Nam, kết nối bảo mật qua SSL (`sslmode=require`).
+  2. Giữ nguyên kiến trúc **Database-per-Service** (mỗi Microservice vẫn kết nối vào database riêng biệt không dùng chung bảng), đồng thời bảo lưu cấu hình 6 container PostgreSQL trong `docker-compose.yml` để có thể chuyển đổi linh hoạt giữa chế độ Cloud tiết kiệm RAM và chế độ Offline Local 100%.

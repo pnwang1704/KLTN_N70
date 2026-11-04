@@ -28,11 +28,14 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `POST` | `/attendances/check-in` | `order-service` | `@Public` | Chấm công vào ca tại Kiosk POS: `@Public` cho phép gọi trực tiếp từ màn hình đăng nhập, so khớp AI khuôn mặt 1:1, tự động gán ca chuẩn (`Shift`), tính trạng thái `ON_TIME` / `LATE` và lưu ảnh snapshot (`201 Created`, `400 Bad Request`). |
 | `POST` | `/attendances/check-out` | `order-service` | `@Public` | Chấm công tan ca tại Kiosk POS: `@Public` gọi trực tiếp trước/sau đăng nhập, so khớp AI khuôn mặt, tự động tính số giờ làm việc `workingHours` và lưu snapshot đối soát (`200 OK`, `400 Bad Request`). |
 | `GET`  | `/attendances/timesheet` | `order-service` | `ADMIN`, `MANAGER` | Truy xuất bảng chấm công đối soát (`?branchId=&fromDate=&toDate=&employeeId=`) kèm ảnh chụp và giờ công (`200 OK`). |
-| `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`) (`200 OK`). |
-| `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (Dine-in Post-pay) hoặc POS Web (`201 Created`, `400 Bad Request`). |
-| `DELETE`| `/orders/:id` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Hủy đơn hàng tạm khi đóng modal thanh toán mà chưa thanh toán. **Điều kiện chặn:** Chỉ xóa khi `status === PENDING`, chặn xóa đơn đã `COMPLETED` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
+| `GET`  | `/orders/active` | `order-service` | `@Public` | Lấy danh sách đơn hàng đang mở / chưa thanh toán của chi nhánh hoặc theo bàn (`?branchId=&tableId=`, bao gồm cả `WAITING_CONFIRM`, `PENDING`, `IN_PROGRESS`) (`200 OK`). |
+| `POST` | `/orders` | `order-service` | `@Public` | Tạo đơn hàng mới từ Customer Web (`source: 'QR'` -> `status: WAITING_CONFIRM`, kiểm tra ca mở & giới hạn tối đa 3 đơn chờ duyệt/bàn) hoặc POS Web (`source: 'POS'` -> `status: PENDING`, gửi thẳng KDS) (`201 Created`, `400 Bad Request`). |
+| `GET`  | `/orders/qr-pending` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Lấy danh sách các đơn hàng khách đặt qua QR đang chờ thu ngân xác nhận (`status = WAITING_CONFIRM`) theo chi nhánh (`?branchId=`) (`200 OK`). |
+| `POST` | `/orders/:id/confirm-qr` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Thu ngân xác nhận đơn QR hợp lệ: chuyển `WAITING_CONFIRM` -> `PENDING`, bắn lệnh `NEW_ORDER_CREATED` xuống KDS và phát `QR_ORDER_UPDATED` cập nhật màn hình khách (`200 OK`, `400 Bad Request`, `404 Not Found`). |
+| `POST` | `/orders/:id/reject-qr` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Thu ngân từ chối/hủy đơn QR ảo: chuyển `WAITING_CONFIRM` -> `CANCELLED` kèm lý do và phát `QR_ORDER_UPDATED` thông báo cho khách (`200 OK`, `400 Bad Request`, `404 Not Found`). |
+| `DELETE`| `/orders/:id` | `order-service` | `ADMIN`, `MANAGER`, `CASHIER` | Hủy đơn hàng tạm khi đóng modal thanh toán mà chưa thanh toán. **Điều kiện chặn:** Chỉ xóa khi `status === PENDING` hoặc `WAITING_CONFIRM`, chặn xóa đơn đã `COMPLETED` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
 | `POST` | `/orders/:id/pay` | `order-service` | `ADMIN`, `CASHIER` | Hoàn tất thanh toán cho một đơn hàng cụ thể (Tiền mặt hoặc Chuyển khoản QR), ghi nhận `Payment`, đổi trạng thái sang `COMPLETED` và kích hoạt trừ kho qua RabbitMQ (`200 OK`, `400 Bad Request`, `404 Not Found`). |
-| `POST` | `/orders/pay-table` | `order-service` | `ADMIN`, `CASHIER` | Hoàn tất thanh toán toàn bộ đơn của một bàn: hợp nhất các đợt gọi thành 1 đơn `COMPLETED`, lưu `Payment`, dọn dẹp đơn phụ và phát Socket.IO `table:completed` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
+| `POST` | `/orders/pay-table` | `order-service` | `ADMIN`, `CASHIER` | Hoàn tất thanh toán toàn bộ đơn đã duyệt của một bàn: hợp nhất các đợt gọi (`PENDING`/`IN_PROGRESS`) thành 1 đơn `COMPLETED`, tự động hủy các đơn `WAITING_CONFIRM` tồn đọng, lưu `Payment` và phát Socket.IO `table:completed` (`200 OK`, `400 Bad Request`, `404 Not Found`). |
 | `PATCH`| `/orders/item-status` | `order-service` | `KITCHEN`, `ADMIN` | Cập nhật trạng thái từng món ăn trên màn hình KDS (`PENDING` -> `IN_PROGRESS` -> `COMPLETED`) (`200 OK`). |
 | `GET`  | `/inventory` | `inventory-service` | `ADMIN`, `MANAGER` | Lấy danh sách tồn kho nguyên liệu theo chi nhánh (`200 OK`). |
 | `POST` | `/inventory/stock-in` | `inventory-service` | `ADMIN`, `MANAGER` | Nhập nguyên vật liệu vào kho chi nhánh (`201 Created`). |
@@ -52,6 +55,7 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 {
   "branchId": "1",
   "orderType": "AT_TABLE",
+  "source": "QR",
   "tableId": "5",
   "totalAmount": 90000,
   "finalAmount": 81000,
@@ -76,6 +80,9 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
   ]
 }
 ```
+> **Lưu ý nghiệp vụ trường `source`:**
+> - Khi `source: "QR"` (gửi từ `customer-web`): Hệ thống kiểm tra chi nhánh có ca hoạt động (`Shift.isActive = true`) và bàn có chưa quá 3 đơn đang chờ duyệt; đơn khởi tạo với `status = "WAITING_CONFIRM"` và phát sự kiện `QR_ORDER_PENDING` tới quầy thu ngân (chưa gửi thẳng xuống bếp KDS).
+> - Khi `source: "POS"` hoặc bỏ trống (tạo trực tiếp tại máy POS): Đơn khởi tạo với `status = "PENDING"` và phát ngay `NEW_ORDER_CREATED` xuống KDS.
 
 ### 1.2. DTO Mẫu: Hoàn tất thanh toán bàn (`POST /orders/pay-table`)
 ```json
@@ -96,12 +103,12 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 }
 ```
 
-### 1.3. Response Mẫu: Hủy đơn hàng PENDING (`DELETE /orders/:id`)
+### 1.3. Response Mẫu: Hủy đơn hàng PENDING / WAITING_CONFIRM (`DELETE /orders/:id`)
 * **Endpoint:** `DELETE /orders/:id`
 * **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
-* **Mục đích:** Xóa sạch bản ghi đơn hàng tạm (dọn dẹp database khi khách đóng modal thanh toán trước khi xác nhận tiền).
+* **Mục đích:** Xóa sạch bản ghi đơn hàng tạm (dọn dẹp database khi khách đóng modal thanh toán trước khi xác nhận tiền hoặc đơn chưa chế biến).
 * **Ràng buộc nghiệp vụ:**
-  - Nếu đơn hàng có trạng thái khác `PENDING` (ví dụ: `COMPLETED`): Trả về `400 Bad Request` với thông báo `"Chỉ được phép xóa đơn hàng đang ở trạng thái PENDING"`.
+  - Nếu đơn hàng có trạng thái khác `PENDING` và `WAITING_CONFIRM` (ví dụ: `COMPLETED`): Trả về `400 Bad Request` với thông báo `"Chỉ được phép xóa đơn hàng đang ở trạng thái PENDING hoặc WAITING_CONFIRM"`.
   - Nếu không tìm thấy mã đơn: Trả về `404 Not Found` với thông báo `"Order not found"`.
 
 **Response (200 OK):**
@@ -377,7 +384,7 @@ Hệ thống cho phép cấu hình linh hoạt các khung giờ ca chuẩn (toà
 
 ---
 
-### 1.8. Cổng Thanh toán VietQR & PayOS (`/payments/payos/*`, `/webhooks/payos`)
+### 1.9. Cổng Thanh toán VietQR & PayOS (`/payments/payos/*`, `/webhooks/payos`)
 
 #### Tạo liên kết thanh toán VietQR PayOS (`POST /payments/payos/create`)
 * **Endpoint:** `POST /payments/payos/create`
@@ -438,6 +445,39 @@ Hệ thống cho phép cấu hình linh hoạt các khung giờ ca chuẩn (toà
 
 ---
 
+### 1.10. Phân hệ Duyệt Đơn Gọi Món QR & Chống Đơn Ảo (`QR Order Approval APIs`)
+
+Nhằm ngăn chặn triệt để rủi ro khách hàng chụp ảnh mã QR dán trên bàn mang về nhà đặt đơn ảo gây lãng phí nguyên vật liệu pha chế, hệ thống trang bị bộ API kiểm duyệt đơn QR tại quầy thu ngân:
+
+#### Lấy danh sách đơn QR chờ duyệt (`GET /orders/qr-pending`)
+* **Endpoint:** `GET /orders/qr-pending?branchId=1`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Mục đích:** Nạp danh sách toàn bộ đơn hàng có `status = 'WAITING_CONFIRM'` của chi nhánh khi thu ngân mở hoặc tải lại trang POS Web (`QrOrderApprovalModal.tsx`).
+* **Response (200 OK):** Mảng các đối tượng `Order` kèm chi tiết `items` và `toppings`, sắp xếp tăng dần theo thời gian gửi (`ASC`) để ưu tiên duyệt đơn đến trước.
+
+#### Xác nhận đơn QR & Đẩy xuống bếp KDS (`POST /orders/:id/confirm-qr`)
+* **Endpoint:** `POST /orders/:id/confirm-qr`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Mục đích:** Sau khi thu ngân quan sát bàn có khách ngồi thực tế, bấm xác nhận để kích hoạt chế biến:
+  1. Cập nhật `order.status = 'PENDING'` và gán `cashierId` của nhân viên duyệt.
+  2. Phát sự kiện Socket.IO `NEW_ORDER_CREATED` tới màn hình bếp KDS.
+  3. Phát sự kiện Socket.IO `QR_ORDER_UPDATED` (`status: 'CONFIRMED'`) tới cả POS Web (ẩn khỏi hàng chờ duyệt) và Customer Web (cập nhật màn hình điện thoại khách sang trạng thái xanh *"Đã duyệt & gửi món vào bếp"*).
+* **Response (200 OK):** Bản ghi `Order` đã chuyển sang trạng thái `PENDING`.
+
+#### Từ chối / Hủy đơn QR ảo (`POST /orders/:id/reject-qr`)
+* **Endpoint:** `POST /orders/:id/reject-qr`
+* **Quyền thực thi (Roles):** `ADMIN`, `MANAGER`, `CASHIER`
+* **Request Body (Tùy chọn):**
+  ```json
+  {
+    "reason": "Bàn trống không có khách ngồi tại quán"
+  }
+  ```
+* **Mục đích:** Chuyển `order.status = 'CANCELLED'` mà không đẩy lệnh xuống bếp KDS, đồng thời phát sự kiện `QR_ORDER_UPDATED` (`status: 'REJECTED'`) thông báo lý do từ chối lên màn hình điện thoại khách.
+* **Response (200 OK):** Bản ghi `Order` ở trạng thái `CANCELLED`.
+
+---
+
 ## 2. Message Pattern RPC (Giao tiếp đồng bộ Request-Response qua RabbitMQ)
 
 API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để gửi yêu cầu và đợi kết quả phản hồi từ các Microservices.
@@ -449,7 +489,10 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `{ cmd: 'get_users' }` | API Gateway | `auth-service` | `{ branchId?: string }` | `User[]` |
 | `{ cmd: 'toggle_user_status' }` | API Gateway | `auth-service` | `{ id: string }` | `User` (Trạng thái `isActive` đã lật) |
 | `{ cmd: 'validate_token' }` | API Gateway | `auth-service` | `{ token: string }` | `{ valid: boolean, user: JwtPayload }` |
-| `'create_order'` | API Gateway | `order-service` | `CreateOrderDto` | `Order` mới tạo (`status: PENDING`) |
+| `'create_order'` | API Gateway | `order-service` | `CreateOrderDto` (`source?: 'QR' \| 'POS'`) | `Order` mới tạo (`WAITING_CONFIRM` nếu QR, `PENDING` nếu POS) |
+| `'get_pending_qr_orders'` | API Gateway | `order-service` | `{ branchId: string }` | `Order[]` (các đơn `WAITING_CONFIRM` chờ thu ngân duyệt) |
+| `'confirm_qr_order'` | API Gateway | `order-service` | `{ orderId: string, cashierId?: string }` | `Order` (`status: PENDING`, kích hoạt KDS & Socket) |
+| `'reject_qr_order'` | API Gateway | `order-service` | `{ orderId: string, cashierId?: string, reason?: string }` | `Order` (`status: CANCELLED`) |
 | `'get_orders'` | API Gateway | `order-service` | `branchId: string` \| `{ branchId, fromDate?, toDate? }` | `Order[]` (kèm items & toppings) |
 | `'get_active_orders'` | API Gateway | `order-service` | `{ branchId: string, tableId?: string }` | `Order[]` (các đơn chưa hoàn tất của bàn/chi nhánh) |
 | `'get_shift_summary'` | API Gateway | `order-service` | `{ branchId, cashierId?, fromDate?, toDate? }` | `ShiftSummaryResult` (`totalRevenue`, `totalCash`, `totalBankTransfer`, `totalExpense`, `expenses`, `totalOrders`, `recentOrders`) |
@@ -495,7 +538,9 @@ WebSocket Server chạy trên `order-service` (Port `3004`) phụ trách đẩy 
 | Event Name | Chiều truyền | Room / Scope | Mô tả chức năng |
 | :--- | :--- | :--- | :--- |
 | `joinBranchRoom` | Client -> Server | Toàn bộ Clients | Client gửi chuỗi `branchId`. Server đưa Socket Client vào room tương ứng nhằm cô lập dữ liệu theo từng chi nhánh (Multi-branch Isolation). |
-| `NEW_ORDER_CREATED` | Server -> KDS Web | `branch_${branchId}` | Phát khi có đơn hàng mới tạo (`PENDING`). KDS tự động thêm thẻ đơn vào danh sách chế biến kèm chuông báo và đồng hồ đếm ngược. |
+| `QR_ORDER_PENDING` | Server -> POS Web | `branch_${branchId}` | Phát ngay khi khách tại bàn gửi đơn qua mã QR (`status = WAITING_CONFIRM`). POS Web phát chuông báo 2 nốt, hiển thị thẻ cảnh báo nổi, cập nhật badge `Duyệt đơn QR (N)` trên Header và đổi viền bàn sang vàng hổ phách (`Chờ duyệt QR`). |
+| `QR_ORDER_UPDATED` | Server -> POS & Customer Web | `branch_${branchId}` | Phát khi thu ngân bấm Xác nhận (`status: 'CONFIRMED'`) hoặc Từ chối (`status: 'REJECTED'`) đơn QR. Payload: `{ orderId, branchId, tableId, status, reason?, order }`. Customer Web tự động cập nhật trạng thái đơn trực tiếp trên màn hình khách hàng. |
+| `NEW_ORDER_CREATED` | Server -> KDS Web | `branch_${branchId}` | Phát khi có đơn hàng được xác nhận chế biến (`PENDING` - tạo từ POS hoặc sau khi thu ngân duyệt đơn QR). KDS tự động thêm thẻ đơn vào danh sách chế biến kèm chuông báo và đồng hồ đếm ngược. |
 | `ITEM_READY` | Server -> POS Web | `branch_${branchId}` | Phát khi Đầu bếp bấm "Hoàn thành" một món trên KDS. POS Web hiển thị Toast thông báo nổi và lưu vào danh sách thông báo (Notification Dropdown). |
 | `order:paid` | Server -> POS Web | `branch_${branchId}` | Phát khi đơn hàng nhận được thanh toán thành công từ Webhook PayOS hoặc quẹt thẻ. POS Web lập tức đóng modal thanh toán và kích hoạt in hóa đơn. |
 | `table:completed` | Server -> Customer & POS Web | `branch_${branchId}` | Phát khi thu ngân hoàn tất thanh toán cho bàn. Payload: `{ branchId, tableId, orderId, orderIds }`. Customer Web tự động đóng modal tra cứu món và reset bàn; POS Web chuyển trạng thái bàn sang Bàn trống. |
@@ -535,3 +580,11 @@ Bên cạnh các REST API tập trung, một số nghiệp vụ vận hành tứ
 * **Storage Engine:** `window.localStorage`.
 * **Storage Key:** `'pos_shift'`.
 * **Cấu trúc:** Lưu thông tin ca trực đang mở của thu ngân (`shiftCode`, `shiftName`, `openedAt`, `cashierName`, `initialCash`), phục vụ hiển thị trên Top Header / Drawer và truyền tham số `fromDate` chính xác khi xuất Báo cáo kết ca (`ShiftSummaryModal`).
+
+### 5.3. Quản lý Phiên Bàn Khách Hàng trên Customer Web (`useTableSession.ts`)
+* **Storage Engine:** `window.sessionStorage` của trình duyệt di động trên `customer-web`.
+* **Storage Keys:** `'customer_table_id'` và `'customer_branch_id'`.
+* **Cơ chế Hoạt động:**
+  - Tự động bắt tham số `tableId` hoặc `table` từ Query String (`/?tableId=5`, `/?tableId=B05`) hoặc Pathname (`/table/5`), chuẩn hóa giá trị (`B05` / `05` -> `"5"`) và lưu vào `sessionStorage`.
+  - Đảm bảo khách hàng reload trang (`F5`), chuyển đổi danh mục thực đơn hoặc mở giỏ hàng vẫn giữ nguyên số bàn (`Bàn số: B05`), nhưng tự động xóa sạch phiên khi đóng tab trình duyệt để không lưu nhầm mã bàn sang ngày hôm sau.
+  - Khi gửi API `POST /orders`, `customer-web` tự động đọc `tableId` từ `sessionStorage` gắn vào payload body kèm `source: 'QR'`.

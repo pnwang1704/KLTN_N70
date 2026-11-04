@@ -10,8 +10,8 @@ Hệ thống được thiết kế theo mô hình **Microservices Architecture**
 graph TB
     %% Client Layer
     subgraph Clients ["Lớp Ứng Dụng Người Dùng (Client Layer)"]
-        CW["Customer Web (Mobile QR / Port 5174)<br/>- Auto-redirect Table URL<br/>- Tra cứu Món đã gọi tại bàn"]
-        POS["POS Web (Port 5175)<br/>- Thu ngân / Sơ đồ bàn / Chiết khấu<br/>- Ca làm việc động & Đối soát két<br/>- Kiosk Chấm công AI (@vladmandic/face-api)<br/>- Quản lý Nhân sự & Bảng công"]
+        CW["Customer Web (Mobile QR / Port 5174 / Vercel)<br/>- Nhận diện bàn sessionStorage (?tableId=)<br/>- Theo dõi duyệt đơn Realtime & Món đã gọi"]
+        POS["POS Web (Port 5175 / Vercel)<br/>- Thu ngân / Tạo & In tem QR Bàn 80mm<br/>- Duyệt đơn QR chống đơn ảo (WAITING_CONFIRM)<br/>- Ca làm việc động & Đối soát két<br/>- Kiosk Chấm công AI (@vladmandic/face-api)"]
         KDS["KDS Web (Port 5173)<br/>- Màn hình Bếp điều phối Realtime"]
     end
 
@@ -41,25 +41,25 @@ graph TB
     end
 
     %% Database Layer
-    subgraph Databases ["Lớp Dữ Liệu Bền Vững (Database-per-Service)"]
-        DB1[("Auth DB<br/>(PostgreSQL 5432)")]
-        DB2[("Order DB<br/>(PostgreSQL 5435)<br/>Orders, Expenses, Shifts,<br/>Employees, Attendances")]
-        DB3[("Inventory DB<br/>(PostgreSQL 5436)")]
+    subgraph Databases ["Lớp Dữ Liệu Bền Vững (Database-per-Service: Local Docker / Neon Cloud Serverless)"]
+        DB1[("Auth DB<br/>(PostgreSQL 5432 / Neon)")]
+        DB2[("Order DB<br/>(PostgreSQL 5435 / Neon)<br/>Orders, Expenses, Shifts,<br/>Employees, Attendances")]
+        DB3[("Inventory DB<br/>(PostgreSQL 5436 / Neon)")]
         DB4[("Branch DB<br/>(PostgreSQL 5437)")]
         DB5[("Product DB<br/>(PostgreSQL 5434)")]
         DB6[("Reporting DB<br/>(PostgreSQL 5438)")]
     end
 
     %% Client Interactions
-    CW -->|"HTTP REST (Create Order, Active Orders)"| GW
-    POS -->|"HTTP REST (Order, Pay Table, Staff, Stock)"| GW
+    CW -->|"HTTP REST (Create QR Order, Active Orders)"| GW
+    POS -->|"HTTP REST (Confirm QR, Order, Pay Table, Staff, Stock)"| GW
     KDS -->|"HTTP REST (Update Item Status)"| GW
 
     %% Realtime WebSocket
     OS -.->|"Socket.IO (NEW_ORDER_CREATED)"| KDS
-    OS -.->|"Socket.IO (ITEM_READY, order:paid)"| POS
-    OS -.->|"Socket.IO (table:completed)"| CW
-    OS -.->|"Socket.IO (table:completed)"| POS
+    OS -.->|"Socket.IO (QR_ORDER_PENDING, ITEM_READY, order:paid)"| POS
+    OS -.->|"Socket.IO (QR_ORDER_UPDATED, table:completed)"| CW
+    OS -.->|"Socket.IO (QR_ORDER_UPDATED, table:completed)"| POS
 
     %% External PayOS Integration
     GW <-->|"Tạo VietQR & Nhận Webhook"| PayOS
@@ -128,7 +128,8 @@ Nhằm tối ưu thời gian phản hồi cho các giao dịch tại quầy thu 
 Order Service tổ chức một WebSocket Server độc lập lắng nghe tại cổng `3004`:
 - **Room Isolation (`joinBranchRoom`):** Khi POS Web, KDS Web hoặc Customer Web khởi chạy, ứng dụng gửi sự kiện `joinBranchRoom(branchId)`. Socket Server sẽ đưa client vào room riêng biệt (ví dụ: `branch_1`, `branch_2`).
 - **Phân phối sự kiện đúng địa chỉ:**
-  - Đơn hàng mới từ QR bàn chi nhánh 1 chỉ kích hoạt thông báo trên màn hình KDS của chi nhánh 1 (`NEW_ORDER_CREATED`).
+  - Đơn hàng khách quét QR tại bàn chi nhánh 1 gửi sự kiện `QR_ORDER_PENDING` tới quầy thu ngân POS của chi nhánh 1 để kiểm duyệt chống đơn ảo.
+  - Khi thu ngân xác nhận đơn QR (hoặc tạo đơn trực tiếp tại POS), hệ thống kích hoạt thông báo chế biến trên màn hình KDS của chi nhánh 1 (`NEW_ORDER_CREATED`) đồng thời báo `QR_ORDER_UPDATED` về màn hình điện thoại khách hàng.
   - Món hoàn thành tại bếp chi nhánh 1 chỉ kích hoạt âm báo và Toast nổi trên POS của chi nhánh 1 (`ITEM_READY`).
   - Đơn hàng thanh toán thành công qua PayOS chỉ gửi tín hiệu `order:paid` tới quầy thu ngân của chi nhánh đó.
   - Khi thu ngân xác nhận thanh toán bàn tại POS, `order-service` phát sự kiện `table:completed` (kèm `branchId`, `tableId`, `orderId`) tới toàn room: Customer Web tại bàn đó lập tức đóng modal món đã gọi, xóa giỏ hàng và giải phóng bàn; đồng thời POS Web cập nhật sơ đồ bàn về trạng thái Bàn trống.
@@ -197,8 +198,8 @@ flowchart TD
 
 ### 6.3. Luồng Tương tác UI trên `pos-web`
 1. **Top Header Siêu Tinh Gọn:**
-   - Xóa bỏ hoàn toàn chữ logo "N70 POS", đưa nút menu ☰, tab "Bán hàng" và nút Badge "Đơn tạm tính" lên vị trí khởi đầu góc trái.
-   - Nút Badge "Đơn tạm tính" hiển thị số lượng hóa đơn lưu tạm hiện tại; khi có đơn ($N > 0$), badge số tự động kích hoạt hiệu ứng `animate-pulse` trên nền xanh dương đậm `bg-blue-600 text-white` để nhắc nhở nhân viên.
+   - Xóa bỏ hoàn toàn chữ logo "N70 POS", đưa nút menu ☰, tab "Bán hàng", nút Badge "Đơn tạm tính" và nút Badge **"Duyệt đơn QR"** lên vị trí khởi đầu góc trái.
+   - Nút Badge "Đơn tạm tính" hiển thị số lượng hóa đơn lưu tạm hiện tại; khi có đơn ($N > 0$), badge số tự động kích hoạt hiệu ứng `animate-pulse` trên nền xanh dương đậm `bg-blue-600 text-white`. Tương tự, khi có khách quét QR gửi đơn mới, nút **"Duyệt đơn QR (M)"** nổi bật tông vàng hổ phách `bg-amber-500 text-white` kèm `animate-pulse` để thu ngân xác nhận ngay.
    - Chuyển toàn bộ thông tin chi nhánh, tên người dùng và badge ca trực ra khỏi Top Header vào Side Drawer, giúp thanh Top Header thoáng đãng và giảm tải nhận thức cho thu ngân.
    - Góc phải duy trì: Nút 1-chạm *"⏰ Chấm công Kiosk"*, Trạng thái mạng *"Connected"*, Chuông thông báo bếp và Nút Đăng xuất.
 2. **Thanh Trượt Side Menu Drawer (`SideMenuDrawer`):**
@@ -563,7 +564,48 @@ Nhằm phục vụ công tác phát triển, kiểm thử và nghiệm thu đồ
 | **6** | `reporting_db`| Reporting Service | `fnb_postgres_reporting` | `5438` | `postgres` / `password` | Dữ liệu tổng hợp báo cáo kinh doanh, sản lượng bán hàng theo ngày/tháng, tỷ lệ hao hụt nguyên liệu. |
 
 ### Hướng Dẫn Kết Nối Bằng Công Cụ Trực Quan
-- **VS Code Extension (Khuyến nghị):** Cài đặt extension **Database Client** (cweijan). Bấm biểu tượng Database trên thanh Activity Bar -> Chọn **New Connection (PostgreSQL)** -> Điền Host: `localhost`, Port tương ứng (ví dụ: `5435`), User: `postgres`, Password: `password`, Database: `order_db` -> Bấm Connect để duyệt bảng và xem dữ liệu trực tiếp trong VS Code.
+- **Chế độ Mặc định Đám mây (Neon Cloud Serverless PostgreSQL - Singapore):** Nhằm tối ưu tài nguyên RAM cho máy phát triển khi chạy đồng thời nhiều container, file `.env` mặc định định tuyến `auth-service`, `order-service` và `inventory-service` sang cụm Neon Cloud (`ep-spring-resonance-ao2usi8g-pooler.c-2.ap-southeast-1.aws.neon.tech`, SSL `sslmode=require`) vẫn đảm bảo tách biệt hoàn toàn 3 database độc lập (`auth_db`, `order_db`, `inventory_db`).
+- **VS Code Extension (Khuyến nghị):** Cài đặt extension **Database Client** (cweijan). Bấm biểu tượng Database trên thanh Activity Bar -> Chọn **New Connection (PostgreSQL)** -> Điền Host (`localhost` với cổng `5432..5438` khi bật Postgres Docker, hoặc Host Neon Cloud cổng `5432` kèm bật SSL) -> Bấm Connect để duyệt bảng và xem dữ liệu trực tiếp trong VS Code.
 - **DBeaver / DataGrip / Navicat:** Tạo kết nối PostgreSQL mới với thông số tương tự để kiểm tra tính toàn vẹn khóa ngoại, cấu trúc bảng và thực thi các câu lệnh SQL kiểm tra nghiệp vụ.
+
+---
+
+## 14. Kiến Trúc Định Danh Bàn Bằng Mã QR Tĩnh & Cơ Chế Chống Đơn Ảo 3 Lớp (Static Table QR & Anti-Fake Order Architecture)
+
+Trong thực tế vận hành F&B, tem mã QR dán cố định trên mặt bàn (`https://customer-web-lac.vercel.app/?tableId=5`) có ưu điểm bền bỉ, in ấn một lần dùng lâu dài, nhưng lại tiềm ẩn rủi ro nghiệp vụ nghiêm trọng: **khách hàng chụp ảnh mã QR mang về nhà và bấm đặt món ảo**, khiến nhà bếp pha chế lãng phí nguyên vật liệu. Hệ thống giải quyết bài toán này bằng kiến trúc phòng vệ 3 lớp kết hợp kiểm duyệt thời gian thực tại quầy thu ngân:
+
+```mermaid
+flowchart TD
+    subgraph POS_QR ["1. Tạo & In Tem QR Bàn (pos-web)"]
+        TM["TableMap.tsx: Bấm nút [Tạo QR] trên thẻ Bàn 01..20"] --> QRM["TableQrModal.tsx: Render <QRCodeSVG /> (qrcode.react)"]
+        QRM --> PRINT_QR["In tem nhiệt 80mm (#table-qr-print) dán cố định tại bàn"]
+    end
+
+    subgraph Customer_QR ["2. Khách Quét QR & Lưu Phiên (customer-web)"]
+        SCAN["Điện thoại quét QR (?tableId=5)"] --> HOOK["useTableSession.ts: Lưu sessionStorage (customer_table_id='5')"]
+        HOOK --> ORDER_REQ["POST /orders (source: 'QR', tableId: '5', header: ngrok-skip-browser-warning)"]
+    end
+
+    subgraph Defense_Layers ["3. Phòng Vệ 3 Lớp & Duyệt Đơn Tại Quầy (order-service & pos-web)"]
+        ORDER_REQ --> L1{"Lớp 1: Có ca làm việc đang mở (Shift.isActive) & Bàn <= 3 đơn chờ?"}
+        L1 -->|"Không đạt"| BLOCK["400 Bad Request: Quán chưa mở ca hoặc quá giới hạn chờ duyệt"]
+        L1 -->|"Hợp lệ"| L2["Lớp 2: Lưu Order với status = WAITING_CONFIRM<br/>(KHÔNG bắn lệnh xuống bếp KDS)"]
+        L2 --> EMIT_PENDING["Socket.IO emit 'QR_ORDER_PENDING' tới POS Room"]
+        EMIT_PENDING --> CASHIER_CHECK{"Lớp 3: Thu ngân kiểm tra bàn thực tế<br/>(QrOrderApprovalModal.tsx)"}
+        CASHIER_CHECK -->|"Có khách thật -> Xác nhận"| CONFIRM["POST /orders/:id/confirm-qr<br/>status: WAITING_CONFIRM -> PENDING"]
+        CASHIER_CHECK -->|"Bàn trống -> Từ chối"| REJECT["POST /orders/:id/reject-qr<br/>status: WAITING_CONFIRM -> CANCELLED"]
+        CONFIRM --> KDS_NOTIFY["Emit 'NEW_ORDER_CREATED' tới KDS Bếp<br/>& 'QR_ORDER_UPDATED' tới Điện thoại khách"]
+        REJECT --> CW_REJECT["Emit 'QR_ORDER_UPDATED' (REJECTED) tới Điện thoại khách"]
+    end
+```
+
+### Các Thành Phần Cốt Lõi
+1. **Sinh & In Tem QR Vector trên POS (`TableQrModal.tsx`):**
+   - Mỗi bàn trên sơ đồ `TableMap.tsx` tích hợp nút **"Tạo QR"**, sử dụng thư viện `qrcode.react` tạo mã SVG sắc nét ở mọi kích thước in kèm tiêu đề tên bàn (`BÀN B05`), URL công khai và nút **"In tem QR (80mm)"** qua React Portal `#print-root`.
+2. **Quản lý Phiên Bàn bằng `sessionStorage` (`useTableSession.ts`):**
+   - Bắt linh hoạt tham số từ cả Query (`/?tableId=5`, `/?table=B05`) và Path (`/table/5`), chuẩn hóa về ID số và lưu trong `sessionStorage` giúp khách hàng F5 tải lại trang hoặc lọc danh mục món không bị mất số bàn, đồng thời tự hủy phiên khi đóng trình duyệt.
+3. **Bảo vệ Nguyên liệu Nhà Bếp Tuyệt đối (`WAITING_CONFIRM`):**
+   - Màn hình bếp KDS chỉ nhận lệnh chế biến (`NEW_ORDER_CREATED`) sau khi thu ngân bấm xác nhận tại quầy. Khi thanh toán đóng bàn (`processTablePayment`), hệ thống chỉ cộng tiền các đơn đã được xác nhận (`PENDING` / `IN_PROGRESS`) và tự động hủy sạch các đơn `WAITING_CONFIRM` chưa duyệt còn sót lại.
+
 
 
