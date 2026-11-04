@@ -9,6 +9,7 @@ export enum OrderType {
 }
 
 export enum OrderStatus {
+  WAITING_CONFIRM = 'WAITING_CONFIRM',
   PENDING = 'PENDING',
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',

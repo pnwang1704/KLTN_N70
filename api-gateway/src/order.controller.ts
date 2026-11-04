@@ -79,6 +79,35 @@ export class OrderController {
     return this.orderClient.send('get_active_orders', { branchId: branchId || '1', tableId });
   }
 
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Get('qr-pending')
+  getPendingQrOrders(@Req() req: any, @Query('branchId') queryBranchId?: string) {
+    const branchId = queryBranchId || req.user?.branchId || '1';
+    return this.orderClient.send('get_pending_qr_orders', { branchId });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Post(':id/confirm-qr')
+  confirmQrOrder(@Param('id') id: string, @Req() req: any) {
+    const cashierId = req.user?.sub || req.user?.id;
+    return this.orderClient.send('confirm_qr_order', { orderId: id, cashierId });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Post(':id/reject-qr')
+  rejectQrOrder(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() req: any,
+  ) {
+    const cashierId = req.user?.sub || req.user?.id;
+    return this.orderClient.send('reject_qr_order', {
+      orderId: id,
+      cashierId,
+      reason: body?.reason,
+    });
+  }
+
   @Roles('CASHIER', 'ADMIN')
   @Post('pay-table')
   processTablePayment(
