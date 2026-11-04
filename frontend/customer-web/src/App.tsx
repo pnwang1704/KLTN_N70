@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import { io, Socket } from 'socket.io-client';
+import { io, type Socket } from 'socket.io-client';
 import { CheckCircle2, Sparkles } from 'lucide-react';
+import api from './lib/axios';
 import { Header } from './components/Header';
 import { ProductCard } from './components/ProductCard';
 import { ProductDetailModal } from './components/ProductDetailModal';
@@ -16,8 +16,10 @@ import { cn } from './lib/utils';
 
 const STORAGE_KEY_BRANCH = 'customer_branch_id';
 const STORAGE_KEY_TABLE = 'customer_table_id';
-const API_BASE_URL = 'http://localhost:3000';
-const SOCKET_URL = 'http://localhost:3004';
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  import.meta.env.VITE_API_GATEWAY_URL ||
+  'http://localhost:3000';
 
 /**
  * Extracts branchId and tableId from current URL (Query params or Path)
@@ -83,7 +85,7 @@ function MainApp() {
 
     setIsLoadingActiveOrders(true);
     try {
-      const res = await axios.get(`${API_BASE_URL}/orders/active?branchId=${targetBranch}&tableId=${targetTable}`);
+      const res = await api.get(`/orders/active?branchId=${targetBranch}&tableId=${targetTable}`);
       setActiveOrders(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.warn('Could not fetch active orders:', error);
@@ -156,7 +158,9 @@ function MainApp() {
   useEffect(() => {
     if (!isReady || !tableId) return;
 
-    const socket: Socket = io(SOCKET_URL);
+    const socket: Socket = io(SOCKET_URL, {
+      transports: ['websocket', 'polling'],
+    });
 
     socket.on('connect', () => {
       socket.emit('joinBranchRoom', branchId || '1');

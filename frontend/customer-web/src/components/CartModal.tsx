@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { X, ChevronRight, FileText } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { formatCurrency } from '../lib/utils';
-import axios from 'axios';
+import api from '../lib/axios';
 
 interface CartModalProps {
   branchId: string;
@@ -42,7 +42,7 @@ export const CartModal: React.FC<CartModalProps> = ({ branchId, tableId, onClose
         }))
       };
 
-      const res = await axios.post('http://localhost:3000/orders', payload);
+      const res = await api.post('/orders', payload);
       clearCart();
       onSuccess(res.data);
     } catch (error) {
