@@ -53,12 +53,13 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 - [x] **Kiểm thử Tự động & Bảo mật RBAC (Unit Testing):**
   - Tinh chỉnh `RolesGuard` trong `api-gateway` ném `ForbiddenException('No role found')` chuẩn NestJS khi request thiếu user hoặc role.
   - 100% các bộ kiểm thử Jest (`roles.guard.spec.ts`, `inventory.service.spec.ts`) vượt qua kiểm tra nghiêm ngặt.
-- [x] **Menu F&B Thực Tế 26 Món & 8 Topping (Expanded F&B Catalog):**
-  - Mở rộng thực đơn gồm **26 món ăn & đồ uống** chuẩn quán hiện đại, phân loại theo 4 nhóm danh mục chính: Trà Sữa (8 món), Cà Phê (6 món), Trà Trái Cây (6 món), Đồ Ăn Vặt (6 món).
-  - Bổ sung **8 loại Topping thực tế**: Trân châu trắng, trân châu đen, thạch phô mai tươi, kem cheese macchiato, pudding trứng caramen, thạch củ năng giòn, đào miếng giòn, hạt sen bùi béo.
-  - Tích hợp đồng bộ trên cả POS Web và Customer Web, cấu hình giá, size, và topping đi kèm chính xác theo thực tế vận hành quán.
+- [x] **Product Service Thực Tế Kết Nối Neon PostgreSQL (`product_db`) & Tích Hợp Cloudinary CDN:**
+  - Triển khai microservice `product-service` độc lập (Hybrid HTTP port `3002` + RabbitMQ `product_queue`) kết nối trực tiếp tới database `product_db` trên **Neon Cloud Serverless PostgreSQL** (gồm 3 bảng thực thể TypeORM: `categories`, `toppings`, `products` với cấu trúc `sizes` và `availableToppings` kiểu `jsonb`).
+  - **Tích hợp Cloudinary (`CloudinaryService` - folder `pos_n70/products`):** Hỗ trợ upload ảnh món ăn trực tiếp từ file binary buffer (`multipart/form-data` qua Multer + `streamifier`) tại endpoint `POST /products/upload` (hoặc đính kèm trực tiếp `file` trong `POST /products`, `PATCH /products/:id`), trả về `secure_url` tốc độ cao từ Cloudinary CDN.
+  - **Auto-Seed & Tự động Migrate Ảnh Mẫu lên Cloudinary:** Tự động khởi tạo **4 danh mục** (`C1`..`C4`), **8 loại Topping** (`T1`..`T8`) và **26 món ăn & đồ uống** (`P1`..`P26`). Khi khởi chạy service hoặc chạy script `scripts/sync-and-seed-neon.js`, các món đang dùng ảnh nội bộ/link ngoài sẽ tự động được đẩy lên Cloudinary (`pos_n70/products`) và cập nhật cột `imageUrl` sang link `https://res.cloudinary.com/...`.
+  - **Quản lý Thực đơn Trực quan trên `pos-web` (`ProductFormModal.tsx`):** Thay thế toàn bộ mock data trên cả `pos-web` và `customer-web` bằng API thật qua `VITE_API_GATEWAY_URL`. Bổ sung nút **"+ Thêm món"**, nút **Làm mới thực đơn**, và nút **Chỉnh sửa món (icon cây bút)** trên từng thẻ món tại `pos-web`, cho phép chọn ảnh từ máy tính upload lên Cloudinary (kèm khung preview tức thì) hoặc dán URL ảnh, chỉnh sửa giá, size, topping và xóa món.
 - [x] **Đóng gói Tài nguyên Hình ảnh Nội bộ & Fallback An toàn (Local Product Assets):**
-  - Đóng gói trực tiếp toàn bộ tài nguyên hình ảnh món ăn vào thư mục tĩnh `/products/` của cả POS Web và Customer Web, loại bỏ nguy cơ gãy ảnh do phụ thuộc CDN ngoài (Pinterest/Unsplash) bị các nhà mạng viễn thông Việt Nam (VNPT, Viettel, FPT) chặn DNS hoặc cơ chế Hotlink Protection.
+  - Đóng gói trực tiếp toàn bộ tài nguyên hình ảnh món ăn vào thư mục tĩnh `/products/` của cả POS Web, Customer Web và `services/product-service/assets/products/`, kết hợp Cloudinary CDN giúp loại bỏ hoàn toàn nguy cơ gãy ảnh do phụ thuộc CDN bên thứ ba bị chặn DNS hoặc Hotlink Protection.
   - Bổ sung thuộc tính `referrerPolicy="no-referrer"`, `loading="lazy"`, và xử lý `onError` tự động fallback sang ảnh dự phòng chất lượng cao, đảm bảo giao diện luôn hiển thị 100% toàn vẹn và tải siêu tốc.
 - [x] **Tích hợp Thanh toán VietQR & PayOS Động Siêu Ổn định (Robust PayOS & Dynamic VietQR):**
   - API Gateway gắn decorator `@Public()` cho `@Post('payments/payos/create')`, cho phép tạo link thanh toán tự do cho cả khách hàng chưa login hoặc thu ngân mà không bị chặn bởi JWT Guard.
@@ -91,7 +92,7 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 * **Message Broker:** RabbitMQ (RPC Request-Response patterns & Asynchronous Pub/Sub events)
 * **Realtime Server:** Socket.IO Server (Cổng 3004, phân tách Room theo từng `branchId`)
 * **Security & Auth:** Stateless JWT, Passport-JWT, Bcrypt, RBAC Guards (`RolesGuard`)
-* **Payment Integration:** PayOS API SDK (VietQR động chuẩn Napas 247)
+* **Payment & Cloud Media Integration:** PayOS API SDK (VietQR động chuẩn Napas 247), **Cloudinary SDK (`cloudinary`, `multer`, `streamifier`)** lưu trữ ảnh thực đơn trên đám mây (`pos_n70/products`)
 * **DevOps & Containerization:** Docker, Docker Compose với Named Persistent Volumes
 
 ---
@@ -102,9 +103,9 @@ Toàn bộ hệ thống chạy ngầm trong một mạng nội bộ (`app-networ
 
 | Thành phần | Công nghệ | Container Name | Port ngoài (Host) | Port trong | Named Persistent Volume |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| :--- | :--- | :--- | :--- | :--- | :--- |
 | **RabbitMQ Management** | RabbitMQ | `fnb_rabbitmq` | `15672` (UI), `5672` | 15672, 5672 | `rabbitmq_data` |
-| **API Gateway** | NestJS | `fnb_api_gateway` | **`3000`** | 3000 | - (Hỗ trợ REST API & WebSocket Proxy `/socket.io`) |
+| **API Gateway** | NestJS | `fnb_api_gateway` | **`3000`** | 3000 | - (Hỗ trợ REST API, Multipart Upload & WebSocket Proxy `/socket.io`) |
+| **Product Service** | NestJS | `fnb_product_service` | **`3002`** | 3002 | - (Kết nối Neon `product_db` & Cloudinary `pos_n70/products`) |
 | **Order Service (Socket)** | NestJS | `fnb_order_service` | **`3004`** | 3004 | - (Được proxy qua Gateway port 3000) |
 | **Auth Database** | PostgreSQL | `fnb_postgres_auth` | `5432` | 5432 | `postgres_auth_data` |
 | **Product Database** | PostgreSQL | `fnb_postgres_product`| `5434` | 5432 | `postgres_product_data` |
@@ -183,6 +184,8 @@ ngrok http 3000
 
 ### 3. Cấu hình Biến Môi Trường (`.env`)
 Hệ thống cung cấp file mẫu `.env.production.example` và tự động đọc các biến cấu hình từ `.env`:
+- `AUTH_DATABASE_URL`, `PRODUCT_DATABASE_URL`, `ORDER_DATABASE_URL`, `INVENTORY_DATABASE_URL`: Chuỗi kết nối PostgreSQL tới từng database độc lập trên cụm Neon Cloud Singapore (`sslmode=require`).
+- `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`: Thông số kết nối Cloudinary phục vụ upload và đồng bộ hình ảnh sản phẩm/món ăn vào thư mục `pos_n70/products`.
 - `JWT_SECRET`: Khóa bí mật ký phát token (mặc định: `super-secret-key`, đồng bộ giữa Gateway và Auth Service).
 - `ORDER_SERVICE_URL`: URL nội bộ proxy WebSocket (`http://order-service:3004` trong Docker).
 - `PAYOS_CLIENT_ID`, `PAYOS_API_KEY`, `PAYOS_CHECKSUM_KEY`: Cổng thanh toán VietQR PayOS.
@@ -261,6 +264,7 @@ Khi chạy hoặc phát triển độc lập từng service:
 ```bash
 # Cài đặt dependencies cho từng module
 npm install --prefix services/auth-service
+npm install --prefix services/product-service
 npm install --prefix services/order-service
 npm install --prefix services/inventory-service
 npm install --prefix api-gateway
@@ -270,6 +274,7 @@ npm install --prefix frontend/kds-web
 
 # Build kiểm tra mã nguồn (TypeScript & Vite)
 npm run build --prefix services/auth-service
+npm run build --prefix services/product-service
 npm run build --prefix services/order-service
 npm run build --prefix services/inventory-service
 npm run build --prefix api-gateway

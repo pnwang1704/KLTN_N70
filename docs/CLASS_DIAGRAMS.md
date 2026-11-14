@@ -448,7 +448,9 @@ classDiagram
 | **Inventory**| `BranchStock` | Quản lý khối lượng tồn kho thực tế của nguyên liệu tại từng chi nhánh cùng mức tồn kho an toàn (`minThreshold`). |
 | **Inventory**| `Recipe` | Bộ định lượng công thức pha chế cho từng món ăn tương ứng theo từng kích thước (Size). |
 | **Inventory**| `StockTransaction`| Sổ cái ghi log biến động kho (Nhập hàng, Tự động trừ kho khi đơn bán hoàn tất, Xuất kho hủy hỏng). |
-| **Product** | `Product` | Món ăn hoặc đồ uống trưng bày trên thực đơn điện tử (Menu). |
+| **Product** | `Category` | Danh mục phân loại thực đơn (`id` dạng `'C1'..'C4'`, `name`, `icon`, `displayOrder`) lưu trong `product_db`. |
+| **Product** | `Topping` | Danh mục món thêm (`id` dạng `'T1'..'T8'`, `name`, `price`, `isAvailable`) lưu trong `product_db`. |
+| **Product** | `Product` | Món ăn hoặc đồ uống trưng bày trên thực đơn điện tử (`id` dạng `'P1'..'P26'`, `categoryId`, `name`, `description`, `basePrice`, `imageUrl` lưu đường dẫn `secure_url` trên Cloudinary `pos_n70/products`, cùng 2 cột JSONB `sizes` và `availableToppings`). |
 | **Product** | `BranchProductAvailability` | Bảng cấu hình tính sẵn có của món ăn tại chi nhánh (cho phép chi nhánh tạm tắt món khi hết nguyên liệu). |
 | **Branch** | `Branch` | Định nghĩa chi nhánh cửa hàng vật lý trong chuỗi F&B. |
 | **Branch** | `Table` | Định nghĩa bàn ăn trong sơ đồ nhà hàng phục vụ mô hình dùng bữa tại bàn (Dine-in). |

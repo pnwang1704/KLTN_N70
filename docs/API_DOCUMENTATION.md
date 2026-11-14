@@ -39,9 +39,15 @@ Toàn bộ REST API được hứng tại **API Gateway (Port 3000)** và địn
 | `PATCH`| `/orders/item-status` | `order-service` | `KITCHEN`, `ADMIN` | Cập nhật trạng thái từng món ăn trên màn hình KDS (`PENDING` -> `IN_PROGRESS` -> `COMPLETED`) (`200 OK`). |
 | `GET`  | `/inventory` | `inventory-service` | `ADMIN`, `MANAGER` | Lấy danh sách tồn kho nguyên liệu theo chi nhánh (`200 OK`). |
 | `POST` | `/inventory/stock-in` | `inventory-service` | `ADMIN`, `MANAGER` | Nhập nguyên vật liệu vào kho chi nhánh (`201 Created`). |
-| `GET`  | `/products` | `api-gateway` (Mock) | `@Public` | Lấy danh sách sản phẩm thực đơn demo (kèm giá, size, toppings) cho lưới bán hàng POS (`200 OK`). |
-| `GET`  | `/categories` | `api-gateway` (Mock) | `@Public` | Lấy danh mục sản phẩm (Trà Sữa, Cà Phê, Đá Xay...) (`200 OK`). |
-| `GET`  | `/toppings` | `api-gateway` (Mock) | `@Public` | Lấy danh sách topping kèm đơn giá (`200 OK`). |
+| `GET`  | `/products` | `product-service` | `@Public` | Lấy danh sách toàn bộ sản phẩm/món ăn thực đơn từ `product_db` (hỗ trợ `?categoryId=`, kèm giá, `sizes` JSONB, `availableToppings` JSONB và `imageUrl` Cloudinary) (`200 OK`). |
+| `GET`  | `/products/:id` | `product-service` | `@Public` | Lấy thông tin chi tiết một món ăn theo mã `id` (`200 OK`, `404 Not Found`). |
+| `POST` | `/products/upload` | `product-service` | `@Public` | Upload file ảnh sản phẩm (`multipart/form-data`, field `file`) lên Cloudinary (folder `pos_n70/products`) và trả về `{ imageUrl: result.secure_url }` (`201 Created`, `400 Bad Request`). |
+| `POST` | `/products` | `product-service` | `@Public` | Tạo món ăn mới (nhận JSON hoặc `multipart/form-data` kèm `file` ảnh trực tiếp), lưu vào bảng `products` trên Neon DB (`201 Created`, `400 Bad Request`). |
+| `PATCH`| `/products/:id` | `product-service` | `@Public` | Cập nhật thông tin món ăn (nhận JSON hoặc `multipart/form-data` kèm `file` ảnh mới) (`200 OK`, `404 Not Found`). |
+| `DELETE`| `/products/:id` | `product-service` | `@Public` | Xóa món ăn khỏi thực đơn theo `id` (`200 OK`, `404 Not Found`). |
+| `GET`  | `/categories` | `product-service` | `@Public` | Lấy danh sách danh mục thực đơn (`C1`..`C4`: Trà Sữa, Cà Phê, Trà Trái Cây, Đồ Ăn Vặt) từ `product_db` (`200 OK`). |
+| `POST` | `/categories` | `product-service` | `@Public` | Tạo danh mục thực đơn mới (`201 Created`). |
+| `GET`  | `/toppings` | `product-service` | `@Public` | Lấy danh sách 8 loại topping kèm đơn giá từ `product_db` (`200 OK`). |
 | `GET`  | `/branches` | `api-gateway` (Mock) | `@Public` | Lấy danh sách chi nhánh (Mặc định Chi nhánh 1 Trung Tâm) (`200 OK`). |
 | `WS/GET`| `/socket.io` | `api-gateway` (Proxy)| `@Public` | Reverse Proxy gom traffic: Chuyển tiếp HTTP Polling và WebSocket Upgrade sang Order Service cổng 3004 (`101 Switching Protocols`, `200 OK`). |
 | `POST` | `/payments/payos/create` | `api-gateway` | `@Public` | Tạo link thanh toán VietQR động tích hợp PayOS (tự động gắn `orderCode` và số tiền chính xác sau chiết khấu) (`200 OK`). |
@@ -478,6 +484,46 @@ Nhằm ngăn chặn triệt để rủi ro khách hàng chụp ảnh mã QR dán
 
 ---
 
+### 1.11. Phân hệ Thực đơn & Upload Hình ảnh Cloudinary (`Product & Cloudinary APIs`)
+
+Các API quản lý danh mục, topping, món ăn trên `product_db` (Neon Cloud PostgreSQL) và tải ảnh sản phẩm lên **Cloudinary** (`folder: 'pos_n70/products'`).
+
+#### Upload ảnh sản phẩm lên Cloudinary (`POST /products/upload`)
+* **Endpoint:** `POST /products/upload`
+* **Content-Type:** `multipart/form-data` (Field bắt buộc: `file`)
+* **Mô tả:** Nhận file binary từ máy tính người dùng qua `FileInterceptor('file')`, chuyển tiếp lossless sang `product-service` và đẩy lên Cloudinary vào thư mục `pos_n70/products` bằng `streamifier`.
+* **Response (201 Created):**
+  ```json
+  {
+    "imageUrl": "https://res.cloudinary.com/<cloud_name>/image/upload/v1731564000/pos_n70/products/abcxyz.jpg"
+  }
+  ```
+
+#### Tạo mới hoặc Cập nhật món ăn (`POST /products`, `PATCH /products/:id`)
+* **Endpoints:** `POST /products` | `PATCH /products/:id` | `PUT /products/:id`
+* **Content-Type:** Hỗ trợ cả `application/json` (khi đã có `imageUrl` từ bước upload preview) hoặc `multipart/form-data` (gửi kèm trực tiếp field `file`).
+* **Request Body Mẫu (JSON):**
+  ```json
+  {
+    "name": "Trà Sữa Oolong Nướng Kem Trứng",
+    "categoryId": "C1",
+    "basePrice": 45000,
+    "description": "Oolong nướng đậm vị kết hợp lớp kem trứng khè lửa thơm béo.",
+    "imageUrl": "https://res.cloudinary.com/<cloud_name>/image/upload/v1731564000/pos_n70/products/oolong.jpg",
+    "sizes": [
+      { "id": "S", "name": "Size S", "priceModifier": 0 },
+      { "id": "M", "name": "Size M", "priceModifier": 6000 },
+      { "id": "L", "name": "Size L", "priceModifier": 12000 }
+    ],
+    "availableToppings": [
+      { "id": "T1", "name": "Trân châu trắng", "price": 5000 },
+      { "id": "T4", "name": "Kem Cheese Macchiato", "price": 10000 }
+    ]
+  }
+  ```
+
+---
+
 ## 2. Message Pattern RPC (Giao tiếp đồng bộ Request-Response qua RabbitMQ)
 
 API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để gửi yêu cầu và đợi kết quả phản hồi từ các Microservices.
@@ -516,6 +562,15 @@ API Gateway sử dụng `ClientProxy.send()` (NestJS Microservices RPC) để g�
 | `'delete_order'` | API Gateway | `order-service` | `id: string` | `{ success: boolean, message: string }` |
 | `'update_item_status'` | API Gateway | `order-service` | `UpdateItemStatusDto` | `OrderItem` |
 | `'process_payos_webhook'` | API Gateway | `order-service` | `{ orderCode, amount }` | `Order` |
+| `{ cmd: 'get_categories' }` | API Gateway | `product-service` | `{}` | `Category[]` |
+| `{ cmd: 'create_category' }` | API Gateway | `product-service` | `CreateCategoryDto` | `Category` |
+| `{ cmd: 'get_toppings' }` | API Gateway | `product-service` | `{}` | `Topping[]` |
+| `{ cmd: 'get_products' }` | API Gateway | `product-service` | `{ categoryId?: string }` | `Product[]` |
+| `{ cmd: 'get_product' }` | API Gateway | `product-service` | `{ id: string }` | `Product` |
+| `{ cmd: 'upload_product_image' }` | API Gateway | `product-service` | `{ fileBase64: string, filename?: string }` | `{ imageUrl: string }` (`secure_url` từ Cloudinary `pos_n70/products`) |
+| `{ cmd: 'create_product' }` | API Gateway | `product-service` | `{ dto: CreateProductDto, fileBase64?: string }` | `Product` mới tạo trong `product_db` |
+| `{ cmd: 'update_product' }` | API Gateway | `product-service` | `{ id: string, dto: UpdateProductDto, fileBase64?: string }` | `Product` đã cập nhật |
+| `{ cmd: 'delete_product' }` | API Gateway | `product-service` | `{ id: string }` | `{ success: boolean, id: string }` |
 | `{ cmd: 'get_inventory' }` | API Gateway | `inventory-service`| `{ branchId?: string }` | `BranchStock[]` |
 | `{ cmd: 'stock_in' }` | API Gateway | `inventory-service`| `StockInDto` | `StockTransaction` |
 

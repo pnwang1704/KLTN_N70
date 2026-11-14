@@ -18,11 +18,12 @@ graph TB
     %% External Services
     subgraph External ["Dịch Vụ Bên Ngoài (Third-party)"]
         PayOS["Cổng Thanh Toán PayOS (VietQR)"]
+        Cloudinary["Cloudinary Cloud Storage<br/>(Folder: pos_n70/products)"]
     end
 
     %% API Gateway Layer
     subgraph Gateway ["Cổng Điều Phối (API Gateway Layer)"]
-        GW["API Gateway (Port 3000)<br/>- Global JWT AuthGuard<br/>- RBAC RolesGuard<br/>- PayOS Controller & Webhooks"]
+        GW["API Gateway (Port 3000)<br/>- Global JWT AuthGuard & RBAC RolesGuard<br/>- Multer Multipart Upload Proxy<br/>- PayOS Controller & Webhooks"]
     end
 
     %% Message Broker
@@ -33,26 +34,26 @@ graph TB
     %% Microservices Layer
     subgraph Services ["Lớp Dịch Vụ Nghiệp Vụ (Microservices Layer)"]
         AS["Auth Service (Port 3001)<br/>(Bcrypt, JWT, RBAC)"]
+        PS["Product Service (Port 3002)<br/>- Categories, Toppings, Products<br/>- Cloudinary Image Upload & Auto-Seed"]
         OS["Order Service (Port 3004)<br/>- Order Lifecycle & Table Consolidate<br/>- Quỹ tiền mặt (Cash Flow & Shift Summary)<br/>- Quản lý Ca động (Shift Management)<br/>- Nhân sự & Chấm công Sinh trắc học (Employee & Attendance)<br/>- Socket.IO Realtime Gateway"]
         IS["Inventory Service<br/>- Recipe Management<br/>- Transactional Deduct Stock"]
         BS["Branch Service<br/>(Bàn ăn, Chi nhánh)"]
-        PS["Product Service<br/>(Menu, Size, Topping)"]
         RS["Reporting Service<br/>(Doanh thu, Báo cáo)"]
     end
 
     %% Database Layer
     subgraph Databases ["Lớp Dữ Liệu Bền Vững (Database-per-Service: Local Docker / Neon Cloud Serverless)"]
         DB1[("Auth DB<br/>(PostgreSQL 5432 / Neon)")]
+        DB5[("Product DB<br/>(PostgreSQL 5434 / Neon)<br/>Categories, Toppings, Products")]
         DB2[("Order DB<br/>(PostgreSQL 5435 / Neon)<br/>Orders, Expenses, Shifts,<br/>Employees, Attendances")]
         DB3[("Inventory DB<br/>(PostgreSQL 5436 / Neon)")]
         DB4[("Branch DB<br/>(PostgreSQL 5437)")]
-        DB5[("Product DB<br/>(PostgreSQL 5434)")]
         DB6[("Reporting DB<br/>(PostgreSQL 5438)")]
     end
 
     %% Client Interactions
-    CW -->|"HTTP REST (Create QR Order, Active Orders)"| GW
-    POS -->|"HTTP REST (Confirm QR, Order, Pay Table, Staff, Stock)"| GW
+    CW -->|"HTTP REST (Get Menu, Create QR Order, Active Orders)"| GW
+    POS -->|"HTTP REST (Menu CRUD + Upload, Confirm QR, Order, Pay)"| GW
     KDS -->|"HTTP REST (Update Item Status)"| GW
 
     %% Realtime WebSocket
@@ -61,13 +62,15 @@ graph TB
     OS -.->|"Socket.IO (QR_ORDER_UPDATED, table:completed)"| CW
     OS -.->|"Socket.IO (QR_ORDER_UPDATED, table:completed)"| POS
 
-    %% External PayOS Integration
+    %% External Integrations
     GW <-->|"Tạo VietQR & Nhận Webhook"| PayOS
+    PS <-->|"Upload Stream / Auto-Seed Image"| Cloudinary
 
     %% Gateway to Microservices (RPC via RabbitMQ)
-    GW <-->|"RabbitMQ RPC (TCP)"| AS
-    GW <-->|"RabbitMQ RPC (TCP)"| OS
-    GW <-->|"RabbitMQ RPC (TCP)"| IS
+    GW <-->|"RabbitMQ RPC (auth_queue)"| AS
+    GW <-->|"RabbitMQ RPC (product_queue)"| PS
+    GW <-->|"RabbitMQ RPC (order_queue)"| OS
+    GW <-->|"RabbitMQ RPC (inventory_queue)"| IS
 
     %% Event Pub/Sub
     OS -.->|"Event: order_completed"| RMQ
@@ -453,10 +456,11 @@ graph TD
 - **Lợi ích ngrok Free:** Người dùng chỉ cần mở 1 tunnel duy nhất (`ngrok http 3000`), không cần tài khoản trả phí hay mở nhiều domain.
 - **Client Auto-Fallback:** Phía Frontend `pos-web` tự động dùng chung `VITE_API_GATEWAY_URL` khi `VITE_SOCKET_URL` không được cấu hình riêng biệt.
 
-### 10.2. Kiến Trúc Mock & Fallback (Decoupled Readiness)
-Để đảm bảo các chức năng bán hàng POS không bị gián đoạn khi các service vệ tinh (`product-service`, `branch-service`) chưa triển khai độc lập:
-1. **Product Controller Mock tại Gateway:** Xử lý trực tiếp các tuyến đường `@Public() /products`, `/products/categories`, `/products/toppings`, trả về danh mục và món ăn demo đầy đủ.
-2. **Branch Controller Mock & Default Branch:** Tuyến đường `@Public() /branches` trả về Chi nhánh 1 mặc định; `JwtAuthGuard` và `AuthService` tự động gán fallback `branchId = "1"` cho người dùng chưa có chi nhánh cụ thể.
+### 10.2. Kiến Trúc Kết Nối `product-service` & Fallback Chi Nhánh (`branch-service`)
+1. **`product-service` Thực tế (Neon PostgreSQL & Cloudinary):**
+   - `ProductController` tại `api-gateway` chuyển tiếp toàn bộ yêu cầu `/categories`, `/toppings`, `/products`, `/products/upload` sang `product-service` qua RabbitMQ RPC (`product_queue`).
+   - Hỗ trợ upload file ảnh `multipart/form-data` qua `FileInterceptor('file')` (Multer), bảo toàn nguyên vẹn dữ liệu binary `Buffer` (mã hóa Base64 lossless qua RabbitMQ) để `product-service` đẩy lên Cloudinary (`pos_n70/products`) bằng `streamifier`.
+2. **Branch Controller Fallback & Default Branch:** Tuyến đường `@Public() /branches` trả về Chi nhánh 1 mặc định; `JwtAuthGuard` và `AuthService` tự động gán fallback `branchId = "1"` cho người dùng chưa có chi nhánh cụ thể.
 3. **CORS Mở Rộng:** Whitelist tự động cho phép `*.vercel.app`, `*.ngrok-free.app`, `*.ngrok.io` cùng danh sách `FRONTEND_URL` tùy chỉnh.
 
 ### 10.3. Cơ Chế Tự Động Chốt Ca Điểm Danh (Auto-close Stale Session)
@@ -564,7 +568,7 @@ Nhằm phục vụ công tác phát triển, kiểm thử và nghiệm thu đồ
 | **6** | `reporting_db`| Reporting Service | `fnb_postgres_reporting` | `5438` | `postgres` / `password` | Dữ liệu tổng hợp báo cáo kinh doanh, sản lượng bán hàng theo ngày/tháng, tỷ lệ hao hụt nguyên liệu. |
 
 ### Hướng Dẫn Kết Nối Bằng Công Cụ Trực Quan
-- **Chế độ Mặc định Đám mây (Neon Cloud Serverless PostgreSQL - Singapore):** Nhằm tối ưu tài nguyên RAM cho máy phát triển khi chạy đồng thời nhiều container, file `.env` mặc định định tuyến `auth-service`, `order-service` và `inventory-service` sang cụm Neon Cloud (`ep-spring-resonance-ao2usi8g-pooler.c-2.ap-southeast-1.aws.neon.tech`, SSL `sslmode=require`) vẫn đảm bảo tách biệt hoàn toàn 3 database độc lập (`auth_db`, `order_db`, `inventory_db`).
+- **Chế độ Mặc định Đám mây (Neon Cloud Serverless PostgreSQL - Singapore):** Nhằm tối ưu tài nguyên RAM cho máy phát triển khi chạy đồng thời nhiều container, file `.env` mặc định định tuyến `auth-service`, `product-service`, `order-service` và `inventory-service` sang cụm Neon Cloud (`ep-spring-resonance-ao2usi8g-pooler.c-2.ap-southeast-1.aws.neon.tech`, SSL `sslmode=require`) vẫn đảm bảo tách biệt hoàn toàn 4 database độc lập (`auth_db`, `product_db`, `order_db`, `inventory_db`).
 - **VS Code Extension (Khuyến nghị):** Cài đặt extension **Database Client** (cweijan). Bấm biểu tượng Database trên thanh Activity Bar -> Chọn **New Connection (PostgreSQL)** -> Điền Host (`localhost` với cổng `5432..5438` khi bật Postgres Docker, hoặc Host Neon Cloud cổng `5432` kèm bật SSL) -> Bấm Connect để duyệt bảng và xem dữ liệu trực tiếp trong VS Code.
 - **DBeaver / DataGrip / Navicat:** Tạo kết nối PostgreSQL mới với thông số tương tự để kiểm tra tính toàn vẹn khóa ngoại, cấu trúc bảng và thực thi các câu lệnh SQL kiểm tra nghiệp vụ.
 
@@ -606,6 +610,50 @@ flowchart TD
    - Bắt linh hoạt tham số từ cả Query (`/?tableId=5`, `/?table=B05`) và Path (`/table/5`), chuẩn hóa về ID số và lưu trong `sessionStorage` giúp khách hàng F5 tải lại trang hoặc lọc danh mục món không bị mất số bàn, đồng thời tự hủy phiên khi đóng trình duyệt.
 3. **Bảo vệ Nguyên liệu Nhà Bếp Tuyệt đối (`WAITING_CONFIRM`):**
    - Màn hình bếp KDS chỉ nhận lệnh chế biến (`NEW_ORDER_CREATED`) sau khi thu ngân bấm xác nhận tại quầy. Khi thanh toán đóng bàn (`processTablePayment`), hệ thống chỉ cộng tiền các đơn đã được xác nhận (`PENDING` / `IN_PROGRESS`) và tự động hủy sạch các đơn `WAITING_CONFIRM` chưa duyệt còn sót lại.
+
+---
+
+## 15. Kiến Trúc `product-service` Kết Nối Neon PostgreSQL & Tích Hợp Cloudinary CDN (`pos_n70/products`)
+
+Nhằm quản lý thực đơn tập trung, đồng bộ hình ảnh sản phẩm tốc độ cao và cho phép nhân viên/quản lý thêm sửa món ăn trực tiếp trên POS Web, hệ thống triển khai microservice `product-service` kết hợp dịch vụ lưu trữ đám mây **Cloudinary**:
+
+```mermaid
+flowchart LR
+    subgraph Frontend ["Frontend (pos-web & customer-web)"]
+        POS_UI["ProductFormModal.tsx<br/>Chọn ảnh từ máy tính / Nhập URL"]
+        MENU_UI["ProductList.tsx & customer-web<br/>Hiển thị Menu từ API"]
+    end
+
+    subgraph Gateway ["API Gateway (:3000)"]
+        MULTER["FileInterceptor('file')<br/>Đọc Buffer -> Base64 lossless"]
+    end
+
+    subgraph ProductSvc ["product-service (:3002)"]
+        CTRL["ProductController & Service<br/>Auto-Seed 4 Categories, 8 Toppings, 26 Products"]
+        CLOUD_SVC["CloudinaryService<br/>streamifier -> upload_stream"]
+    end
+
+    subgraph CloudInfra ["Hạ Tầng Đám Mây"]
+        CLOUDINARY[("Cloudinary CDN<br/>Folder: pos_n70/products")]
+        NEON_DB[("Neon PostgreSQL<br/>product_db")]
+    end
+
+    POS_UI -->|"POST /products/upload (multipart/form-data)"| MULTER
+    MULTER -->|"RabbitMQ RPC (product_queue)"| CTRL
+    CTRL --> CLOUD_SVC
+    CLOUD_SVC -->|"Upload Buffer / Seed Image"| CLOUDINARY
+    CLOUDINARY -->|"Trả về secure_url"| CLOUD_SVC
+    CTRL -->|"Lưu Category, Topping, Product (imageUrl)"| NEON_DB
+    MENU_UI -->|"GET /categories, /products, /toppings"| MULTER
+```
+
+### Các Điểm Nhấn Kỹ Thuật
+1. **Chuyển tiếp File Binary Không Suy Hao (Lossless Multipart Forwarding):**
+   - `api-gateway` sử dụng `FileInterceptor('file')` của Multer để đọc trực tiếp luồng `multipart/form-data` thành `Buffer`, mã hóa sang chuỗi Base64 và gửi qua RabbitMQ RPC (`upload_product_image`, `create_product`, `update_product`).
+   - Tại `product-service`, `Buffer.from(fileBase64, 'base64')` khôi phục chính xác 100% dữ liệu nhị phân của ảnh và truyền qua `streamifier.createReadStream(buffer).pipe(cloudinary.uploader.upload_stream({ folder: 'pos_n70/products' }))`.
+2. **Cơ chế Auto-Seed & Tự động Migrate Ảnh sang Cloudinary:**
+   - Khi khởi chạy `product-service` (`onModuleInit`) hoặc thực thi `node scripts/sync-and-seed-neon.js`, nếu phát hiện món ăn đang dùng đường dẫn ảnh nội bộ (`/products/...`) hoặc link ngoài và 3 biến môi trường `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` đã được cấu hình, hệ thống tự động đẩy ảnh lên folder `pos_n70/products` của Cloudinary và lưu `secure_url` vào bảng `products` trên `product_db` (giữ nguyên nếu đã là link `res.cloudinary.com`).
+
 
 
 

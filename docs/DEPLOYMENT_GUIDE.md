@@ -18,13 +18,15 @@ graph TD
     Host["VPS Host (Linux) / Local ngrok Tunnel"]
     
     subgraph Docker_Network ["Docker Internal Network (pos-network / app-network)"]
-        Gateway["api-gateway :3000<br/>(REST API + WebSocket Reverse Proxy /socket.io)"]
+        Gateway["api-gateway :3000<br/>(REST API + Multipart Upload + WebSocket Proxy /socket.io)"]
         AuthSvc["auth-service (RabbitMQ RPC)"]
+        ProdSvc["product-service :3002<br/>(Neon product_db + Cloudinary pos_n70/products)"]
         OrderSvc["order-service :3004<br/>(Socket.IO Realtime + QR Approval)"]
         InvenSvc["inventory-service (RabbitMQ RPC + SAGA)"]
-        Postgres["PostgreSQL / Neon Cloud Serverless<br/>(auth_db, order_db, inventory_db)"]
+        Postgres["PostgreSQL / Neon Cloud Serverless<br/>(auth_db, product_db, order_db, inventory_db)"]
         RabbitMQ["RabbitMQ :5672 / :15672"]
     end
+    Cloudinary["Cloudinary Cloud Storage (pos_n70/products)"]
 
     Client -->|"HTTPS"| VercelPOS
     Mobile -->|"Quét QR (?tableId=5)"| VercelCW
@@ -32,11 +34,14 @@ graph TD
     Mobile -->|"REST API (ngrok-skip-browser-warning) & /socket.io"| Gateway
 
     Gateway -->|"TCP Microservice"| AuthSvc
+    Gateway -->|"TCP Microservice"| ProdSvc
     Gateway -->|"TCP Microservice"| OrderSvc
     Gateway -->|"TCP Microservice"| InvenSvc
     Gateway -->|"WebSocket Proxy /socket.io"| OrderSvc
 
     AuthSvc -->|"SQL Connection"| Postgres
+    ProdSvc -->|"SQL Connection"| Postgres
+    ProdSvc -->|"Upload Stream"| Cloudinary
     OrderSvc -->|"SQL Connection"| Postgres
     InvenSvc -->|"SQL Connection"| Postgres
 
@@ -174,13 +179,11 @@ Cả REST API và kết nối WebSocket `/socket.io` đều tự động chạy 
 
 ---
 
-## 5. CƠ CHẾ MOCK & FALLBACK DÀNH CHO CÁC SERVICE CHƯA TRIỂN KHAI
+## 5. KẾT NỐI `product-service` (NEON DB & CLOUDINARY) VÀ FALLBACK CHI NHÁNH
 
-Nhằm đảm bảo giao diện POS không bị treo hoặc gặp lỗi 502 Bad Gateway khi các service vệ tinh (`branch-service`, `product-service`, `report-service`) đang trong lộ trình hoàn thiện:
-
-1. **`product-service` Fallback:**
-   - Tuyến đường `@Public() /products`, `/products/categories`, `/products/toppings` được xử lý trực tiếp tại API Gateway.
-   - Trả về danh sách thực đơn mẫu chuẩn (Trà Sữa Trân Châu Hoàng Gia, Trà Sữa Matcha Tây Bắc, Cà Phê Muối...) với đầy đủ hình ảnh, danh mục và topping.
+1. **`product-service` (Neon PostgreSQL & Cloudinary CDN):**
+   - Container `fnb_product_service` kết nối tới `product_db` trên Neon Cloud qua `DATABASE_URL=${PRODUCT_DATABASE_URL}` và khởi tạo `CloudinaryService` bằng 3 biến `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`.
+   - Tuyến đường `/categories`, `/toppings`, `/products` và `/products/upload` tại API Gateway chuyển tiếp trực tiếp sang `product-service` qua RabbitMQ RPC (`product_queue`).
 2. **`branch-service` Fallback:**
    - Tuyến đường `@Public() /branches` trả về thông tin mặc định "Chi nhánh 1 (Trung Tâm)".
    - Tất cả Token JWT và Request Guard tại API Gateway tự động gán `branchId = "1"` nếu user chưa có `branchId` cụ thể.
@@ -239,11 +242,11 @@ Khi chuyển đổi từ PostgreSQL local sang Neon Cloud để giải phóng RA
 - **Port:** `5432`
 - **Username:** `neondb_owner`
 - **Password:** `<Cấu hình trong file .env>`
-- **Database Names:** `auth_db`, `order_db`, `inventory_db`
+- **Database Names:** `auth_db`, `product_db`, `order_db`, `inventory_db`
 - **SSL Configuration:** Bắt buộc kích hoạt SSL (`sslmode=require` và `rejectUnauthorized: false`).
-- **Script kiểm tra & nạp dữ liệu:**
+- **Script kiểm tra, nạp dữ liệu & tự động đồng bộ ảnh lên Cloudinary (`pos_n70/products`):**
   ```bash
-  # Đồng bộ schema và nạp dữ liệu mẫu ban đầu
+  # Đồng bộ schema 4 database (auth_db, order_db, inventory_db, product_db) và tự động đẩy ảnh món ăn lên Cloudinary
   node scripts/sync-and-seed-neon.js
 
   # Kiểm tra kết nối và truy vấn đối soát dữ liệu

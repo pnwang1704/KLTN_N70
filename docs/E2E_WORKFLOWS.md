@@ -903,6 +903,53 @@ sequenceDiagram
     VercelCW-->>Customer: Hiển thị "Bàn số: B05" & tải thực đơn qua ngrok (header ngrok-skip-browser-warning)
 ```
 
+---
+
+## 15. Luồng Quản Lý Thực Đơn & Upload Hình Ảnh Món Ăn Lên Cloudinary (`pos-web` -> `product-service` -> Cloudinary & Neon DB)
+
+Quy trình cho phép quản lý/thu ngân thêm mới hoặc chỉnh sửa món ăn trực tiếp trên `pos-web` (`ProductFormModal.tsx`), chọn file ảnh từ máy tính đẩy lên **Cloudinary** (`folder: 'pos_n70/products'`), lưu `secure_url` vào cơ sở dữ liệu `product_db` trên **Neon Cloud PostgreSQL** và đồng bộ tức thời sang giao diện đặt món QR (`customer-web`):
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Staff as Quản lý / Thu ngân POS
+    participant POS as POS Web (ProductFormModal.tsx)
+    participant GW as API Gateway (:3000 - Multer)
+    participant PS as Product Service (:3002)
+    participant Cloud as Cloudinary CDN (pos_n70/products)
+    participant DB as Neon PostgreSQL (product_db)
+    participant CW as Customer Web (QR Menu)
+
+    Staff->>POS: Bấm "+ Thêm món" hoặc icon "Sửa món" (Pencil) trên thẻ món ăn
+    POS->>POS: Mở ProductFormModal (nạp Categories & Toppings từ API)
+    Staff->>POS: Chọn file ảnh món ăn từ máy tính (<input type="file" />)
+    POS->>POS: Hiển thị ảnh preview tức thì (URL.createObjectURL)
+    POS->>GW: POST /products/upload (multipart/form-data, field: 'file')
+    GW->>GW: FileInterceptor('file') đọc file.buffer -> mã hóa Base64 lossless
+    GW->>PS: RabbitMQ RPC: { cmd: 'upload_product_image', fileBase64 }
+    PS->>PS: Buffer.from(fileBase64, 'base64') -> streamifier.createReadStream()
+    PS->>Cloud: cloudinary.uploader.upload_stream({ folder: 'pos_n70/products' })
+    Cloud-->>PS: Trả về { secure_url: 'https://res.cloudinary.com/.../pos_n70/products/...' }
+    PS-->>GW: { imageUrl: result.secure_url }
+    GW-->>POS: HTTP 201 Created ({ imageUrl })
+    POS->>POS: Gán imageUrl = secure_url & hiển thị huy hiệu "Cloudinary CDN"
+
+    Staff->>POS: Nhập Tên món, Danh mục, Giá cơ bản, Sizes (S/M/L), Toppings -> Bấm "Lưu"
+    POS->>GW: POST /products (hoặc PATCH /products/:id)
+    GW->>PS: RabbitMQ RPC: { cmd: 'create_product' | 'update_product' }
+    PS->>DB: INSERT / UPDATE bảng products (lưu imageUrl Cloudinary, sizes JSONB, availableToppings JSONB)
+    DB-->>PS: Bản ghi Product đã lưu
+    PS-->>GW: Product Entity
+    GW-->>POS: HTTP 201 / 200 OK
+    POS->>POS: Cập nhật lưới thực đơn POS ngay lập tức
+
+    CW->>GW: Khách quét QR mở menu -> GET /categories & GET /products
+    GW->>PS: RabbitMQ RPC: { cmd: 'get_products' }
+    PS->>DB: SELECT * FROM products WHERE isAvailable = true
+    DB-->>CW: Hiển thị món ăn mới kèm ảnh tốc độ cao từ Cloudinary CDN
+```
+
+
 
 
 
