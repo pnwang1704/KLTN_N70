@@ -12,7 +12,7 @@ import { TableSelectScreen } from './components/TableSelectScreen';
 import { useCart } from './context/CartContext';
 import { useTableSession, formatTableBadge } from './hooks/useTableSession';
 import { mockCategories, mockProducts } from './data/mockData';
-import type { Product } from './types';
+import type { Category, Product } from './types';
 import { cn } from './lib/utils';
 
 const SOCKET_URL =
@@ -31,6 +31,8 @@ function MainApp() {
   } = useTableSession();
 
   const [showManualTableSelect, setShowManualTableSelect] = useState(false);
+  const [categories, setCategories] = useState<Category[]>(mockCategories);
+  const [products, setProducts] = useState<Product[]>(mockProducts);
   const [activeCategoryId, setActiveCategoryId] = useState(mockCategories[0].id);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -42,6 +44,50 @@ function MainApp() {
   const [qrRejectedNotice, setQrRejectedNotice] = useState<string | null>(null);
 
   const { clearCart } = useCart();
+
+  // Fetch Categories & Products from real API Gateway (product-service -> Neon DB & Cloudinary)
+  useEffect(() => {
+    let isMounted = true;
+    const fetchMenuData = async () => {
+      try {
+        const [catRes, prodRes] = await Promise.all([
+          api.get('/categories'),
+          api.get('/products'),
+        ]);
+        if (!isMounted) return;
+
+        if (Array.isArray(catRes.data) && catRes.data.length > 0) {
+          setCategories(catRes.data);
+          setActiveCategoryId((prev) =>
+            catRes.data.some((c: Category) => c.id === prev) ? prev : catRes.data[0].id
+          );
+        }
+
+        if (Array.isArray(prodRes.data) && prodRes.data.length > 0) {
+          const normalized: Product[] = prodRes.data.map((p: any) => ({
+            id: String(p.id),
+            categoryId: String(p.categoryId),
+            name: p.name,
+            description: p.description || '',
+            basePrice: Number(p.basePrice) || 0,
+            imageUrl: p.imageUrl || 'https://images.unsplash.com/photo-1558857563-b37cf5a228f4?auto=format&fit=crop&q=80&w=400',
+            sizes: Array.isArray(p.sizes) && p.sizes.length > 0
+              ? p.sizes
+              : [{ id: 'S', name: 'Tiêu chuẩn', priceModifier: 0 }],
+            availableToppings: Array.isArray(p.availableToppings) ? p.availableToppings : [],
+          }));
+          setProducts(normalized);
+        }
+      } catch (err) {
+        console.warn('Could not fetch menu from API Gateway, using local fallback menu:', err);
+      }
+    };
+
+    fetchMenuData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Fetch active orders of current table
   const fetchActiveOrders = useCallback(async (bId?: string, tId?: string) => {
@@ -148,7 +194,7 @@ function MainApp() {
     setPaymentSuccessNotice(null);
   };
 
-  const filteredProducts = mockProducts.filter(p => p.categoryId === activeCategoryId);
+  const filteredProducts = products.filter(p => p.categoryId === activeCategoryId);
 
   if (showManualTableSelect) {
     return (
@@ -197,7 +243,7 @@ function MainApp() {
         {/* Category Horizontal Scroll */}
         <div className="sticky top-[61px] z-30 bg-white/90 backdrop-blur-md border-b border-zinc-100 py-3 shadow-xs">
           <div className="flex gap-2 overflow-x-auto px-4 hide-scrollbar snap-x">
-            {mockCategories.map(cat => (
+            {categories.map(cat => (
               <button
                 key={cat.id}
                 onClick={() => setActiveCategoryId(cat.id)}
