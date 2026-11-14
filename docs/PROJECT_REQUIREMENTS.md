@@ -22,7 +22,7 @@
 * **Database:** PostgreSQL 15 & **Neon Cloud Serverless PostgreSQL (AWS Singapore)** — Mỗi service quản lý một database độc lập (`auth_db`, `branch_db`, `product_db`, `order_db`, `inventory_db`, `reporting_db`).
 * **Message Broker:** RabbitMQ (Xử lý đồng bộ RPC qua Message Pattern và bất đồng bộ Pub/Sub Event `order_completed`).
 * **Realtime Communication:** Socket.IO Server (Port `3004`, phân tách Room theo từng `branchId`, được Reverse Proxy qua API Gateway Port `3000`).
-* **Cổng thanh toán:** PayOS API (Sinh mã VietQR động theo chuẩn Napas 247).
+* **Cổng thanh toán & Cloud Media:** PayOS API (Sinh mã VietQR động theo chuẩn Napas 247), **Cloudinary SDK (`cloudinary`, `multer`, `streamifier`)** lưu trữ hình ảnh sản phẩm/món ăn vào folder `pos_n70/products`.
 * **Frontend:** React 19, TypeScript, Tailwind CSS, Vite, Lucide Icons, `qrcode.react` (SVG QR), Socket.IO Client, Axios (`ngrok-skip-browser-warning`).
 * **Hạ tầng & Devops:** Docker, Docker Compose với hệ thống **Named Persistent Volumes**, triển khai SPA trên **Vercel Edge CDN** (`pos-web` & `customer-web`).
 * **Testing:** Jest Unit Testing cho RBAC Guards và Transactional Inventory Service.
@@ -31,10 +31,10 @@
 
 ## 3. Cấu Trúc Các Dịch Vụ Microservices
 
-1. **API Gateway (Port 3000):** Cổng tiếp nhận duy nhất cho Client; đảm nhiệm xác thực Stateless JWT, phân quyền vai trò (RBAC `RolesGuard`), định tuyến request qua RabbitMQ RPC và tích hợp PayOS VietQR & Webhook.
-2. **Auth Service (`auth_db` - 5432):** Quản lý tài khoản nhân viên, mã hóa mật khẩu Bcrypt, cấp phát JWT và phân quyền theo 5 vai trò: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `WAITER`.
+1. **API Gateway (Port 3000):** Cổng tiếp nhận duy nhất cho Client; đảm nhiệm xác thực Stateless JWT, phân quyền vai trò (RBAC `RolesGuard`), định tuyến request & multipart binary upload (`FileInterceptor('file')`) qua RabbitMQ RPC và tích hợp PayOS VietQR & Webhook.
+2. **Auth Service (`auth_db` - 5432 / Neon Cloud):** Quản lý tài khoản nhân viên, mã hóa mật khẩu Bcrypt, cấp phát JWT và phân quyền theo 5 vai trò: `ADMIN`, `MANAGER`, `CASHIER`, `KITCHEN`, `WAITER`.
 3. **Branch Service (`branch_db` - 5437):** Quản lý danh mục chi nhánh, sơ đồ bàn ăn theo trạng thái (Bàn trống, Đang phục vụ).
-4. **Product Service (`product_db` - 5434):** Quản lý danh mục món ăn, giá bán cơ sở, biến thể kích thước (Size M, L), Topping và cấu hình bật/tắt món cục bộ tại từng chi nhánh (`branch_product_availabilities`).
+4. **Product Service (`product_db` - 5434 / Neon Cloud, Port 3002):** Quản lý danh mục món ăn (`Category`), Topping (`Topping`), sản phẩm (`Product` kèm `sizes` & `availableToppings` JSONB), tích hợp `CloudinaryService` đẩy ảnh lên thư mục `pos_n70/products` (`POST /products/upload`, `POST /products`, `PATCH /products/:id`) và tự động seed/migrate 26 món ăn lên Neon PostgreSQL & Cloudinary.
 5. **Order Service (`order_db` - 5435 / Neon Cloud):** Quản lý vòng đời đơn hàng, kiểm duyệt đơn QR chống đơn ảo (`WAITING_CONFIRM`, `get_pending_qr_orders`, `confirm_qr_order`, `reject_qr_order`), chiết khấu (% / tiền mặt), thanh toán hóa đơn, hợp nhất đơn gọi nhiều đợt, dọn dẹp đơn tạm (`DELETE /orders/:id`), quản lý ca làm việc (`Shift`), nhân viên (`Employee`), sinh mã NV tự động (`get_next_employee_code`), chấm công sinh trắc học (`Attendance`), chi tiền mặt két (`Expense`), đối soát kết ca (`shift-summary`) và lưu trữ Socket.IO Realtime Gateway (Port 3004).
 6. **Inventory Service (`inventory_db` - 5436):** Quản lý danh mục nguyên liệu thô, định mức tồn kho an toàn, công thức chế biến (`Recipe`) và tự động trừ kho nguyên liệu bằng Database Transaction khi nhận sự kiện `order_completed`.
 7. **Reporting Service (`reporting_db` - 5438):** Tổng hợp và truy xuất báo cáo doanh thu, sản lượng món bán chạy và tỷ lệ tiêu hao nguyên liệu.
@@ -86,7 +86,8 @@
 | **UC39** | Tạo & In tem mã QR bàn 80mm tại POS | POS Web | **ĐÃ HOÀN THÀNH** | Nút `"Tạo QR"` cạnh từng bàn (`1..20`) trên `TableMap.tsx`, mở `TableQrModal.tsx` render mã SVG sắc nét bằng `qrcode.react` trỏ tới `https://customer-web-lac.vercel.app/?tableId=<ID_BÀN>`, hỗ trợ sao chép liên kết và in tem nhiệt 80mm (`#table-qr-print`) qua `window.print()`. |
 | **UC40** | Nhận diện Phiên bàn `sessionStorage` & Triển khai `customer-web` Vercel | Customer Web / DevOps | **ĐÃ HOÀN THÀNH** | Hook `useTableSession.ts` bắt `tableId`/`table` từ URL lưu vào `sessionStorage`, tự động đính kèm khi `POST /orders`. Cấu hình `vercel.json` SPA rewrites, header mặc định `ngrok-skip-browser-warning: "true"` trên Axios và đồng bộ Socket.IO `transports: ['websocket', 'polling']`. |
 | **UC41** | Duyệt đơn QR tại quầy & Phòng vệ Chống đơn ảo 3 lớp | Order / Gateway / POS / Customer | **ĐÃ HOÀN THÀNH** | Trạng thái `OrderStatus.WAITING_CONFIRM`, chặn đặt ngoài giờ mở ca (`Shift.isActive`) & giới hạn tối đa 3 đơn chờ/bàn. Phát Socket `QR_ORDER_PENDING` kèm chuông báo Web Audio 2 nốt, thẻ nổi & modal `QrOrderApprovalModal.tsx` trên POS; chỉ bắn `NEW_ORDER_CREATED` xuống KDS khi thu ngân bấm xác nhận (`confirm-qr`) và đồng bộ tức thời sang màn hình khách (`QR_ORDER_UPDATED`). |
-| **UC42** | Tích hợp Cụm CSDL Đám mây Neon Serverless PostgreSQL | DevOps / Cơ sở dữ liệu | **ĐÃ HOÀN THÀNH** | Kết nối `auth_db`, `order_db`, `inventory_db` lên cụm Neon Cloud Singapore (`ap-southeast-1`, SSL `sslmode=require`) giúp giải phóng hàng GB RAM máy cục bộ mà vẫn giữ chuẩn Database-per-Service; trang bị script tự động `sync-and-seed-neon.js` và `verify-neon-services.js`. |
+| **UC42** | Tích hợp Cụm CSDL Đám mây Neon Serverless PostgreSQL | DevOps / Cơ sở dữ liệu | **ĐÃ HOÀN THÀNH** | Kết nối `auth_db`, `product_db`, `order_db`, `inventory_db` lên cụm Neon Cloud Singapore (`ap-southeast-1`, SSL `sslmode=require`) giúp giải phóng hàng GB RAM máy cục bộ mà vẫn giữ chuẩn Database-per-Service; trang bị script tự động `sync-and-seed-neon.js` và `verify-neon-services.js`. |
+| **UC43** | Triển khai `product-service` & Tích hợp Cloudinary Upload (`pos_n70/products`) | Product / Gateway / POS / Customer | **ĐÃ HOÀN THÀNH** | Xây dựng `CloudinaryService` (`cloudinary`, `multer`, `streamifier`), endpoint `POST /products/upload` và CRUD `/products`, `/categories`, `/toppings` trên `product_db` (Neon Cloud). Tự động seed & migrate ảnh 26 món lên Cloudinary (`pos_n70/products`). Thay thế toàn bộ mock data trên `pos-web` & `customer-web` bằng API thật và bổ sung `ProductFormModal.tsx` hỗ trợ Thêm/Sửa/Xóa món kèm upload ảnh trực tiếp từ máy tính. |
 
 ---
 
@@ -321,7 +322,14 @@
      - Thu ngân nhìn ra bàn thực tế (hoặc xác nhận với khách): bấm **"Xác nhận & Gửi bếp"** (`POST /orders/:id/confirm-qr`) để chuyển đơn sang `PENDING`, lúc này hệ thống mới bắn lệnh chế biến xuống KDS và phát `QR_ORDER_UPDATED` cập nhật màn hình điện thoại khách sang trạng thái xanh *"Đã duyệt & gửi món vào bếp!"*. Nếu bàn trống không có khách, thu ngân bấm **"Từ chối"** (`POST /orders/:id/reject-qr`) để hủy đơn ảo ngay lập tức.
 
 ### Quyết định 28: Tích hợp Cụm Cơ sở Dữ liệu Đám mây Neon Serverless PostgreSQL Song Song Docker Local
-* **Bối cảnh:** Khi vận hành đồng thời toàn bộ hệ sinh thái trên máy cá nhân (RabbitMQ, API Gateway, 3 Microservices, 3 ứng dụng Web và 6 container PostgreSQL), lượng bộ nhớ RAM tiêu thụ bởi Docker Desktop lên tới 4GB - 6GB.
+* **Bối cảnh:** Khi vận hành đồng thời toàn bộ hệ sinh thái trên máy cá nhân (RabbitMQ, API Gateway, 4 Microservices, 3 ứng dụng Web và 6 container PostgreSQL), lượng bộ nhớ RAM tiêu thụ bởi Docker Desktop lên tới 4GB - 6GB.
 * **Giải pháp Kỹ thuật:**
-  1. Triển khai các database độc lập (`auth_db`, `order_db`, `inventory_db`) lên nền tảng **Neon Cloud Serverless PostgreSQL** đặt tại vùng AWS Singapore (`ap-southeast-1`) có độ trễ thấp về Việt Nam, kết nối bảo mật qua SSL (`sslmode=require`).
+  1. Triển khai các database độc lập (`auth_db`, `product_db`, `order_db`, `inventory_db`) lên nền tảng **Neon Cloud Serverless PostgreSQL** đặt tại vùng AWS Singapore (`ap-southeast-1`) có độ trễ thấp về Việt Nam, kết nối bảo mật qua SSL (`sslmode=require`).
   2. Giữ nguyên kiến trúc **Database-per-Service** (mỗi Microservice vẫn kết nối vào database riêng biệt không dùng chung bảng), đồng thời bảo lưu cấu hình 6 container PostgreSQL trong `docker-compose.yml` để có thể chuyển đổi linh hoạt giữa chế độ Cloud tiết kiệm RAM và chế độ Offline Local 100%.
+
+### Quyết định 29: Triển khai `product-service` Thực tế Kết nối Neon `product_db` & Đồng bộ Ảnh Đám mây Cloudinary (`pos_n70/products`)
+* **Bối cảnh:** Để quản lý thực đơn động (thêm món mới, đổi giá, cập nhật ảnh món ăn từ máy tính thu ngân/quản lý) và đồng bộ tức thời giữa `pos-web` và `customer-web`, việc giữ mock data tĩnh hoặc lưu file ảnh vào ổ cứng cục bộ của container sẽ bị mất dữ liệu khi rebuild container và không hiển thị được khi deploy frontend lên Vercel.
+* **Giải pháp Kỹ thuật:**
+  1. **Tích hợp `CloudinaryService` trong `product-service`:** Sử dụng `cloudinary`, `multer` và `streamifier` đẩy trực tiếp luồng `Buffer` ảnh lên thư mục `pos_n70/products` trên Cloudinary và lưu `secure_url` vào cột `imageUrl` của bảng `products` trên `product_db` (Neon Cloud).
+  2. **Truyền tải Binary Lossless qua API Gateway:** `api-gateway` sử dụng `FileInterceptor('file')` đọc file `multipart/form-data`, mã hóa Base64 lossless qua RabbitMQ RPC (`upload_product_image`, `create_product`, `update_product`) sang `product-service` mà không làm hỏng cấu trúc binary của file ảnh.
+  3. **Auto-Seed & Tự động Migrate Ảnh Mẫu:** Trong `onModuleInit` và script `scripts/sync-and-seed-neon.js`, nếu món ăn trong dữ liệu mẫu đang dùng đường dẫn ảnh local (`/products/...`) hoặc link ngoài và tài khoản Cloudinary đã được cấu hình, hệ thống tự động upload ảnh lên Cloudinary (`pos_n70/products`) và cập nhật lại `imageUrl` trong database.
