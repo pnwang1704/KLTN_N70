@@ -54,7 +54,75 @@ const NEON_CONFIG = {
       path.join(rootDir, 'services/inventory-service/dist/inventory/entities/stock.entity.js'),
     ],
   },
+  product: {
+    name: 'product_db',
+    url: process.env.PRODUCT_DATABASE_URL || 'postgresql://localhost:5432/product_db',
+    entities: [
+      path.join(rootDir, 'services/product-service/dist/product/entities/category.entity.js'),
+      path.join(rootDir, 'services/product-service/dist/product/entities/topping.entity.js'),
+      path.join(rootDir, 'services/product-service/dist/product/entities/product.entity.js'),
+    ],
+  },
 };
+
+/**
+ * Hàm hỗ trợ tự động upload ảnh sản phẩm (từ file local hoặc URL ngoài) lên Cloudinary
+ * vào folder `pos_n70/products` và trả về `secure_url`.
+ * Nếu đã là link `res.cloudinary.com` hoặc chưa cấu hình Cloudinary thì giữ nguyên.
+ */
+async function uploadSeedImageToCloudinary(imageUrl, productId) {
+  if (!imageUrl || imageUrl.includes('res.cloudinary.com')) {
+    return imageUrl;
+  }
+
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  const apiKey = process.env.CLOUDINARY_API_KEY;
+  const apiSecret = process.env.CLOUDINARY_API_SECRET;
+
+  if (!cloudName || !apiKey || !apiSecret) {
+    return imageUrl;
+  }
+
+  try {
+    const { v2: cloudinary } = require(path.join(rootDir, 'services/product-service/node_modules/cloudinary'));
+    cloudinary.config({
+      cloud_name: cloudName,
+      api_key: apiKey,
+      api_secret: apiSecret,
+      secure: true,
+    });
+
+    let sourceToUpload = imageUrl;
+
+    if (imageUrl.startsWith('/')) {
+      const relativeFile = imageUrl.replace(/^\/+/, '');
+      const candidates = [
+        path.join(rootDir, 'services/product-service/assets', relativeFile),
+        path.join(rootDir, 'frontend/pos-web/public', relativeFile),
+        path.join(rootDir, 'frontend/customer-web/public', relativeFile),
+      ];
+      const matched = candidates.find((p) => fs.existsSync(p));
+      if (!matched) {
+        console.warn(`⚠️ [PRODUCT_DB] Không tìm thấy file ảnh local cho ${productId}: ${imageUrl}`);
+        return imageUrl;
+      }
+      sourceToUpload = matched;
+    }
+
+    const result = await cloudinary.uploader.upload(sourceToUpload, {
+      folder: 'pos_n70/products',
+      public_id: `product_${productId.toLowerCase()}`,
+      overwrite: true,
+      resource_type: 'image',
+    });
+
+    console.log(`☁️ [Cloudinary] Đã upload ảnh món ${productId} -> ${result.secure_url}`);
+    return result.secure_url || imageUrl;
+  } catch (err) {
+    console.warn(`⚠️ [Cloudinary] Upload ảnh cho món ${productId} thất bại (${err.message}), giữ nguyên link gốc.`);
+    return imageUrl;
+  }
+}
 
 async function syncAndSeedAuth() {
   console.log('\n======================================================');
@@ -306,6 +374,110 @@ async function syncAndSeedInventory() {
   await ds.destroy();
 }
 
+async function syncAndSeedProduct() {
+  console.log('\n======================================================');
+  console.log('4. [PRODUCT_DB] Kết nối và Đồng bộ Schema lên Neon Cloud');
+  console.log('======================================================');
+  const ds = new DataSource({
+    type: 'postgres',
+    url: NEON_CONFIG.product.url,
+    entities: NEON_CONFIG.product.entities,
+    synchronize: true,
+    ssl: { rejectUnauthorized: false },
+    extra: { ssl: { rejectUnauthorized: false } },
+  });
+
+  await ds.initialize();
+  console.log('✅ [PRODUCT_DB] Kết nối Neon thành công & Schema đã được đồng bộ!');
+
+  const {
+    SEED_CATEGORIES,
+    SEED_TOPPINGS,
+    SEED_PRODUCTS,
+  } = require(path.join(rootDir, 'services/product-service/dist/product/seed-data.js'));
+
+  const categoryRepo = ds.getRepository('Category');
+  const toppingRepo = ds.getRepository('Topping');
+  const productRepo = ds.getRepository('Product');
+
+  // 1. Seed Categories
+  const catCount = await categoryRepo.count();
+  console.log(`[PRODUCT_DB] Số lượng danh mục hiện có: ${catCount}`);
+  if (catCount === 0) {
+    await categoryRepo.save(SEED_CATEGORIES);
+    console.log(`✅ [PRODUCT_DB] Đã seed ${SEED_CATEGORIES.length} danh mục thực đơn.`);
+  }
+
+  // 2. Seed Toppings
+  const topCount = await toppingRepo.count();
+  console.log(`[PRODUCT_DB] Số lượng topping hiện có: ${topCount}`);
+  if (topCount === 0) {
+    await toppingRepo.save(SEED_TOPPINGS);
+    console.log(`✅ [PRODUCT_DB] Đã seed ${SEED_TOPPINGS.length} topping.`);
+  }
+
+  // 3. Seed Products & Auto-Upload Images to Cloudinary if configured
+  const existingProducts = await productRepo.find();
+  const existingMap = new Map(existingProducts.map((p) => [p.id, p]));
+  console.log(`[PRODUCT_DB] Số lượng sản phẩm/món ăn hiện có: ${existingProducts.length}`);
+
+  let insertedCount = 0;
+  let updatedCloudinaryCount = 0;
+
+  for (const item of SEED_PRODUCTS) {
+    const existing = existingMap.get(item.id);
+    if (!existing) {
+      const finalImageUrl = await uploadSeedImageToCloudinary(item.imageUrl, item.id);
+      await productRepo.save({
+        ...item,
+        imageUrl: finalImageUrl,
+        isAvailable: true,
+      });
+      insertedCount++;
+    } else if (
+      existing.imageUrl &&
+      !existing.imageUrl.includes('res.cloudinary.com') &&
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET
+    ) {
+      // Nếu món ăn đã tồn tại trong DB nhưng đang dùng ảnh local/link ngoài và Cloudinary đã được cấu hình,
+      // tự động đẩy lên Cloudinary (folder: pos_n70/products) và cập nhật lại cột imageUrl
+      const cloudUrl = await uploadSeedImageToCloudinary(existing.imageUrl, existing.id);
+      if (cloudUrl !== existing.imageUrl) {
+        existing.imageUrl = cloudUrl;
+        await productRepo.save(existing);
+        updatedCloudinaryCount++;
+      }
+    }
+  }
+
+  if (insertedCount > 0) {
+    console.log(`✅ [PRODUCT_DB] Đã seed mới ${insertedCount} món ăn vào bảng products.`);
+  }
+  if (updatedCloudinaryCount > 0) {
+    console.log(`☁️ [PRODUCT_DB] Đã đồng bộ ${updatedCloudinaryCount} ảnh món ăn lên Cloudinary (pos_n70/products).`);
+  }
+
+  const allCategories = await categoryRepo.find({ order: { displayOrder: 'ASC' } });
+  console.log('📋 Danh sách Danh mục trên Neon product_db:');
+  console.table(allCategories.map(c => ({ id: c.id, name: c.name, icon: c.icon, order: c.displayOrder })));
+
+  const allProducts = await productRepo.find({ order: { categoryId: 'ASC', id: 'ASC' } });
+  console.log(`📋 Danh sách Sản phẩm trên Neon product_db (${allProducts.length} món):`);
+  console.table(
+    allProducts.map(p => ({
+      id: p.id,
+      name: p.name,
+      category: p.categoryId,
+      basePrice: p.basePrice,
+      imageSource: p.imageUrl?.includes('res.cloudinary.com') ? 'Cloudinary' : p.imageUrl?.slice(0, 35) + '...',
+    })),
+  );
+
+  await ds.destroy();
+}
+
 async function main() {
   console.log('🚀 BẮT ĐẦU ĐỒNG BỘ VÀ SEED DỮ LIỆU LÊN NEON CLOUD POSTGRESQL');
   console.log('Thời gian:', new Date().toLocaleString());
@@ -313,6 +485,7 @@ async function main() {
     await syncAndSeedAuth();
     await syncAndSeedOrder();
     await syncAndSeedInventory();
+    await syncAndSeedProduct();
     console.log('\n🎉 HOÀN TẤT ĐỒNG BỘ TOÀN BỘ CƠ SỞ DỮ LIỆU LÊN NEON CLOUD THÀNH CÔNG!');
   } catch (error) {
     console.error('\n❌ Xảy ra lỗi trong quá trình đồng bộ:', error);
