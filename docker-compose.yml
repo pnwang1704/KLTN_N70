@@ -213,21 +213,25 @@ services:
     networks:
       - app-network
 
-  # Uncomment when service implementation is ready
-  # product-service:
-  #   build:
-  #     context: ./services/product-service
-  #   container_name: fnb_product_service
-  #   environment:
-  #     - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-  #     - DATABASE_URL=postgres://postgres:password@postgres-product:5432/product_db
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #     postgres-product:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
+  product-service:
+    build:
+      context: ./services/product-service
+    container_name: fnb_product_service
+    ports:
+      - '3002:3002'
+    environment:
+      - PORT=3002
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - DATABASE_URL=${PRODUCT_DATABASE_URL}
+      - DATABASE_SSL=true
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
 
   # Uncomment when service implementation is ready
   # branch-service:
