@@ -108,6 +108,11 @@ export const useSocket = (branchId: string, isAuthenticated = false) => {
       setQrAlertOrder((curr: any) => (curr?.id === payload.orderId ? null : curr));
     });
 
+    newSocket.on('orderCancelled', (payload: { orderId: string }) => {
+      setPendingQrOrders(prev => prev.filter(o => o.id !== payload.orderId));
+      setQrAlertOrder((curr: any) => (curr?.id === payload.orderId ? null : curr));
+    });
+
     newSocket.on('table:completed', () => {
       fetchPendingQrOrders();
     });

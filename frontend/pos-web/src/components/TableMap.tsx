@@ -10,10 +10,17 @@ interface TableMapProps {
   branchId: string;
   onSelectTable: (tableId: string) => void;
   onPayTable: (orderId: string, totalAmount: number, orderData?: any) => void;
+  onManageTableOrders?: (tableId: string) => void;
   onClose: () => void;
 }
 
-export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onPayTable, onClose }) => {
+export const TableMap: React.FC<TableMapProps> = ({
+  branchId,
+  onSelectTable,
+  onPayTable,
+  onManageTableOrders,
+  onClose,
+}) => {
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedOccupiedTable, setSelectedOccupiedTable] = useState<any>(null);
@@ -25,7 +32,11 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
       const res = await api.get(`/orders?branchId=${branchId}`);
       // Filter all active orders that are not completed and not cancelled
       const activeAtTable = res.data.filter((o: any) => 
-        o.status !== 'COMPLETED' && o.status !== 'CANCELLED' && o.orderType === 'AT_TABLE'
+        o.status !== 'COMPLETED' &&
+        o.status !== 'PAID' &&
+        o.status !== 'CANCELLED' &&
+        o.status !== 'VOIDED' &&
+        o.orderType === 'AT_TABLE'
       );
       setActiveOrders(activeAtTable);
     } catch (error) {
@@ -66,6 +77,14 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
     });
 
     socket.on('order:paid', () => {
+      fetchActiveOrders();
+    });
+
+    socket.on('orderUpdated', () => {
+      fetchActiveOrders();
+    });
+
+    socket.on('orderCancelled', () => {
       fetchActiveOrders();
     });
 
@@ -402,13 +421,27 @@ export const TableMap: React.FC<TableMapProps> = ({ branchId, onSelectTable, onP
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-zinc-200 bg-zinc-50/50 flex gap-3 shrink-0">
+            <div className="p-4 border-t border-zinc-200 bg-zinc-50/50 flex gap-2.5 shrink-0">
               <button 
                 onClick={() => setSelectedOccupiedTable(null)}
-                className="flex-1 py-3 bg-zinc-100 text-zinc-700 font-bold rounded-xl hover:bg-zinc-200 transition-colors cursor-pointer text-sm"
+                className="px-4 py-3 bg-zinc-100 text-zinc-700 font-bold rounded-xl hover:bg-zinc-200 transition-colors cursor-pointer text-xs sm:text-sm"
               >
                 Đóng
               </button>
+              {onManageTableOrders && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const targetTable = selectedOccupiedTable.tableId;
+                    setSelectedOccupiedTable(null);
+                    onClose();
+                    onManageTableOrders(targetTable);
+                  }}
+                  className="flex-1 py-3 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 font-bold rounded-xl transition-colors cursor-pointer text-xs sm:text-sm"
+                >
+                  Sửa / Hủy đơn bàn
+                </button>
+              )}
               <button 
                 disabled={!selectedOccupiedTable.confirmedOrders || selectedOccupiedTable.confirmedOrders.length === 0}
                 onClick={() => {

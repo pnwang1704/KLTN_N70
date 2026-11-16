@@ -6,6 +6,7 @@ import { ProductDetailModal } from './components/ProductDetailModal';
 import { PaymentModal } from './components/PaymentModal';
 import { LoginScreen } from './components/LoginScreen';
 import { OrderHistory } from './components/OrderHistory';
+import { OrderManagement } from './components/OrderManagement';
 import { InventoryManagement } from './components/InventoryManagement';
 import { ShiftSelectModal, type ShiftSession } from './components/ShiftSelectModal';
 import { ShiftSummaryModal } from './components/ShiftSummaryModal';
@@ -20,7 +21,8 @@ import type { Product } from './types';
 
 function App() {
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'POS' | 'HISTORY' | 'INVENTORY'>('POS');
+  const [activeTab, setActiveTab] = useState<'POS' | 'VOID_BILL' | 'HISTORY' | 'INVENTORY'>('POS');
+  const [manageTableFilter, setManageTableFilter] = useState<string | null>(null);
   const [currentShift, setCurrentShift] = useState<ShiftSession | null>(null);
   const [showShiftSelect, setShowShiftSelect] = useState<boolean>(false);
   const [showShiftSummary, setShowShiftSummary] = useState<boolean>(false);
@@ -120,9 +122,25 @@ function App() {
           </div>
           
           <div className="w-[40%] h-full border-l border-zinc-200">
-            <OrderPanel onOpenPayment={(params) => setPaymentInfo(params)} />
+            <OrderPanel
+              onOpenPayment={(params) => setPaymentInfo(params)}
+              onManageTableOrders={(tableId) => {
+                setManageTableFilter(tableId);
+                setActiveTab('VOID_BILL');
+              }}
+            />
           </div>
         </div>
+      )}
+
+      {activeTab === 'VOID_BILL' && (
+        <OrderManagement
+          branchId={branchId}
+          user={user}
+          currentShift={currentShift}
+          initialTableIdFilter={manageTableFilter}
+          onClearInitialTableFilter={() => setManageTableFilter(null)}
+        />
       )}
 
       {activeTab === 'HISTORY' && (
