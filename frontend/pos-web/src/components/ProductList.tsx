@@ -8,9 +8,14 @@ import { ProductFormModal } from './ProductFormModal';
 
 interface ProductListProps {
   onSelectProduct: (product: Product) => void;
+  userRole?: string;
 }
 
-export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => {
+export const ProductList: React.FC<ProductListProps> = ({
+  onSelectProduct,
+  userRole,
+}) => {
+  const canManageMenu = userRole === 'ADMIN' || userRole === 'MANAGER';
   const [categories, setCategories] = useState<Category[]>(mockCategories);
   const [products, setProducts] = useState<Product[]>(mockProducts);
   const [toppings, setToppings] = useState<Topping[]>(mockToppings);
@@ -140,14 +145,16 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
             <RefreshCw size={17} className={cn(isLoading && 'animate-spin text-blue-600')} />
           </button>
 
-          <button
-            type="button"
-            onClick={handleOpenAddModal}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold shadow-xs transition-all cursor-pointer shrink-0"
-          >
-            <Plus size={17} />
-            <span>Thêm món</span>
-          </button>
+          {canManageMenu && (
+            <button
+              type="button"
+              onClick={handleOpenAddModal}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs sm:text-sm font-bold shadow-xs transition-all cursor-pointer shrink-0"
+            >
+              <Plus size={17} />
+              <span>Thêm món</span>
+            </button>
+          )}
         </div>
 
         {!search && (
@@ -179,15 +186,17 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
               onClick={() => onSelectProduct(product)}
               className="bg-white border border-zinc-200 rounded-2xl overflow-hidden hover:border-blue-500 hover:shadow-md transition-all cursor-pointer group flex flex-col relative"
             >
-              {/* Nút Sửa món ăn nhanh góc phải trên */}
-              <button
-                type="button"
-                title="Chỉnh sửa món ăn & Upload ảnh Cloudinary"
-                onClick={(e) => handleOpenEditModal(e, product)}
-                className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-white/90 hover:bg-blue-600 text-zinc-700 hover:text-white shadow-sm opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
-              >
-                <Pencil size={14} />
-              </button>
+              {/* Nút Sửa món ăn góc trên (Chỉ hiển thị cho ADMIN & MANAGER) */}
+              {canManageMenu && (
+                <button
+                  type="button"
+                  title="Chỉnh sửa món ăn & Upload ảnh Cloudinary"
+                  onClick={(e) => handleOpenEditModal(e, product)}
+                  className="absolute top-2 right-2 z-10 p-1.5 rounded-lg bg-white/95 hover:bg-blue-600 text-zinc-700 hover:text-white border border-zinc-200 shadow-sm opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                >
+                  <Pencil size={13} />
+                </button>
+              )}
 
               <div className="aspect-square bg-zinc-100 relative overflow-hidden">
                 <img
@@ -219,7 +228,7 @@ export const ProductList: React.FC<ProductListProps> = ({ onSelectProduct }) => 
       </div>
 
       {/* Modal Thêm / Chỉnh sửa món ăn & Upload ảnh Cloudinary */}
-      {isFormOpen && (
+      {isFormOpen && canManageMenu && (
         <ProductFormModal
           product={editingProduct}
           categories={categories}

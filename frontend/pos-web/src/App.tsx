@@ -118,7 +118,10 @@ function App() {
       {activeTab === 'POS' && (
         <div className="flex-1 flex overflow-hidden">
           <div className="w-[60%] h-full">
-            <ProductList onSelectProduct={setSelectedProduct} />
+            <ProductList
+              onSelectProduct={setSelectedProduct}
+              userRole={user?.role}
+            />
           </div>
           
           <div className="w-[40%] h-full border-l border-zinc-200">
@@ -147,9 +150,10 @@ function App() {
         <OrderHistory branchId={branchId} currentShift={currentShift} />
       )}
 
-      {activeTab === 'INVENTORY' && (
-        <InventoryManagement branchId={branchId} />
-      )}
+      {activeTab === 'INVENTORY' &&
+        (user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+          <InventoryManagement branchId={branchId} />
+        )}
 
       {/* Modals */}
       {selectedProduct && (
