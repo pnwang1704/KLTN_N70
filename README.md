@@ -67,7 +67,16 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
   - Cơ chế tự phục hồi thông minh khi gặp lỗi trùng đơn PayOS (mã `231` - *Đơn thanh toán đã tồn tại*): Tự động inject tài khoản thụ hưởng MBBank (`970422`, STK `VQRQAMOXB8388`, Chủ TK `PHAN NHAT QUANG`) và tạo lại mã VietQR hoàn chỉnh ngay cả khi API `get` của PayOS không trả về thông tin tài khoản ngân hàng.
   - Bổ sung nút liên kết trực tiếp mở cổng thanh toán PayOS (`checkoutUrl`) và cơ chế fallback sang `qrserver` dự phòng nếu mạng máy khách bị gián đoạn kết nối với dịch vụ VietQR bên ngoài.
 - [x] **Giải phóng bàn Real-time:** Socket.IO sự kiện `table:completed` đồng bộ hai chiều giữa POS và Customer Web ngay khi thanh toán xong.
-- [x] **Trừ kho tự động theo công thức (SAGA Pattern):** Lắng nghe sự kiện `order_completed` qua RabbitMQ, trừ nguyên vật liệu bằng TypeORM Transaction, tự động rollback nếu thiếu hàng.
+- [x] **Sửa / Hủy Đơn hàng & Hóa đơn (Void Bill) Tích hợp Menu Chức năng (`OrderManagement.tsx`):**
+  - Bổ sung trạng thái đơn hàng `CONFIRMED`, `PREPARING`, `PAID`, `VOIDED` và các trường kiểm toán (`cancelReason`, `cancelledBy`, `cancelledAt`, `paymentMethod`) trong `order_db`.
+  - **Tab 1 - Đơn đang phục vụ (Chưa thanh toán):** Lọc nhanh theo số bàn, cho phép **Sửa món** (tăng/giảm số lượng, xóa món, thêm món mới, sửa ghi chú, chuyển bàn `PUT /orders/:id/items`) hoặc **Hủy đơn** (`PATCH /orders/:id/cancel` kèm lý do hủy -> giải phóng bàn về trạng thái trống và báo `orderCancelled` xuống KDS).
+  - **Tab 2 - Hóa đơn đã thanh toán (Lịch sử Bill & Void Bill):** Hiển thị 4 thẻ thống kê **Tổng doanh thu thực thu** (không cộng đơn `VOIDED`), **Tiền mặt thực thu**, **Chuyển khoản / QR**, và **Tổng tiền đơn đã hủy / Void**. Hỗ trợ **Sửa PTTT** (`PATCH /orders/:id/payment-method`) và **Hủy Hóa Đơn - Void Bill** (`PATCH /orders/:id/void`) có kiểm tra **Mã PIN Quản lý** (mặc định `1234`) + Lý do hủy.
+- [x] **Thiết lập Công thức Định lượng (Recipe / BOM), Tính Giá vốn (COGS) & Tự động Trừ/Hoàn Kho (SAGA Pattern):**
+  - Tự động seed **14 nguyên vật liệu phổ biến** (kèm `currentStock`, `minStock`, `costPerUnit`) và **78 công thức định lượng (`Recipe`)** cho toàn bộ 26 món ăn (`P1`..`P26`, đủ 3 size `S`, `M`, `L`) trên `inventory_db` (Neon Cloud).
+  - Giao diện **Quản lý Kho 3 Tab** (`InventoryManagement.tsx` - chỉ dành cho `ADMIN` & `MANAGER`, kiểm soát phân quyền RBAC chặt chẽ ẩn các nút thêm/sửa món & công thức khỏi tài khoản `CASHIER`):
+    1. *Tồn kho Nguyên liệu:* Theo dõi tồn kho thực tế, đơn giá vốn, cảnh báo sắp hết hàng và nút `+ Nhập thêm kho` (`PATCH /inventory/ingredients/:id/stock`).
+    2. *Thiết lập Công thức (Định lượng món - BOM):* Chọn món ăn, thêm/xóa nguyên liệu định lượng, tự động tính nhẩm **Giá vốn (COGS)**, **Lãi gộp ước tính & % biên lợi nhuận** và lưu công thức (`PUT /inventory/recipes/:productId`).
+    3. *Lịch sử Xuất - Nhập kho (`inventory_transactions`):* Ghi nhận realtime từng lượt **Xuất bán theo đơn (`ORDER_DEDUCT`)**, **Hoàn trả kho khi Hủy/Void đơn (`ORDER_RESTORE`)**, và **Nhập kho bổ sung (`MANUAL_IMPORT`)** với cơ chế Idempotency chống trừ/hoàn kho trùng lặp.
 - [x] **Persistent Storage & Microservices:** Named Persistent Volumes cho 6 database PostgreSQL và RabbitMQ, đảm bảo dữ liệu luôn bền vững khi restart/rebuild container.
 - [x] **Cơ sở Dữ liệu Phân tán (Database-per-Service) & Đám mây Neon PostgreSQL:**
   - Tách biệt hoàn toàn các cơ sở dữ liệu PostgreSQL độc lập theo đúng chuẩn Microservices (`auth_db`, `product_db`, `order_db`, `inventory_db`, `branch_db`, `reporting_db`).
