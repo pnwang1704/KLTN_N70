@@ -5,6 +5,8 @@ import { columnNumericTransformer } from '../../common/transformers/numeric.tran
 export enum PaymentMethod {
   CASH = 'CASH',
   BANK_TRANSFER = 'BANK_TRANSFER',
+  TRANSFER = 'TRANSFER',
+  QR = 'QR',
 }
 
 @Entity()

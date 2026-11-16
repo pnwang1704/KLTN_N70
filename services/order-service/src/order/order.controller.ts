@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Patch, Delete, Param, Get, Query } from '@nestjs/common';
+import { Controller, Post, Body, Patch, Put, Delete, Param, Get, Query } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -63,6 +63,44 @@ export class OrderController {
     return this.orderService.createOrder(createOrderDto);
   }
 
+  // HTTP endpoint for updating order items / table / note (PUT /orders/:id/items or PATCH /orders/:id)
+  @Put(':id/items')
+  async updateOrderItemsHttp(@Param('id') id: string, @Body() body: any) {
+    return this.orderService.updateOrderItems(id, body);
+  }
+
+  @Patch(':id/items')
+  async patchOrderItemsHttp(@Param('id') id: string, @Body() body: any) {
+    return this.orderService.updateOrderItems(id, body);
+  }
+
+  // HTTP endpoint for cancelling unpaid order
+  @Patch(':id/cancel')
+  async cancelUnpaidOrderHttp(
+    @Param('id') id: string,
+    @Body() body: { cancelReason: string; cancelledBy?: string },
+  ) {
+    return this.orderService.cancelUnpaidOrder(id, body);
+  }
+
+  // HTTP endpoint for voiding paid order (requires managerPin)
+  @Patch(':id/void')
+  async voidPaidOrderHttp(
+    @Param('id') id: string,
+    @Body() body: { cancelReason: string; cancelledBy?: string; managerPin: string },
+  ) {
+    return this.orderService.voidPaidOrder(id, body);
+  }
+
+  // HTTP endpoint for changing payment method of paid order
+  @Patch(':id/payment-method')
+  async updateOrderPaymentMethodHttp(
+    @Param('id') id: string,
+    @Body() body: { paymentMethod: string; updatedBy?: string },
+  ) {
+    return this.orderService.updateOrderPaymentMethod(id, body);
+  }
+
   // HTTP endpoint for deleting pending order
   @Delete(':id')
   async deleteOrderHttp(@Param('id') id: string) {
@@ -73,6 +111,12 @@ export class OrderController {
   @Patch('item-status')
   async updateItemStatusHttp(@Body() updateItemStatusDto: UpdateItemStatusDto) {
     return this.orderService.updateItemStatus(updateItemStatusDto);
+  }
+
+  // HTTP endpoint for updating order (generic PATCH /orders/:id)
+  @Patch(':id')
+  async updateOrderHttp(@Param('id') id: string, @Body() body: any) {
+    return this.orderService.updateOrderItems(id, body);
   }
 
   // HTTP endpoint for processing payment
@@ -116,7 +160,19 @@ export class OrderController {
 
   // Message Pattern for getting orders
   @MessagePattern('get_orders')
-  async handleGetOrders(@Payload() payload: string | { branchId: string; fromDate?: string; toDate?: string }) {
+  async handleGetOrders(
+    @Payload()
+    payload:
+      | string
+      | {
+          branchId: string;
+          fromDate?: string;
+          toDate?: string;
+          status?: string;
+          tableId?: string;
+          paymentMethod?: string;
+        },
+  ) {
     return this.orderService.getOrders(payload);
   }
 
@@ -126,8 +182,54 @@ export class OrderController {
     @Query('branchId') branchId: string,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
+    @Query('status') status?: string,
+    @Query('tableId') tableId?: string,
+    @Query('paymentMethod') paymentMethod?: string,
   ) {
-    return this.orderService.getOrders({ branchId: branchId || '1', fromDate, toDate });
+    return this.orderService.getOrders({
+      branchId: branchId || '1',
+      fromDate,
+      toDate,
+      status,
+      tableId,
+      paymentMethod,
+    });
+  }
+
+  // Message Pattern for updating order items / table / note
+  @MessagePattern('update_order_items')
+  async handleUpdateOrderItems(@Payload() payload: { orderId: string; data: any }) {
+    return this.orderService.updateOrderItems(payload.orderId, payload.data);
+  }
+
+  // Message Pattern for cancelling unpaid order
+  @MessagePattern('cancel_unpaid_order')
+  async handleCancelUnpaidOrder(
+    @Payload() payload: { orderId: string; cancelReason: string; cancelledBy?: string },
+  ) {
+    return this.orderService.cancelUnpaidOrder(payload.orderId, payload);
+  }
+
+  // Message Pattern for voiding paid order
+  @MessagePattern('void_paid_order')
+  async handleVoidPaidOrder(
+    @Payload()
+    payload: {
+      orderId: string;
+      cancelReason: string;
+      cancelledBy?: string;
+      managerPin: string;
+    },
+  ) {
+    return this.orderService.voidPaidOrder(payload.orderId, payload);
+  }
+
+  // Message Pattern for updating payment method of paid order
+  @MessagePattern('update_order_payment_method')
+  async handleUpdateOrderPaymentMethod(
+    @Payload() payload: { orderId: string; paymentMethod: string; updatedBy?: string },
+  ) {
+    return this.orderService.updateOrderPaymentMethod(payload.orderId, payload);
   }
 
   // Message Pattern for getting active orders of table

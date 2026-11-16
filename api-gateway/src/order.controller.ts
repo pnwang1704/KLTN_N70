@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, Inject, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Body, Param, Query, Inject, Req } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Roles } from './common/decorators/roles.decorator';
 import { Public } from './common/decorators/public.decorator';
@@ -16,11 +16,80 @@ export class OrderController {
     return this.orderClient.send('create_order', dto);
   }
 
-  @Roles('CASHIER', 'ADMIN')
+  @Roles('CASHIER', 'ADMIN', 'MANAGER')
   @Post(':id/pay')
   processPayment(@Param('id') id: string, @Body() dto: ProcessPaymentDto, @Req() req: any) {
     const cashierId = req.user?.sub || req.user?.id;
     return this.orderClient.send('process_payment', { orderId: id, processPaymentDto: { ...dto, cashierId } });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Put(':id/items')
+  updateOrderItemsPut(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const updatedBy = body?.updatedBy || req.user?.fullName || req.user?.username || req.user?.sub;
+    return this.orderClient.send('update_order_items', {
+      orderId: id,
+      data: { ...body, updatedBy },
+    });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Patch(':id/items')
+  updateOrderItemsPatch(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const updatedBy = body?.updatedBy || req.user?.fullName || req.user?.username || req.user?.sub;
+    return this.orderClient.send('update_order_items', {
+      orderId: id,
+      data: { ...body, updatedBy },
+    });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Patch(':id/cancel')
+  cancelUnpaidOrder(
+    @Param('id') id: string,
+    @Body() body: { cancelReason: string; cancelledBy?: string },
+    @Req() req: any,
+  ) {
+    const cancelledBy =
+      body?.cancelledBy || req.user?.fullName || req.user?.username || req.user?.sub || 'Thu ngân';
+    return this.orderClient.send('cancel_unpaid_order', {
+      orderId: id,
+      cancelReason: body?.cancelReason,
+      cancelledBy,
+    });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Patch(':id/void')
+  voidPaidOrder(
+    @Param('id') id: string,
+    @Body() body: { cancelReason: string; cancelledBy?: string; managerPin: string },
+    @Req() req: any,
+  ) {
+    const cancelledBy =
+      body?.cancelledBy || req.user?.fullName || req.user?.username || req.user?.sub || 'Quản lý';
+    return this.orderClient.send('void_paid_order', {
+      orderId: id,
+      cancelReason: body?.cancelReason,
+      cancelledBy,
+      managerPin: body?.managerPin,
+    });
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Patch(':id/payment-method')
+  updateOrderPaymentMethod(
+    @Param('id') id: string,
+    @Body() body: { paymentMethod: string; updatedBy?: string },
+    @Req() req: any,
+  ) {
+    const updatedBy =
+      body?.updatedBy || req.user?.fullName || req.user?.username || req.user?.sub;
+    return this.orderClient.send('update_order_payment_method', {
+      orderId: id,
+      paymentMethod: body?.paymentMethod,
+      updatedBy,
+    });
   }
 
   @Roles('ADMIN', 'MANAGER', 'CASHIER')
@@ -32,6 +101,16 @@ export class OrderController {
   @Patch('item-status')
   updateItemStatus(@Body() dto: UpdateItemStatusDto) {
     return this.orderClient.send('update_item_status', dto);
+  }
+
+  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Patch(':id')
+  updateOrderGeneric(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    const updatedBy = body?.updatedBy || req.user?.fullName || req.user?.username || req.user?.sub;
+    return this.orderClient.send('update_order_items', {
+      orderId: id,
+      data: { ...body, updatedBy },
+    });
   }
 
   @Roles('ADMIN', 'MANAGER', 'CASHIER')
@@ -65,9 +144,19 @@ export class OrderController {
     @Query('branchId') queryBranchId?: string,
     @Query('fromDate') fromDate?: string,
     @Query('toDate') toDate?: string,
+    @Query('status') status?: string,
+    @Query('tableId') tableId?: string,
+    @Query('paymentMethod') paymentMethod?: string,
   ) {
     const branchId = queryBranchId || req.user?.branchId || '1';
-    return this.orderClient.send('get_orders', { branchId, fromDate, toDate });
+    return this.orderClient.send('get_orders', {
+      branchId,
+      fromDate,
+      toDate,
+      status,
+      tableId,
+      paymentMethod,
+    });
   }
 
   @Public()
