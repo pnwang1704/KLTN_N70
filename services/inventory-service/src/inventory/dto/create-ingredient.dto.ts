@@ -9,5 +9,17 @@ export class CreateIngredientDto {
 
   @IsOptional()
   @IsNumber()
+  currentStock?: number;
+
+  @IsOptional()
+  @IsNumber()
+  minStock?: number;
+
+  @IsOptional()
+  @IsNumber()
   minStockThreshold?: number;
+
+  @IsOptional()
+  @IsNumber()
+  costPerUnit?: number;
 }

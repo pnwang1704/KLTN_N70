@@ -114,8 +114,19 @@ export class OrderService {
       // Đơn từ QR khách quét: Báo về quầy POS để thu ngân xác nhận trước, CHƯA đẩy thẳng vào KDS bếp
       this.eventsGateway.emitQrOrderPending(savedOrder.branchId, savedOrder);
     } else {
-      // Đơn tạo trực tiếp tại POS: Phát sự kiện tới KDS của chi nhánh ngay
+      // Đơn tạo trực tiếp tại POS: Phát sự kiện tới KDS của chi nhánh ngay & tự động trừ kho
       this.eventsGateway.emitNewOrder(savedOrder.branchId, savedOrder);
+      this.inventoryClient.emit('order.deduct_stock', {
+        orderId: savedOrder.id,
+        orderCode: savedOrder.orderCode,
+        branchId: savedOrder.branchId || '1',
+        items: (savedOrder.items || []).map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          size: item.size || 'M',
+          quantity: item.quantity,
+        })),
+      });
     }
 
     return savedOrder;
@@ -164,8 +175,19 @@ export class OrderService {
 
     const savedOrder = await this.orderRepository.save(order);
 
-    // Sau khi thu ngân duyệt -> Đẩy đơn xuống màn hình bếp KDS & đồng bộ POS / Customer Web
+    // Sau khi thu ngân duyệt -> Đẩy đơn xuống màn hình bếp KDS & đồng bộ POS / Customer Web & tự động trừ kho
     this.eventsGateway.emitNewOrder(savedOrder.branchId, savedOrder);
+    this.inventoryClient.emit('order.deduct_stock', {
+      orderId: savedOrder.id,
+      orderCode: savedOrder.orderCode,
+      branchId: savedOrder.branchId || '1',
+      items: (savedOrder.items || []).map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        size: item.size || 'M',
+        quantity: item.quantity,
+      })),
+    });
     this.eventsGateway.emitQrOrderUpdated(savedOrder.branchId, {
       orderId: savedOrder.id,
       branchId: savedOrder.branchId,
@@ -310,10 +332,12 @@ export class OrderService {
     // Emit event to inventory service via RabbitMQ
     const payload = {
       orderId: savedOrder.id,
+      orderCode: savedOrder.orderCode,
       branchId: savedOrder.branchId,
       items: savedOrder.items.map(item => ({
         productId: item.productId,
-        size: item.size,
+        productName: item.productName,
+        size: item.size || 'M',
         quantity: item.quantity,
         toppings: item.toppings?.map(t => ({
           toppingId: t.toppingId,
@@ -594,10 +618,12 @@ export class OrderService {
       // Emit event to inventory service via RabbitMQ
       const invPayload = {
         orderId: updatedPrimaryOrder.id,
+        orderCode: updatedPrimaryOrder.orderCode,
         branchId: updatedPrimaryOrder.branchId,
         items: updatedPrimaryOrder.items?.map(item => ({
           productId: item.productId,
-          size: item.size,
+          productName: item.productName,
+          size: item.size || 'M',
           quantity: item.quantity,
           toppings: item.toppings?.map(t => ({
             toppingId: t.toppingId,
@@ -647,10 +673,12 @@ export class OrderService {
     // Emit event to inventory service via RabbitMQ
     const invPayload = {
       orderId: order.id,
+      orderCode: order.orderCode,
       branchId: order.branchId,
       items: order.items?.map(item => ({
         productId: item.productId,
-        size: item.size,
+        productName: item.productName,
+        size: item.size || 'M',
         quantity: item.quantity,
         toppings: item.toppings?.map(t => ({
           toppingId: t.toppingId,
@@ -907,6 +935,13 @@ export class OrderService {
     }
 
     const oldTableId = order.tableId;
+    const oldItemsSnapshot = (order.items || []).map((it) => ({
+      productId: it.productId,
+      productName: it.productName,
+      size: it.size || 'M',
+      quantity: Number(it.quantity || 1),
+    }));
+    const wasConfirmedOrder = order.status !== OrderStatus.WAITING_CONFIRM;
 
     if (payload.tableId !== undefined) {
       order.tableId = payload.tableId;
@@ -970,6 +1005,22 @@ export class OrderService {
 
     const savedOrder = await this.orderRepository.save(order);
 
+    // Đồng bộ phần chênh lệch tồn kho sang inventory-service nếu đơn đã xác nhận
+    if (wasConfirmedOrder) {
+      this.inventoryClient.emit('order.adjust_stock', {
+        orderId: savedOrder.id,
+        orderCode: savedOrder.orderCode,
+        branchId: savedOrder.branchId || '1',
+        oldItems: oldItemsSnapshot,
+        newItems: (savedOrder.items || []).map((it) => ({
+          productId: it.productId,
+          productName: it.productName,
+          size: it.size || 'M',
+          quantity: Number(it.quantity || 1),
+        })),
+      });
+    }
+
     // Emit Realtime event orderUpdated tới KDS và POS
     this.eventsGateway.emitOrderUpdated(savedOrder.branchId, savedOrder);
 
@@ -1027,6 +1078,20 @@ export class OrderService {
     order.cancelledAt = new Date();
 
     const savedOrder = await this.orderRepository.save(order);
+
+    // Phát sự kiện hoàn trả tồn kho (ORDER_RESTORE) sang inventory-service
+    this.inventoryClient.emit('order.restore_stock', {
+      orderId: savedOrder.id,
+      orderCode: savedOrder.orderCode,
+      branchId: savedOrder.branchId || '1',
+      reason: savedOrder.cancelReason,
+      items: (savedOrder.items || []).map((it) => ({
+        productId: it.productId,
+        productName: it.productName,
+        size: it.size || 'M',
+        quantity: Number(it.quantity || 1),
+      })),
+    });
 
     // Emit sự kiện orderCancelled cho KDS & POS
     this.eventsGateway.emitOrderCancelled(savedOrder.branchId, {
@@ -1104,6 +1169,20 @@ export class OrderService {
     order.cancelledAt = new Date();
 
     const savedOrder = await this.orderRepository.save(order);
+
+    // Phát sự kiện hoàn trả tồn kho (ORDER_RESTORE) sang inventory-service khi Void Bill
+    this.inventoryClient.emit('order.restore_stock', {
+      orderId: savedOrder.id,
+      orderCode: savedOrder.orderCode,
+      branchId: savedOrder.branchId || '1',
+      reason: savedOrder.cancelReason,
+      items: (savedOrder.items || []).map((it) => ({
+        productId: it.productId,
+        productName: it.productName,
+        size: it.size || 'M',
+        quantity: Number(it.quantity || 1),
+      })),
+    });
 
     this.eventsGateway.emitOrderCancelled(savedOrder.branchId, {
       orderId: savedOrder.id,

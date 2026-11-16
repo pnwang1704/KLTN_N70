@@ -52,6 +52,7 @@ const NEON_CONFIG = {
       path.join(rootDir, 'services/inventory-service/dist/inventory/entities/recipe.entity.js'),
       path.join(rootDir, 'services/inventory-service/dist/inventory/entities/recipe-item.entity.js'),
       path.join(rootDir, 'services/inventory-service/dist/inventory/entities/stock.entity.js'),
+      path.join(rootDir, 'services/inventory-service/dist/inventory/entities/inventory-transaction.entity.js'),
     ],
   },
   product: {
@@ -366,6 +367,88 @@ async function syncAndSeedInventory() {
   const ingredients = await ingredientRepo.find();
   console.log('📋 Danh sách Nguyên liệu trên Neon inventory_db:');
   console.table(ingredients.map(i => ({ id: i.id, name: i.name, unit: i.unit, minThreshold: i.minStockThreshold })));
+
+  // Tự động kiểm tra và seed công thức định lượng (Recipes) cho toàn bộ 26 món (P1..P26, size S/M/L)
+  const findIng = (kw) =>
+    ingredients.find((i) => i.name.toLowerCase().includes(kw.toLowerCase())) || ingredients[0];
+  const ingCoffee = findIng('cà phê');
+  const ingMilk = findIng('sữa đặc');
+  const ingSugar = findIng('đường');
+  const ingTea = findIng('trà');
+  const ingBoba = findIng('trân châu') || ingSugar;
+  const ingFreshMilk = findIng('sữa tươi') || ingMilk;
+  const ingMatcha = findIng('matcha') || ingTea;
+
+  if (ingCoffee && ingTea) {
+    const existingRecipes = await recipeRepo.find();
+    const existingSet = new Set(existingRecipes.map((r) => `${r.productId}_${r.size || 'M'}`));
+    const milkTeaIds = ['P1', 'P2', 'P7', 'P8', 'P9', 'P10', 'P11', '2'];
+    const coffeeIds = ['P3', 'P4', 'P12', 'P13', 'P14', 'P15', '1'];
+    const fruitTeaIds = ['P5', 'P16', 'P17', 'P18', 'P19', 'P20'];
+    const snackIds = ['P6', 'P21', 'P22', 'P23', 'P24', 'P25', 'P26'];
+    const sizes = [
+      { code: 'S', factor: 0.8 },
+      { code: 'M', factor: 1.0 },
+      { code: 'L', factor: 1.3 },
+    ];
+    let newRecipeCount = 0;
+
+    const ensureRecipes = async (pid, baseItems) => {
+      for (const sz of sizes) {
+        const key = `${pid}_${sz.code}`;
+        if (existingSet.has(key)) continue;
+        const savedRec = await recipeRepo.save({ productId: pid, size: sz.code });
+        await recipeItemRepo.save(
+          baseItems.map((bi) => ({
+            recipe: savedRec,
+            ingredientId: bi.ingredientId,
+            quantityNeeded: Math.round(bi.qty * sz.factor),
+          })),
+        );
+        existingSet.add(key);
+        newRecipeCount++;
+      }
+    };
+
+    for (const pid of milkTeaIds) {
+      const items =
+        pid === 'P2'
+          ? [
+              { ingredientId: ingMatcha.id, qty: 15 },
+              { ingredientId: ingFreshMilk.id, qty: 150 },
+              { ingredientId: ingSugar.id, qty: 20 },
+            ]
+          : [
+              { ingredientId: ingTea.id, qty: 15 },
+              { ingredientId: ingFreshMilk.id, qty: 150 },
+              { ingredientId: ingSugar.id, qty: 20 },
+              { ingredientId: ingBoba.id, qty: 40 },
+            ];
+      await ensureRecipes(pid, items);
+    }
+    for (const pid of coffeeIds) {
+      await ensureRecipes(pid, [
+        { ingredientId: ingCoffee.id, qty: 25 },
+        { ingredientId: ingMilk.id, qty: 35 },
+        { ingredientId: ingSugar.id, qty: 10 },
+      ]);
+    }
+    for (const pid of fruitTeaIds) {
+      await ensureRecipes(pid, [
+        { ingredientId: ingTea.id, qty: 20 },
+        { ingredientId: ingSugar.id, qty: 25 },
+      ]);
+    }
+    for (const pid of snackIds) {
+      await ensureRecipes(pid, [
+        { ingredientId: ingSugar.id, qty: 15 },
+        { ingredientId: ingMilk.id, qty: 20 },
+      ]);
+    }
+    if (newRecipeCount > 0) {
+      console.log(`✅ [INVENTORY_DB] Đã seed bổ sung ${newRecipeCount} công thức định lượng (Recipes) cho 26 món ăn P1..P26.`);
+    }
+  }
 
   const stocks = await stockRepo.find();
   console.log('📋 Danh sách Tồn kho Chi nhánh 1 trên Neon inventory_db:');

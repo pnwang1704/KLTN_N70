@@ -98,7 +98,7 @@ export class ProductController {
     );
   }
 
-  @Roles('ADMIN', 'MANAGER', 'CASHIER')
+  @Roles('ADMIN', 'MANAGER')
   @Post('products/upload')
   @UseInterceptors(
     FileInterceptor('file', {
