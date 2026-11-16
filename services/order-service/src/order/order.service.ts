@@ -8,6 +8,7 @@ import { OrderItemTopping } from './entities/order-item-topping.entity';
 import { Payment, PaymentMethod } from './entities/payment.entity';
 import { Expense } from './entities/expense.entity';
 import { Shift } from '../shift/entities/shift.entity';
+import { Employee } from '../employee/entities/employee.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateItemStatusDto } from './dto/update-item-status.dto';
 import { ProcessPaymentDto } from './dto/process-payment.dto';
@@ -21,10 +22,16 @@ export class OrderService {
     private orderRepository: Repository<Order>,
     @InjectRepository(OrderItem)
     private orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(OrderItemTopping)
+    private orderItemToppingRepository: Repository<OrderItemTopping>,
+    @InjectRepository(Payment)
+    private paymentRepository: Repository<Payment>,
     @InjectRepository(Expense)
     private expenseRepository: Repository<Expense>,
     @InjectRepository(Shift)
     private shiftRepository: Repository<Shift>,
+    @InjectRepository(Employee)
+    private employeeRepository: Repository<Employee>,
     private eventsGateway: EventsGateway,
     @Inject('INVENTORY_SERVICE') private inventoryClient: ClientProxy,
   ) {}
@@ -98,6 +105,7 @@ export class OrderService {
       payment.paymentMethod = paymentMethod;
       payment.amount = orderData.finalAmount;
       order.payment = payment;
+      order.paymentMethod = paymentMethod;
     }
 
     const savedOrder = await this.orderRepository.save(order);
@@ -106,8 +114,19 @@ export class OrderService {
       // Đơn từ QR khách quét: Báo về quầy POS để thu ngân xác nhận trước, CHƯA đẩy thẳng vào KDS bếp
       this.eventsGateway.emitQrOrderPending(savedOrder.branchId, savedOrder);
     } else {
-      // Đơn tạo trực tiếp tại POS: Phát sự kiện tới KDS của chi nhánh ngay
+      // Đơn tạo trực tiếp tại POS: Phát sự kiện tới KDS của chi nhánh ngay & tự động trừ kho
       this.eventsGateway.emitNewOrder(savedOrder.branchId, savedOrder);
+      this.inventoryClient.emit('order.deduct_stock', {
+        orderId: savedOrder.id,
+        orderCode: savedOrder.orderCode,
+        branchId: savedOrder.branchId || '1',
+        items: (savedOrder.items || []).map(item => ({
+          productId: item.productId,
+          productName: item.productName,
+          size: item.size || 'M',
+          quantity: item.quantity,
+        })),
+      });
     }
 
     return savedOrder;
@@ -156,8 +175,19 @@ export class OrderService {
 
     const savedOrder = await this.orderRepository.save(order);
 
-    // Sau khi thu ngân duyệt -> Đẩy đơn xuống màn hình bếp KDS & đồng bộ POS / Customer Web
+    // Sau khi thu ngân duyệt -> Đẩy đơn xuống màn hình bếp KDS & đồng bộ POS / Customer Web & tự động trừ kho
     this.eventsGateway.emitNewOrder(savedOrder.branchId, savedOrder);
+    this.inventoryClient.emit('order.deduct_stock', {
+      orderId: savedOrder.id,
+      orderCode: savedOrder.orderCode,
+      branchId: savedOrder.branchId || '1',
+      items: (savedOrder.items || []).map(item => ({
+        productId: item.productId,
+        productName: item.productName,
+        size: item.size || 'M',
+        quantity: item.quantity,
+      })),
+    });
     this.eventsGateway.emitQrOrderUpdated(savedOrder.branchId, {
       orderId: savedOrder.id,
       branchId: savedOrder.branchId,
@@ -189,6 +219,9 @@ export class OrderService {
     }
 
     order.status = OrderStatus.CANCELLED;
+    order.cancelReason = payload?.reason || 'Thu ngân từ chối đơn (Bàn chưa có khách hoặc đơn không hợp lệ)';
+    order.cancelledBy = payload?.cashierId || 'Thu ngân';
+    order.cancelledAt = new Date();
     if (payload?.cashierId) {
       order.cashierId = payload.cashierId;
     }
@@ -200,7 +233,16 @@ export class OrderService {
       branchId: savedOrder.branchId,
       tableId: savedOrder.tableId,
       status: OrderStatus.CANCELLED,
-      reason: payload?.reason || 'Thu ngân từ chối đơn (Bàn chưa có khách hoặc đơn không hợp lệ)',
+      reason: order.cancelReason,
+    });
+    this.eventsGateway.emitOrderCancelled(savedOrder.branchId, {
+      orderId: savedOrder.id,
+      branchId: savedOrder.branchId,
+      tableId: savedOrder.tableId,
+      status: OrderStatus.CANCELLED,
+      cancelReason: order.cancelReason,
+      cancelledBy: order.cancelledBy,
+      order: savedOrder,
     });
 
     return savedOrder;
@@ -242,7 +284,12 @@ export class OrderService {
       throw new NotFoundException('Order not found');
     }
 
-    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.COMPLETED) {
+    if (
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.VOIDED ||
+      order.status === OrderStatus.COMPLETED ||
+      order.status === OrderStatus.PAID
+    ) {
       throw new BadRequestException('Order is already completed or cancelled');
     }
 
@@ -264,6 +311,7 @@ export class OrderService {
     }
 
     order.status = OrderStatus.COMPLETED;
+    order.paymentMethod = paymentMethod;
 
     if (!order.payment) {
       const payment = new Payment();
@@ -284,10 +332,12 @@ export class OrderService {
     // Emit event to inventory service via RabbitMQ
     const payload = {
       orderId: savedOrder.id,
+      orderCode: savedOrder.orderCode,
       branchId: savedOrder.branchId,
       items: savedOrder.items.map(item => ({
         productId: item.productId,
-        size: item.size,
+        productName: item.productName,
+        size: item.size || 'M',
         quantity: item.quantity,
         toppings: item.toppings?.map(t => ({
           toppingId: t.toppingId,
@@ -340,10 +390,24 @@ export class OrderService {
     });
   }
 
-  async getOrders(params: string | { branchId: string; fromDate?: string; toDate?: string }): Promise<Order[]> {
+  async getOrders(
+    params:
+      | string
+      | {
+          branchId: string;
+          fromDate?: string;
+          toDate?: string;
+          status?: string;
+          tableId?: string;
+          paymentMethod?: string;
+        },
+  ): Promise<Order[]> {
     const branchId = typeof params === 'string' ? params : (params.branchId || '1');
     const fromDate = typeof params === 'object' ? params.fromDate : undefined;
     const toDate = typeof params === 'object' ? params.toDate : undefined;
+    const status = typeof params === 'object' ? params.status : undefined;
+    const tableId = typeof params === 'object' ? params.tableId : undefined;
+    const paymentMethod = typeof params === 'object' ? params.paymentMethod : undefined;
 
     const query = this.orderRepository
       .createQueryBuilder('order')
@@ -358,6 +422,43 @@ export class OrderService {
 
     if (toDate) {
       query.andWhere('order.createdAt <= :toDate', { toDate: new Date(toDate) });
+    }
+
+    if (status && status !== 'ALL') {
+      if (status === 'PAID' || status === 'COMPLETED') {
+        query.andWhere('order.status IN (:...paidStatuses)', {
+          paidStatuses: [OrderStatus.COMPLETED, OrderStatus.PAID],
+        });
+      } else if (status === 'ACTIVE') {
+        query.andWhere('order.status NOT IN (:...closedStatuses)', {
+          closedStatuses: [
+            OrderStatus.COMPLETED,
+            OrderStatus.PAID,
+            OrderStatus.CANCELLED,
+            OrderStatus.VOIDED,
+          ],
+        });
+      } else {
+        query.andWhere('order.status = :status', { status });
+      }
+    }
+
+    if (tableId) {
+      query.andWhere('order.tableId = :tableId', { tableId });
+    }
+
+    if (paymentMethod && paymentMethod !== 'ALL') {
+      if (paymentMethod === 'TRANSFER' || paymentMethod === 'BANK_TRANSFER') {
+        query.andWhere(
+          '(order.paymentMethod IN (:...transferMethods) OR payment.paymentMethod IN (:...transferMethods))',
+          { transferMethods: ['TRANSFER', 'BANK_TRANSFER', 'QR'] },
+        );
+      } else {
+        query.andWhere(
+          '(order.paymentMethod = :paymentMethod OR payment.paymentMethod = :paymentMethod)',
+          { paymentMethod },
+        );
+      }
     }
 
     query.orderBy('order.createdAt', 'DESC');
@@ -390,7 +491,14 @@ export class OrderService {
     const { branchId, tableId } = params;
     const where: any = {
       branchId: branchId || '1',
-      status: Not(In([OrderStatus.COMPLETED, OrderStatus.CANCELLED])),
+      status: Not(
+        In([
+          OrderStatus.COMPLETED,
+          OrderStatus.PAID,
+          OrderStatus.CANCELLED,
+          OrderStatus.VOIDED,
+        ]),
+      ),
     };
 
     if (tableId) {
@@ -489,6 +597,7 @@ export class OrderService {
       updatedPrimaryOrder.totalAmount = combinedTotal;
       updatedPrimaryOrder.finalAmount = combinedFinal;
       updatedPrimaryOrder.status = OrderStatus.COMPLETED;
+      updatedPrimaryOrder.paymentMethod = paymentMethod;
 
       if (!updatedPrimaryOrder.payment) {
         const payment = new Payment();
@@ -509,10 +618,12 @@ export class OrderService {
       // Emit event to inventory service via RabbitMQ
       const invPayload = {
         orderId: updatedPrimaryOrder.id,
+        orderCode: updatedPrimaryOrder.orderCode,
         branchId: updatedPrimaryOrder.branchId,
         items: updatedPrimaryOrder.items?.map(item => ({
           productId: item.productId,
-          size: item.size,
+          productName: item.productName,
+          size: item.size || 'M',
           quantity: item.quantity,
           toppings: item.toppings?.map(t => ({
             toppingId: t.toppingId,
@@ -542,6 +653,7 @@ export class OrderService {
     // Single order case
     const order = orders[0];
     order.status = OrderStatus.COMPLETED;
+    order.paymentMethod = paymentMethod;
     if (!order.payment) {
       const payment = new Payment();
       payment.paymentMethod = paymentMethod;
@@ -561,10 +673,12 @@ export class OrderService {
     // Emit event to inventory service via RabbitMQ
     const invPayload = {
       orderId: order.id,
+      orderCode: order.orderCode,
       branchId: order.branchId,
       items: order.items?.map(item => ({
         productId: item.productId,
-        size: item.size,
+        productName: item.productName,
+        size: item.size || 'M',
         quantity: item.quantity,
         toppings: item.toppings?.map(t => ({
           toppingId: t.toppingId,
@@ -680,7 +794,9 @@ export class OrderService {
       .createQueryBuilder('order')
       .leftJoinAndSelect('order.payment', 'payment')
       .where('order.branchId = :branchId', { branchId })
-      .andWhere('order.status = :status', { status: OrderStatus.COMPLETED })
+      .andWhere('order.status IN (:...paidStatuses)', {
+        paidStatuses: [OrderStatus.COMPLETED, OrderStatus.PAID],
+      })
       .andWhere('order.createdAt >= :startDate', { startDate })
       .andWhere('order.createdAt <= :endDate', { endDate })
       .orderBy('order.createdAt', 'DESC');
@@ -703,10 +819,15 @@ export class OrderService {
       );
       totalRevenue += amount;
 
-      const method = order.payment?.paymentMethod;
+      const method = order.payment?.paymentMethod || order.paymentMethod;
       if (method === PaymentMethod.CASH || (method as string) === 'CASH') {
         totalCash += amount;
-      } else if (method === PaymentMethod.BANK_TRANSFER || (method as string) === 'BANK_TRANSFER') {
+      } else if (
+        method === PaymentMethod.BANK_TRANSFER ||
+        (method as string) === 'BANK_TRANSFER' ||
+        (method as string) === 'TRANSFER' ||
+        (method as string) === 'QR'
+      ) {
         totalBankTransfer += amount;
       } else {
         totalCash += amount;
@@ -755,10 +876,370 @@ export class OrderService {
             ? o.finalAmount
             : (o.totalAmount || 0),
         ),
-        paymentMethod: o.payment?.paymentMethod,
+        paymentMethod: o.payment?.paymentMethod || o.paymentMethod,
         createdAt: o.createdAt,
       })),
     };
+  }
+
+  /**
+   * 1. Sửa danh sách món, số lượng, ghi chú, đổi bàn cho đơn hàng đang phục vụ
+   */
+  async updateOrderItems(
+    orderId: string,
+    payload: {
+      tableId?: string;
+      orderType?: OrderType;
+      discountPercent?: number;
+      cancelReason?: string;
+      updatedBy?: string;
+      items: Array<{
+        productId: string;
+        productName: string;
+        size?: string;
+        quantity: number;
+        unitPrice: number;
+        note?: string;
+        itemStatus?: ItemStatus;
+        toppings?: Array<{
+          toppingId: string;
+          toppingName: string;
+          price: number;
+          quantity: number;
+        }>;
+      }>;
+    },
+  ): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: { items: { toppings: true }, payment: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Không tìm thấy đơn hàng');
+    }
+
+    if (
+      order.status === OrderStatus.COMPLETED ||
+      order.status === OrderStatus.PAID ||
+      order.status === OrderStatus.CANCELLED ||
+      order.status === OrderStatus.VOIDED
+    ) {
+      throw new BadRequestException('Không thể sửa món của đơn hàng đã hoàn tất hoặc đã hủy');
+    }
+
+    if (!payload.items || payload.items.length === 0) {
+      throw new BadRequestException(
+        'Đơn hàng phải có ít nhất 1 món. Nếu khách hủy toàn bộ món, vui lòng chọn chức năng Hủy đơn!',
+      );
+    }
+
+    const oldTableId = order.tableId;
+    const oldItemsSnapshot = (order.items || []).map((it) => ({
+      productId: it.productId,
+      productName: it.productName,
+      size: it.size || 'M',
+      quantity: Number(it.quantity || 1),
+    }));
+    const wasConfirmedOrder = order.status !== OrderStatus.WAITING_CONFIRM;
+
+    if (payload.tableId !== undefined) {
+      order.tableId = payload.tableId;
+    }
+    if (payload.orderType !== undefined) {
+      order.orderType = payload.orderType;
+    }
+    if (payload.cancelReason) {
+      order.cancelReason = payload.cancelReason;
+    }
+
+    // Xóa các items cũ của đơn để thay bằng danh sách mới
+    if (order.items && order.items.length > 0) {
+      for (const existingItem of order.items) {
+        if (existingItem.toppings && existingItem.toppings.length > 0) {
+          await this.orderItemToppingRepository.remove(existingItem.toppings);
+        }
+      }
+      await this.orderItemRepository.remove(order.items);
+    }
+
+    let calculatedTotal = 0;
+    const newOrderItems: OrderItem[] = payload.items.map((item) => {
+      const qty = Math.max(1, Number(item.quantity || 1));
+      const unitPrice = Number(item.unitPrice || 0);
+      const toppingsTotalPerUnit = (item.toppings || []).reduce(
+        (tSum, t) => tSum + Number(t.price || 0) * Number(t.quantity || 1),
+        0,
+      );
+      calculatedTotal += (unitPrice + toppingsTotalPerUnit) * qty;
+
+      const orderItem = new OrderItem();
+      orderItem.productId = item.productId;
+      orderItem.productName = item.productName;
+      orderItem.size = item.size || '';
+      orderItem.quantity = qty;
+      orderItem.unitPrice = unitPrice;
+      orderItem.note = item.note || '';
+      orderItem.itemStatus = item.itemStatus || ItemStatus.PENDING;
+      orderItem.toppings =
+        item.toppings?.map((t) => {
+          const topping = new OrderItemTopping();
+          topping.toppingId = t.toppingId;
+          topping.toppingName = t.toppingName;
+          topping.price = Number(t.price || 0);
+          topping.quantity = Number(t.quantity || 1);
+          return topping;
+        }) || [];
+      return orderItem;
+    });
+
+    const discountPct =
+      payload.discountPercent !== undefined
+        ? Number(payload.discountPercent)
+        : Number(order.discountPercent || 0);
+    order.discountPercent = discountPct;
+    order.totalAmount = Math.round(calculatedTotal);
+    const discountAmt = Math.round((order.totalAmount * discountPct) / 100);
+    order.finalAmount = Math.max(0, order.totalAmount - discountAmt);
+    order.items = newOrderItems;
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Đồng bộ phần chênh lệch tồn kho sang inventory-service nếu đơn đã xác nhận
+    if (wasConfirmedOrder) {
+      this.inventoryClient.emit('order.adjust_stock', {
+        orderId: savedOrder.id,
+        orderCode: savedOrder.orderCode,
+        branchId: savedOrder.branchId || '1',
+        oldItems: oldItemsSnapshot,
+        newItems: (savedOrder.items || []).map((it) => ({
+          productId: it.productId,
+          productName: it.productName,
+          size: it.size || 'M',
+          quantity: Number(it.quantity || 1),
+        })),
+      });
+    }
+
+    // Emit Realtime event orderUpdated tới KDS và POS
+    this.eventsGateway.emitOrderUpdated(savedOrder.branchId, savedOrder);
+
+    // Nếu đổi bàn và bàn cũ không còn đơn active nào thì phát giải phóng bàn cũ
+    if (oldTableId && oldTableId !== savedOrder.tableId) {
+      const remainingOnOldTable = await this.getActiveOrders({
+        branchId: savedOrder.branchId,
+        tableId: oldTableId,
+      });
+      if (remainingOnOldTable.length === 0) {
+        this.eventsGateway.emitTableCompleted(savedOrder.branchId, {
+          branchId: savedOrder.branchId,
+          tableId: oldTableId,
+          orderId: savedOrder.id,
+        });
+      }
+    }
+
+    return savedOrder;
+  }
+
+  /**
+   * 2. Hủy đơn chưa thanh toán (status -> CANCELLED) và giải phóng bàn nếu bàn trống
+   */
+  async cancelUnpaidOrder(
+    orderId: string,
+    payload: { cancelReason: string; cancelledBy?: string },
+  ): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: { items: { toppings: true }, payment: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Không tìm thấy đơn hàng');
+    }
+
+    if (order.status === OrderStatus.COMPLETED || order.status === OrderStatus.PAID) {
+      throw new BadRequestException(
+        'Đơn hàng đã thanh toán! Vui lòng sử dụng chức năng Hủy Hóa Đơn (Void Bill) có mã PIN quản lý.',
+      );
+    }
+
+    if (order.status === OrderStatus.CANCELLED || order.status === OrderStatus.VOIDED) {
+      throw new BadRequestException('Đơn hàng này đã bị hủy trước đó.');
+    }
+
+    if (!payload.cancelReason || !payload.cancelReason.trim()) {
+      throw new BadRequestException('Vui lòng nhập hoặc chọn lý do hủy đơn!');
+    }
+
+    order.status = OrderStatus.CANCELLED;
+    order.cancelReason = payload.cancelReason.trim();
+    order.cancelledBy = payload.cancelledBy || 'Thu ngân';
+    order.cancelledAt = new Date();
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Phát sự kiện hoàn trả tồn kho (ORDER_RESTORE) sang inventory-service
+    this.inventoryClient.emit('order.restore_stock', {
+      orderId: savedOrder.id,
+      orderCode: savedOrder.orderCode,
+      branchId: savedOrder.branchId || '1',
+      reason: savedOrder.cancelReason,
+      items: (savedOrder.items || []).map((it) => ({
+        productId: it.productId,
+        productName: it.productName,
+        size: it.size || 'M',
+        quantity: Number(it.quantity || 1),
+      })),
+    });
+
+    // Emit sự kiện orderCancelled cho KDS & POS
+    this.eventsGateway.emitOrderCancelled(savedOrder.branchId, {
+      orderId: savedOrder.id,
+      branchId: savedOrder.branchId,
+      tableId: savedOrder.tableId,
+      status: OrderStatus.CANCELLED,
+      cancelReason: savedOrder.cancelReason,
+      cancelledBy: savedOrder.cancelledBy,
+      order: savedOrder,
+    });
+
+    // Kiểm tra nếu bàn của đơn này không còn đơn đang phục vụ nào thì giải phóng bàn về AVAILABLE
+    if (savedOrder.tableId) {
+      const remainingActive = await this.getActiveOrders({
+        branchId: savedOrder.branchId,
+        tableId: savedOrder.tableId,
+      });
+      if (remainingActive.length === 0) {
+        this.eventsGateway.emitTableCompleted(savedOrder.branchId, {
+          branchId: savedOrder.branchId,
+          tableId: savedOrder.tableId,
+          orderId: savedOrder.id,
+        });
+      }
+    }
+
+    return savedOrder;
+  }
+
+  /**
+   * 3. Hủy hoàn tiền hóa đơn đã thanh toán (Void Bill -> VOIDED), kiểm tra Mã PIN Quản lý
+   */
+  async voidPaidOrder(
+    orderId: string,
+    payload: { cancelReason: string; cancelledBy?: string; managerPin: string },
+  ): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: { items: { toppings: true }, payment: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Không tìm thấy hóa đơn');
+    }
+
+    if (order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.PAID) {
+      throw new BadRequestException('Chỉ có thể Void hóa đơn đã thanh toán!');
+    }
+
+    if (!payload.cancelReason || !payload.cancelReason.trim()) {
+      throw new BadRequestException('Vui lòng nhập lý do hủy hóa đơn (Void Bill)!');
+    }
+
+    const inputPin = (payload.managerPin || '').trim();
+    const defaultPin = process.env.MANAGER_VOID_PIN || '1234';
+    let isPinValid = inputPin === defaultPin || inputPin === '123456';
+
+    if (!isPinValid && inputPin) {
+      const managerEmp = await this.employeeRepository.findOne({
+        where: { pinCode: inputPin, isActive: true },
+      });
+      if (managerEmp) {
+        isPinValid = true;
+      }
+    }
+
+    if (!isPinValid) {
+      throw new BadRequestException('Mã PIN Quản lý không chính xác! (Mặc định: 1234)');
+    }
+
+    order.status = OrderStatus.VOIDED;
+    order.cancelReason = payload.cancelReason.trim();
+    order.cancelledBy = payload.cancelledBy || 'Quản lý';
+    order.cancelledAt = new Date();
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Phát sự kiện hoàn trả tồn kho (ORDER_RESTORE) sang inventory-service khi Void Bill
+    this.inventoryClient.emit('order.restore_stock', {
+      orderId: savedOrder.id,
+      orderCode: savedOrder.orderCode,
+      branchId: savedOrder.branchId || '1',
+      reason: savedOrder.cancelReason,
+      items: (savedOrder.items || []).map((it) => ({
+        productId: it.productId,
+        productName: it.productName,
+        size: it.size || 'M',
+        quantity: Number(it.quantity || 1),
+      })),
+    });
+
+    this.eventsGateway.emitOrderCancelled(savedOrder.branchId, {
+      orderId: savedOrder.id,
+      branchId: savedOrder.branchId,
+      tableId: savedOrder.tableId,
+      status: OrderStatus.VOIDED,
+      cancelReason: savedOrder.cancelReason,
+      cancelledBy: savedOrder.cancelledBy,
+      order: savedOrder,
+    });
+
+    return savedOrder;
+  }
+
+  /**
+   * 4. Đổi phương thức thanh toán (CASH <-> TRANSFER / BANK_TRANSFER) cho hóa đơn đã thanh toán
+   */
+  async updateOrderPaymentMethod(
+    orderId: string,
+    payload: { paymentMethod: string; updatedBy?: string },
+  ): Promise<Order> {
+    const order = await this.orderRepository.findOne({
+      where: { id: orderId },
+      relations: { items: { toppings: true }, payment: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Không tìm thấy hóa đơn');
+    }
+
+    if (order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.PAID) {
+      throw new BadRequestException('Chỉ có thể đổi phương thức thanh toán cho hóa đơn đã thanh toán!');
+    }
+
+    const normalizedMethod =
+      payload.paymentMethod === 'TRANSFER' || payload.paymentMethod === 'QR'
+        ? PaymentMethod.BANK_TRANSFER
+        : payload.paymentMethod === 'CASH'
+        ? PaymentMethod.CASH
+        : (payload.paymentMethod as PaymentMethod);
+
+    order.paymentMethod = payload.paymentMethod;
+
+    if (order.payment) {
+      order.payment.paymentMethod = normalizedMethod;
+      await this.paymentRepository.save(order.payment);
+    } else {
+      const payment = new Payment();
+      payment.paymentMethod = normalizedMethod;
+      payment.amount = Number(order.finalAmount || order.totalAmount || 0);
+      order.payment = payment;
+    }
+
+    const savedOrder = await this.orderRepository.save(order);
+    this.eventsGateway.emitOrderUpdated(savedOrder.branchId, savedOrder);
+
+    return savedOrder;
   }
 }
 

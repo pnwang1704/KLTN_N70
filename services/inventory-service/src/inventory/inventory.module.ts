@@ -6,10 +6,11 @@ import { Ingredient } from './entities/ingredient.entity';
 import { Recipe } from './entities/recipe.entity';
 import { RecipeItem } from './entities/recipe-item.entity';
 import { Stock } from './entities/stock.entity';
+import { InventoryTransaction } from './entities/inventory-transaction.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Ingredient, Recipe, RecipeItem, Stock]),
+    TypeOrmModule.forFeature([Ingredient, Recipe, RecipeItem, Stock, InventoryTransaction]),
   ],
   controllers: [InventoryController],
   providers: [InventoryService],

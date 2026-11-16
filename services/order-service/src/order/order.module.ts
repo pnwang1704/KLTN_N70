@@ -9,11 +9,12 @@ import { OrderItemTopping } from './entities/order-item-topping.entity';
 import { Payment } from './entities/payment.entity';
 import { Expense } from './entities/expense.entity';
 import { Shift } from '../shift/entities/shift.entity';
+import { Employee } from '../employee/entities/employee.entity';
 import { EventsGateway } from '../events/events.gateway';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, OrderItemTopping, Payment, Expense, Shift]),
+    TypeOrmModule.forFeature([Order, OrderItem, OrderItemTopping, Payment, Expense, Shift, Employee]),
     ClientsModule.register([
       {
         name: 'INVENTORY_SERVICE',

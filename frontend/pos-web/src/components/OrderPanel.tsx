@@ -15,9 +15,13 @@ export interface OpenPaymentParams {
 
 interface OrderPanelProps {
   onOpenPayment: (params: OpenPaymentParams) => void;
+  onManageTableOrders?: (tableId: string) => void;
 }
 
-export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
+export const OrderPanel: React.FC<OrderPanelProps> = ({
+  onOpenPayment,
+  onManageTableOrders,
+}) => {
   const { 
     cart, 
     updateQuantity, 
@@ -246,6 +250,10 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({ onOpenPayment }) => {
           onPayTable={(id, total, orderObj) => {
             onOpenPayment({ orderId: id, totalAmount: Math.round(Number(total || 0)), orderData: orderObj });
             setShowTableMap(false);
+          }}
+          onManageTableOrders={(id) => {
+            setShowTableMap(false);
+            onManageTableOrders?.(id);
           }}
           onClose={() => setShowTableMap(false)}
         />

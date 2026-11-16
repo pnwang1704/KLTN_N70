@@ -13,7 +13,38 @@ export class InventoryController {
 
   @EventPattern('order.completed')
   async handleOrderCompleted(@Payload() payload: any) {
-    await this.inventoryService.deductStockForOrder(payload);
+    try {
+      await this.inventoryService.deductStockForOrder({ ...payload, allowPartial: true });
+    } catch (e) {
+      // Prevent unhandled exception from crashing consumer
+    }
+  }
+
+  @EventPattern('order.deduct_stock')
+  async handleOrderDeductStock(@Payload() payload: any) {
+    try {
+      await this.inventoryService.deductStockForOrder({ ...payload, allowPartial: true });
+    } catch (e) {
+      // Prevent unhandled exception from crashing consumer
+    }
+  }
+
+  @EventPattern('order.restore_stock')
+  async handleOrderRestoreStock(@Payload() payload: any) {
+    try {
+      await this.inventoryService.restoreStockForOrder(payload);
+    } catch (e) {
+      // Prevent unhandled exception from crashing consumer
+    }
+  }
+
+  @EventPattern('order.adjust_stock')
+  async handleOrderAdjustStock(@Payload() payload: any) {
+    try {
+      await this.inventoryService.adjustStockForOrderUpdate(payload);
+    } catch (e) {
+      // Prevent unhandled exception from crashing consumer
+    }
   }
 
   @MessagePattern('create_ingredient')
@@ -29,6 +60,11 @@ export class InventoryController {
   @MessagePattern('update_ingredient')
   updateIngredient(@Payload() payload: { id: string; dto: UpdateIngredientDto }) {
     return this.inventoryService.updateIngredient(payload.id, payload.dto);
+  }
+
+  @MessagePattern('adjust_ingredient_stock')
+  adjustIngredientStock(@Payload() payload: { id: string; data: any }) {
+    return this.inventoryService.adjustIngredientStock(payload.id, payload.data || {});
   }
 
   @MessagePattern('delete_ingredient')
@@ -47,13 +83,23 @@ export class InventoryController {
     return this.inventoryService.getRecipes();
   }
 
+  @MessagePattern('get_recipe_by_product')
+  getRecipeByProduct(@Payload() payload: { productId: string; size?: string }) {
+    return this.inventoryService.getRecipeByProduct(payload.productId, payload.size);
+  }
+
+  @MessagePattern('upsert_product_recipe')
+  upsertProductRecipe(@Payload() payload: { productId: string; data: any }) {
+    return this.inventoryService.upsertProductRecipe(payload.productId, payload.data || {});
+  }
+
   @MessagePattern('update_recipe')
   updateRecipe(@Payload() payload: { id: string; dto: UpdateRecipeDto }) {
     return this.inventoryService.updateRecipe(payload.id, payload.dto);
   }
 
   @MessagePattern('stock_in')
-  stockIn(@Payload() dto: StockInDto) {
+  stockIn(@Payload() dto: StockInDto & { note?: string }) {
     return this.inventoryService.stockIn(dto);
   }
 
@@ -71,5 +117,18 @@ export class InventoryController {
       ? payload.branchId
       : payload;
     return this.inventoryService.getLowStockAlerts(branchId);
+  }
+
+  @MessagePattern('get_inventory_transactions')
+  getTransactionsByBranch(@Payload() payload: any) {
+    const branchId =
+      typeof payload === 'object' && payload !== null && 'branchId' in payload
+        ? payload.branchId
+        : payload || '1';
+    const limit =
+      typeof payload === 'object' && payload !== null && 'limit' in payload
+        ? Number(payload.limit)
+        : 100;
+    return this.inventoryService.getTransactionsByBranch(branchId, limit);
   }
 }

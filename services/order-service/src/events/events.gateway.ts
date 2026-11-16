@@ -48,5 +48,13 @@ export class EventsGateway {
   emitTableCompleted(branchId: string, payload: { branchId: string; tableId: string; orderId?: string; orderIds?: string[] }) {
     this.server.to(branchId).emit('table:completed', payload);
   }
+
+  emitOrderUpdated(branchId: string, orderData: any) {
+    this.server.to(branchId).emit('orderUpdated', orderData);
+  }
+
+  emitOrderCancelled(branchId: string, payload: { orderId: string; branchId: string; tableId?: string; status: string; cancelReason?: string; cancelledBy?: string; order?: any }) {
+    this.server.to(branchId).emit('orderCancelled', payload);
+  }
 }
 

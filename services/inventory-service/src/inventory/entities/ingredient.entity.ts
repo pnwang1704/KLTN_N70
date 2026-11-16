@@ -12,5 +12,14 @@ export class Ingredient {
   unit: string;
 
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
+  currentStock: number;
+
+  @Column('decimal', { precision: 10, scale: 2, default: 0 })
+  minStock: number;
+
+  @Column('decimal', { precision: 10, scale: 2, default: 0 })
   minStockThreshold: number;
+
+  @Column('decimal', { precision: 10, scale: 2, default: 0 })
+  costPerUnit: number;
 }

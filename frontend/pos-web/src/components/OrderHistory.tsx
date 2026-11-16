@@ -280,22 +280,31 @@ export const OrderHistory: React.FC<OrderHistoryProps> = ({ branchId, currentShi
                   <td className="px-6 py-4 font-bold text-zinc-900">{formatCurrency(order.finalAmount)}</td>
                   <td className="px-6 py-4">
                     <span className={`px-2.5 py-0.5 rounded-md text-xs font-bold ${
-                      order.status === 'COMPLETED'
+                      order.status === 'COMPLETED' || order.status === 'PAID'
                         ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                         : order.status === 'WAITING_CONFIRM'
                         ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                        : order.status === 'VOIDED'
+                        ? 'bg-red-600 text-white'
                         : order.status === 'CANCELLED'
                         ? 'bg-red-50 text-red-700 border border-red-200'
                         : 'bg-blue-50 text-blue-700 border border-blue-200'
                     }`}>
-                      {order.status === 'COMPLETED'
+                      {order.status === 'COMPLETED' || order.status === 'PAID'
                         ? 'Đã thanh toán'
                         : order.status === 'WAITING_CONFIRM'
                         ? 'Chờ duyệt QR'
+                        : order.status === 'VOIDED'
+                        ? 'Đã Void (Hoàn tiền)'
                         : order.status === 'CANCELLED'
-                        ? 'Đã từ chối'
+                        ? 'Đã hủy'
                         : 'Đang phục vụ'}
                     </span>
+                    {order.cancelReason && (
+                      <div className="text-[11px] text-red-600 mt-1">
+                        Lý do: {order.cancelReason}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <button 

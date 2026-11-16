@@ -11,9 +11,13 @@ export enum OrderType {
 export enum OrderStatus {
   WAITING_CONFIRM = 'WAITING_CONFIRM',
   PENDING = 'PENDING',
+  CONFIRMED = 'CONFIRMED',
+  PREPARING = 'PREPARING',
   IN_PROGRESS = 'IN_PROGRESS',
   COMPLETED = 'COMPLETED',
+  PAID = 'PAID',
   CANCELLED = 'CANCELLED',
+  VOIDED = 'VOIDED',
 }
 
 @Entity()
@@ -55,6 +59,18 @@ export class Order {
 
   @Column({ type: 'int', default: 0, nullable: true })
   discountPercent: number;
+
+  @Column({ type: 'varchar', nullable: true })
+  paymentMethod: string;
+
+  @Column({ type: 'text', nullable: true })
+  cancelReason: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  cancelledBy: string;
+
+  @Column({ type: 'timestamp', nullable: true })
+  cancelledAt: Date;
 
   @OneToMany(() => OrderItem, item => item.order, { cascade: true })
   items: OrderItem[];
