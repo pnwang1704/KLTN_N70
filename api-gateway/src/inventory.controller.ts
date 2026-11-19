@@ -18,8 +18,8 @@ export class InventoryController {
 
   @Roles('ADMIN', 'MANAGER')
   @Get('ingredients')
-  getIngredients() {
-    return this.inventoryClient.send('get_ingredients', {});
+  getIngredients(@Query('branchId') branchId?: string) {
+    return this.inventoryClient.send('get_ingredients', branchId ? { branchId } : {});
   }
 
   @Roles('ADMIN', 'MANAGER')

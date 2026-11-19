@@ -14,11 +14,15 @@ export interface OpenPaymentParams {
 }
 
 interface OrderPanelProps {
+  branchId: string;
+  branchName?: string;
   onOpenPayment: (params: OpenPaymentParams) => void;
   onManageTableOrders?: (tableId: string) => void;
 }
 
 export const OrderPanel: React.FC<OrderPanelProps> = ({
+  branchId,
+  branchName,
   onOpenPayment,
   onManageTableOrders,
 }) => {
@@ -117,7 +121,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({
       const user = userStr ? JSON.parse(userStr) : null;
 
       const payload = {
-        branchId: user?.branchId || '1',
+        branchId: branchId || user?.branchId || '1',
         cashierId: user?.id || user?.sub,
         tableId: orderType === 'AT_TABLE' ? tableId : undefined,
         orderType,
@@ -175,7 +179,7 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({
     const user = userStr ? JSON.parse(userStr) : null;
 
     const orderData = {
-      branchId: user?.branchId || '1',
+      branchId: branchId || user?.branchId || '1',
       cashierId: user?.id || user?.sub,
       tableId: orderType === 'AT_TABLE' ? tableId : undefined,
       orderType,
@@ -242,7 +246,8 @@ export const OrderPanel: React.FC<OrderPanelProps> = ({
 
       {showTableMap && (
         <TableMap 
-          branchId={JSON.parse(localStorage.getItem('pos_user') || '{}')?.branchId || '1'}
+          branchId={branchId || '1'}
+          branchName={branchName}
           onSelectTable={(id) => {
             setTableId(id);
             setShowTableMap(false);

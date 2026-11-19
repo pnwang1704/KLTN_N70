@@ -233,19 +233,22 @@ services:
     networks:
       - app-network
 
-  # Uncomment when service implementation is ready
-  # branch-service:
-  #   build:
-  #     context: ./services/branch-service
-  #   container_name: fnb_branch_service
-  #   environment:
-  #     - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-  #     - DATABASE_URL=postgres://postgres:password@postgres-branch:5432/branch_db
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
+  branch-service:
+    build:
+      context: ./services/branch-service
+    container_name: fnb_branch_service
+    ports:
+      - '3003:3003'
+    environment:
+      - PORT=3003
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - DATABASE_URL=${BRANCH_DATABASE_URL}
+      - DATABASE_SSL=true
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
 
   # Uncomment when service implementation is ready
   # reporting-service:

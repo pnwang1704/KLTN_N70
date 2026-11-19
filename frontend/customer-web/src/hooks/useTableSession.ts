@@ -113,7 +113,7 @@ export function useTableSession() {
     }
 
     if (syncUrl) {
-      const targetSearch = `?tableId=${encodeURIComponent(cleanTable)}${cleanBranch !== '1' ? `&branchId=${encodeURIComponent(cleanBranch)}` : ''}`;
+      const targetSearch = `?branchId=${encodeURIComponent(cleanBranch)}&tableId=${encodeURIComponent(cleanTable)}`;
       if (window.location.search !== targetSearch) {
         window.history.replaceState(
           { tableId: cleanTable, branchId: cleanBranch },

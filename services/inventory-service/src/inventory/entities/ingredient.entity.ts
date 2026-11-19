@@ -5,6 +5,9 @@ export class Ingredient {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Column({ nullable: true, default: '1' })
+  branchId: string;
+
   @Column()
   name: string;
 

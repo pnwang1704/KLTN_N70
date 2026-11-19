@@ -6,6 +6,7 @@ import { X, Printer, Copy, Check, ExternalLink, QrCode, Coffee } from 'lucide-re
 interface TableQrModalProps {
   tableId: string;
   branchId: string;
+  branchName?: string;
   onClose: () => void;
 }
 
@@ -20,7 +21,7 @@ function formatTableCode(tableId: string): string {
   return tableId.trim().toUpperCase();
 }
 
-export const TableQrModal: React.FC<TableQrModalProps> = ({ tableId, branchId, onClose }) => {
+export const TableQrModal: React.FC<TableQrModalProps> = ({ tableId, branchId, branchName, onClose }) => {
   const [copied, setCopied] = useState(false);
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
 
@@ -35,9 +36,10 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({ tableId, branchId, o
     setMountNode(node);
   }, []);
 
+  const resolvedBranchId = String(branchId || '1');
+  const displayBranchLabel = branchName || `Chi nhánh ${resolvedBranchId}`;
   const tableCode = formatTableCode(tableId);
-  const branchParam = branchId && String(branchId) !== '1' ? `&branchId=${encodeURIComponent(branchId)}` : '';
-  const qrUrl = `${DEFAULT_CUSTOMER_WEB_URL}/?tableId=${encodeURIComponent(tableId)}${branchParam}`;
+  const qrUrl = `${DEFAULT_CUSTOMER_WEB_URL}/?branchId=${encodeURIComponent(resolvedBranchId)}&tableId=${encodeURIComponent(tableId)}`;
 
   const handleCopyLink = async () => {
     try {
@@ -67,7 +69,7 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({ tableId, branchId, o
                 <h3 className="text-base font-bold text-zinc-900">
                   Mã QR Gọi Món • Bàn {tableId} ({tableCode})
                 </h3>
-                <p className="text-xs text-zinc-500">Chi nhánh {branchId || '1'}</p>
+                <p className="text-xs text-zinc-500">{displayBranchLabel}</p>
               </div>
             </div>
             <button
@@ -82,8 +84,11 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({ tableId, branchId, o
           {/* QR Sticker Preview */}
           <div className="p-6 flex flex-col items-center">
             <div className="w-full max-w-[290px] bg-white border-2 border-dashed border-zinc-300 rounded-3xl p-5 flex flex-col items-center text-center shadow-sm">
-              <div className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-orange-600 mb-1">
+              <div className="inline-flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-orange-600 mb-0.5">
                 <Coffee size={14} /> N70 COFFEE & TEA
+              </div>
+              <div className="text-[11px] font-semibold text-zinc-500 mb-2">
+                {displayBranchLabel}
               </div>
               <div className="px-4 py-1 rounded-full bg-zinc-900 text-white text-sm font-black tracking-wide mb-4">
                 BÀN SỐ: {tableCode}
@@ -161,7 +166,7 @@ export const TableQrModal: React.FC<TableQrModalProps> = ({ tableId, branchId, o
           <div id="table-qr-print" className="bg-white text-black p-4 mx-auto text-center">
             <div className="border-2 border-black rounded-2xl p-4 flex flex-col items-center">
               <div className="text-sm font-extrabold uppercase tracking-wider">N70 COFFEE & TEA</div>
-              <div className="text-[11px] mb-2">Chi nhánh {branchId || '1'}</div>
+              <div className="text-[11px] mb-2">{displayBranchLabel}</div>
               <div className="border-y-2 border-dashed border-black py-1.5 px-6 my-1 text-lg font-black">
                 BÀN SỐ: {tableCode}
               </div>

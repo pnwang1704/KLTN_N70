@@ -31,6 +31,7 @@ function MainApp() {
   } = useTableSession();
 
   const [showManualTableSelect, setShowManualTableSelect] = useState(false);
+  const [branchName, setBranchName] = useState<string>('');
   const [categories, setCategories] = useState<Category[]>(mockCategories);
   const [products, setProducts] = useState<Product[]>(mockProducts);
   const [activeCategoryId, setActiveCategoryId] = useState(mockCategories[0].id);
@@ -44,6 +45,25 @@ function MainApp() {
   const [qrRejectedNotice, setQrRejectedNotice] = useState<string | null>(null);
 
   const { clearCart } = useCart();
+
+  // Fetch branch name from branch-service based on branchId from QR
+  useEffect(() => {
+    let mounted = true;
+    const bId = branchId || '1';
+    api
+      .get(`/branches/${encodeURIComponent(bId)}`)
+      .then((res) => {
+        if (mounted && res.data?.name) {
+          setBranchName(res.data.name);
+        }
+      })
+      .catch(() => {
+        if (mounted) setBranchName(`Chi nhánh ${bId}`);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [branchId]);
 
   // Fetch Categories & Products from real API Gateway (product-service -> Neon DB & Cloudinary)
   useEffect(() => {
@@ -212,6 +232,7 @@ function MainApp() {
 
         <Header
           branchId={branchId}
+          branchName={branchName}
           tableId={tableId}
           onOpenCart={() => setIsCartOpen(true)}
           onOpenActiveOrders={() => setIsActiveOrderOpen(true)}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { ProductList } from './components/ProductList';
 import { OrderPanel, type OpenPaymentParams } from './components/OrderPanel';
@@ -8,6 +8,7 @@ import { LoginScreen } from './components/LoginScreen';
 import { OrderHistory } from './components/OrderHistory';
 import { OrderManagement } from './components/OrderManagement';
 import { InventoryManagement } from './components/InventoryManagement';
+import { BranchManagement, type BranchItem } from './components/BranchManagement';
 import { ShiftSelectModal, type ShiftSession } from './components/ShiftSelectModal';
 import { ShiftSummaryModal } from './components/ShiftSummaryModal';
 import { ExpenseModal } from './components/ExpenseModal';
@@ -17,11 +18,16 @@ import { TimesheetModal } from './components/TimesheetModal';
 import { HeldOrdersDrawer } from './components/HeldOrdersDrawer';
 import { QrOrderApprovalModal } from './components/QrOrderApprovalModal';
 import { useSocket } from './hooks/useSocket';
+import api from './lib/axios';
 import type { Product } from './types';
 
 function App() {
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'POS' | 'VOID_BILL' | 'HISTORY' | 'INVENTORY'>('POS');
+  const [activeTab, setActiveTab] = useState<'POS' | 'VOID_BILL' | 'HISTORY' | 'INVENTORY' | 'BRANCHES'>('POS');
+  const [branches, setBranches] = useState<BranchItem[]>([]);
+  const [activeBranchId, setActiveBranchId] = useState<string>(
+    () => localStorage.getItem('pos_active_branch_id') || '1'
+  );
   const [manageTableFilter, setManageTableFilter] = useState<string | null>(null);
   const [currentShift, setCurrentShift] = useState<ShiftSession | null>(null);
   const [showShiftSelect, setShowShiftSelect] = useState<boolean>(false);
@@ -60,7 +66,41 @@ function App() {
     return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
   }, []);
 
-  const branchId = user?.branchId || '1';
+  const fetchBranches = useCallback(async () => {
+    try {
+      const res = await api.get('/branches');
+      const list: BranchItem[] = Array.isArray(res.data) ? res.data : [];
+      if (list.length > 0) {
+        setBranches(list);
+      }
+    } catch (e) {
+      console.warn('Không tải được danh sách chi nhánh:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchBranches();
+      if (user.role !== 'ADMIN' && user.role !== 'MANAGER' && user.branchId) {
+        setActiveBranchId(String(user.branchId));
+      }
+    }
+  }, [user, fetchBranches]);
+
+  const branchId = activeBranchId || user?.branchId || '1';
+  const activeBranch = branches.find((b) => String(b.id) === String(branchId));
+
+  useEffect(() => {
+    localStorage.setItem('pos_active_branch_id', String(branchId));
+    if (activeBranch) {
+      localStorage.setItem('pos_active_branch', JSON.stringify(activeBranch));
+    }
+  }, [branchId, activeBranch]);
+
+  const handleChangeBranch = (newBranchId: string) => {
+    setActiveBranchId(String(newBranchId));
+    setManageTableFilter(null);
+  };
   const {
     isConnected,
     toastMessage,
@@ -102,6 +142,9 @@ function App() {
         }} 
         activeTab={activeTab}
         setActiveTab={(t) => setActiveTab(t as any)}
+        branches={branches}
+        activeBranchId={branchId}
+        onChangeBranch={handleChangeBranch}
         notifications={notifications}
         onMarkAsRead={markAsRead}
         currentShift={currentShift}
@@ -126,6 +169,8 @@ function App() {
           
           <div className="w-[40%] h-full border-l border-zinc-200">
             <OrderPanel
+              branchId={branchId}
+              branchName={activeBranch?.name}
               onOpenPayment={(params) => setPaymentInfo(params)}
               onManageTableOrders={(tableId) => {
                 setManageTableFilter(tableId);
@@ -153,6 +198,18 @@ function App() {
       {activeTab === 'INVENTORY' &&
         (user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
           <InventoryManagement branchId={branchId} />
+        )}
+
+      {activeTab === 'BRANCHES' &&
+        (user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+          <BranchManagement
+            activeBranchId={branchId}
+            onSelectActiveBranch={(id) => {
+              handleChangeBranch(id);
+              setActiveTab('POS');
+            }}
+            onBranchesChanged={fetchBranches}
+          />
         )}
 
       {/* Modals */}
@@ -227,6 +284,8 @@ function App() {
         isOpen={showTimesheetModal}
         onClose={() => setShowTimesheetModal(false)}
         user={user}
+        branchId={branchId}
+        branches={branches}
       />
 
       {/* Held / Draft Orders Drawer */}

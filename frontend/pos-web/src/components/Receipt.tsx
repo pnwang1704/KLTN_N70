@@ -5,6 +5,7 @@ import { formatCurrency, formatDate, formatPaymentMethod } from '../lib/utils';
 interface ReceiptProps {
   order: any;
   user: any;
+  branch?: any;
 }
 
 const groupReceiptItems = (items: any[] = []) => {
@@ -26,8 +27,18 @@ const groupReceiptItems = (items: any[] = []) => {
   return Array.from(map.values());
 };
 
-export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
+export const Receipt: React.FC<ReceiptProps> = ({ order, user, branch }) => {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+
+  const activeBranch = React.useMemo(() => {
+    if (branch) return branch;
+    try {
+      const stored = localStorage.getItem('pos_active_branch');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, [branch]);
 
   useEffect(() => {
     let node = document.getElementById('print-root');
@@ -65,8 +76,12 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
     <div id="printable-receipt" className="bg-white text-black p-4 mx-auto">
       <div className="text-center mb-4">
         <h2 className="text-xl font-bold uppercase mb-1">N70 POS</h2>
-        <p className="text-sm">Chi nhánh {user?.branchId || 1}</p>
-        <p className="text-xs">ĐC: 12 Nguyễn Văn Bảo, Gò Vấp</p>
+        <p className="text-sm font-semibold">
+          {activeBranch?.name || `Chi nhánh ${order?.branchId || user?.branchId || 1}`}
+        </p>
+        <p className="text-xs">
+          ĐC: {activeBranch?.address || '12 Nguyễn Văn Bảo, Gò Vấp, TP.HCM'}
+        </p>
         <div className="border-b-2 border-dashed border-black my-2"></div>
         <h3 className="text-lg font-bold">PHIẾU THANH TOÁN</h3>
       </div>
@@ -173,8 +188,10 @@ export const Receipt: React.FC<ReceiptProps> = ({ order, user }) => {
 
       <div className="text-center text-xs space-y-1">
         <p className="font-bold">CẢM ƠN QUÝ KHÁCH & HẸN GẶP LẠI!</p>
-        <p>Hotline: 0123.456.789</p>
-        <p>Wifi: N70_Free / Pass: 12345678</p>
+        <p>Hotline: {activeBranch?.phone || '0123.456.789'}</p>
+        <p>
+          Wifi: {activeBranch?.wifiName || 'N70_Free'} / Pass: {activeBranch?.wifiPassword || '12345678'}
+        </p>
       </div>
     </div>,
     mountNode

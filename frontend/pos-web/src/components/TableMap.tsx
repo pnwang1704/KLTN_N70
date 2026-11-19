@@ -8,6 +8,7 @@ import { TableQrModal } from './TableQrModal';
 
 interface TableMapProps {
   branchId: string;
+  branchName?: string;
   onSelectTable: (tableId: string) => void;
   onPayTable: (orderId: string, totalAmount: number, orderData?: any) => void;
   onManageTableOrders?: (tableId: string) => void;
@@ -16,15 +17,42 @@ interface TableMapProps {
 
 export const TableMap: React.FC<TableMapProps> = ({
   branchId,
+  branchName,
   onSelectTable,
   onPayTable,
   onManageTableOrders,
   onClose,
 }) => {
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
+  const [branchTables, setBranchTables] = useState<Array<{ tableId: string; name: string; area?: string }>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedOccupiedTable, setSelectedOccupiedTable] = useState<any>(null);
   const [qrTableId, setQrTableId] = useState<string | null>(null);
+
+  const fetchBranchTables = useCallback(async () => {
+    try {
+      const res = await api.get(`/branches/${branchId}/tables`);
+      const list = Array.isArray(res.data) ? res.data : [];
+      if (list.length > 0) {
+        setBranchTables(
+          list.map((t: any) => ({
+            tableId: String(t.tableNumber || t.id),
+            name: t.name || `Bàn ${t.tableNumber}`,
+            area: t.area,
+          }))
+        );
+        return;
+      }
+    } catch (err) {
+      console.warn('Không tải được danh sách bàn từ branch-service, dùng mặc định:', err);
+    }
+    setBranchTables(
+      Array.from({ length: 12 }, (_, i) => ({
+        tableId: String(i + 1),
+        name: `Bàn ${String(i + 1).padStart(2, '0')}`,
+      }))
+    );
+  }, [branchId]);
 
   const fetchActiveOrders = useCallback(async () => {
     setIsLoading(true);
@@ -47,6 +75,7 @@ export const TableMap: React.FC<TableMapProps> = ({
   }, [branchId]);
 
   useEffect(() => {
+    fetchBranchTables();
     fetchActiveOrders();
 
     // Socket.IO real-time updates for table statuses
@@ -91,7 +120,7 @@ export const TableMap: React.FC<TableMapProps> = ({
     return () => {
       socket.disconnect();
     };
-  }, [branchId, fetchActiveOrders]);
+  }, [branchId, fetchActiveOrders, fetchBranchTables]);
 
   const openTableSummaryModal = (tableId: string, sourceOrders: any[]) => {
     const tableOrders = sourceOrders.filter(o => o.tableId === tableId);
@@ -143,8 +172,7 @@ export const TableMap: React.FC<TableMapProps> = ({
     }
   };
 
-  const handleTableClick = (tableNum: number) => {
-    const tableId = tableNum.toString();
+  const handleTableClick = (tableId: string) => {
     const tableOrders = activeOrders.filter(o => o.tableId === tableId);
 
     if (tableOrders.length > 0) {
@@ -159,7 +187,9 @@ export const TableMap: React.FC<TableMapProps> = ({
       <div className="bg-zinc-100 rounded-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="px-6 py-4 bg-white border-b border-zinc-200 flex justify-between items-center shadow-sm z-10">
           <div>
-            <h2 className="text-xl font-bold text-zinc-900">Sơ đồ bàn - Chi nhánh {branchId}</h2>
+            <h2 className="text-xl font-bold text-zinc-900">
+              Sơ đồ bàn • {branchName || `Chi nhánh ${branchId}`}
+            </h2>
             <div className="flex gap-4 mt-1.5 text-xs">
               <span className="flex items-center gap-1.5 font-medium text-zinc-600">
                 <span className="w-3 h-3 rounded-full bg-white border border-zinc-300"></span> Bàn trống
@@ -196,9 +226,9 @@ export const TableMap: React.FC<TableMapProps> = ({
             </div>
           )}
 
-          <div className="grid grid-cols-5 gap-4 sm:gap-6">
-            {Array.from({ length: 20 }, (_, i) => i + 1).map(num => {
-              const tableId = num.toString();
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
+            {branchTables.map((tbl) => {
+              const tableId = tbl.tableId;
               const tableOrders = activeOrders.filter(o => o.tableId === tableId);
               const confirmedOrders = tableOrders.filter(o => o.status !== 'WAITING_CONFIRM');
               const waitingOrders = tableOrders.filter(o => o.status === 'WAITING_CONFIRM');
@@ -214,12 +244,12 @@ export const TableMap: React.FC<TableMapProps> = ({
               );
 
               return (
-                <div key={num} className="relative group">
+                <div key={tableId} className="relative group">
                   <button
                     type="button"
-                    onClick={() => handleTableClick(num)}
+                    onClick={() => handleTableClick(tableId)}
                     className={cn(
-                      "w-full p-3 h-32 rounded-2xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all active:scale-95 cursor-pointer",
+                      "w-full p-3 h-32 rounded-2xl border-2 flex flex-col items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer",
                       hasWaitingQr
                         ? "bg-amber-50 border-amber-400 hover:bg-amber-100 hover:border-amber-500 shadow-sm ring-2 ring-amber-300/40"
                         : isOccupied
@@ -229,16 +259,21 @@ export const TableMap: React.FC<TableMapProps> = ({
                   >
                     <span
                       className={cn(
-                        "text-2xl font-black",
+                        "text-xl font-black",
                         hasWaitingQr
                           ? "text-amber-600"
                           : isOccupied
                           ? "text-blue-600"
-                          : "text-zinc-400 group-hover:text-zinc-600"
+                          : "text-zinc-500 group-hover:text-zinc-800"
                       )}
                     >
-                      {num}
+                      {tbl.name}
                     </span>
+                    {tbl.area && (
+                      <span className="text-[10px] font-semibold text-zinc-400">
+                        {tbl.area}
+                      </span>
+                    )}
 
                     {hasWaitingQr ? (
                       <div className="flex flex-col items-center">
@@ -483,6 +518,7 @@ export const TableMap: React.FC<TableMapProps> = ({
         <TableQrModal
           tableId={qrTableId}
           branchId={branchId}
+          branchName={branchName}
           onClose={() => setQrTableId(null)}
         />
       )}

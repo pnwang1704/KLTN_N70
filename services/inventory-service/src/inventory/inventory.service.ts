@@ -70,11 +70,13 @@ export class InventoryService implements OnModuleInit {
    */
   async seedInitialData() {
     try {
+      const seedBranchIds = ['1', '2'];
       const existingCount = await this.ingredientRepository.count();
       if (existingCount === 0) {
-        this.logger.log('Seeding initial ingredients & stocks...');
+        this.logger.log('Seeding initial ingredients & stocks for branches 1 & 2...');
         for (const def of SEED_INGREDIENTS) {
           const savedIng = await this.ingredientRepository.save({
+            branchId: '1',
             name: def.name,
             unit: def.unit,
             currentStock: def.currentStock,
@@ -82,11 +84,13 @@ export class InventoryService implements OnModuleInit {
             minStockThreshold: def.minStock,
             costPerUnit: def.costPerUnit,
           });
-          await this.stockRepository.save({
-            branchId: '1',
-            ingredientId: savedIng.id,
-            currentQuantity: def.currentStock,
-          });
+          for (const bId of seedBranchIds) {
+            await this.stockRepository.save({
+              branchId: bId,
+              ingredientId: savedIng.id,
+              currentQuantity: def.currentStock,
+            });
+          }
         }
       }
 
@@ -99,16 +103,19 @@ export class InventoryService implements OnModuleInit {
         return;
       }
 
-      const existingStocks = (await this.stockRepository.find({ where: { branchId: '1' } })) || [];
-      const stockByIngId = new Map(existingStocks.map((s) => [s.ingredientId, s]));
+      const existingStocks = (await this.stockRepository.find()) || [];
+      const stockByBranchAndIng = new Map(
+        existingStocks.map((s) => [`${s.branchId}_${s.ingredientId}`, s]),
+      );
 
-      // Bổ sung các nguyên liệu mới trong SEED_INGREDIENTS nếu chưa có và đồng bộ giá vốn / tồn kho
+      // Bổ sung các nguyên liệu mới trong SEED_INGREDIENTS nếu chưa có và đồng bộ giá vốn / tồn kho cho cả 2 chi nhánh
       for (const def of SEED_INGREDIENTS) {
         let found = allIngredients.find(
           (i) => i.name.toLowerCase() === def.name.toLowerCase(),
         );
         if (!found) {
           found = await this.ingredientRepository.save({
+            branchId: '1',
             name: def.name,
             unit: def.unit,
             currentStock: def.currentStock,
@@ -116,15 +123,17 @@ export class InventoryService implements OnModuleInit {
             minStockThreshold: def.minStock,
             costPerUnit: def.costPerUnit,
           });
-          await this.stockRepository.save({
-            branchId: '1',
-            ingredientId: found.id,
-            currentQuantity: def.currentStock,
-          });
+          for (const bId of seedBranchIds) {
+            await this.stockRepository.save({
+              branchId: bId,
+              ingredientId: found.id,
+              currentQuantity: def.currentStock,
+            });
+          }
           allIngredients.push(found);
         } else {
-          const stockRow = stockByIngId.get(found.id);
-          const actualQty = stockRow ? Number(stockRow.currentQuantity) : def.currentStock;
+          const branch1Stock = stockByBranchAndIng.get(`1_${found.id}`);
+          const actualQty = branch1Stock ? Number(branch1Stock.currentQuantity) : def.currentStock;
           let needsSave = false;
           if (!Number(found.costPerUnit)) {
             found.costPerUnit = def.costPerUnit;
@@ -141,12 +150,14 @@ export class InventoryService implements OnModuleInit {
           if (needsSave) {
             await this.ingredientRepository.save(found);
           }
-          if (!stockRow) {
-            await this.stockRepository.save({
-              branchId: '1',
-              ingredientId: found.id,
-              currentQuantity: Number(found.currentStock) || def.currentStock,
-            });
+          for (const bId of seedBranchIds) {
+            if (!stockByBranchAndIng.get(`${bId}_${found.id}`)) {
+              await this.stockRepository.save({
+                branchId: bId,
+                ingredientId: found.id,
+                currentQuantity: bId === '1' ? (Number(found.currentStock) || def.currentStock) : def.currentStock,
+              });
+            }
           }
         }
       }
@@ -276,16 +287,18 @@ export class InventoryService implements OnModuleInit {
   }
 
   // --- INGREDIENT CRUD ---
-  async createIngredient(dto: CreateIngredientDto): Promise<Ingredient> {
+  async createIngredient(dto: CreateIngredientDto & { branchId?: string }): Promise<Ingredient> {
     const minVal = Number(dto.minStock ?? dto.minStockThreshold ?? 0);
     const initStock = Number(dto.currentStock ?? 0);
     const costVal = Number(dto.costPerUnit ?? 0);
+    const branchId = dto.branchId || '1';
 
     const payload: any = {
       name: dto.name,
       unit: dto.unit,
       minStockThreshold: minVal,
     };
+    if (dto.branchId !== undefined) payload.branchId = branchId;
     if (dto.currentStock !== undefined) payload.currentStock = initStock;
     if (dto.minStock !== undefined) payload.minStock = minVal;
     if (dto.costPerUnit !== undefined) payload.costPerUnit = costVal;
@@ -293,15 +306,15 @@ export class InventoryService implements OnModuleInit {
     const ingredient = this.ingredientRepository.create(payload as Partial<Ingredient>);
     const saved = await this.ingredientRepository.save(ingredient);
 
-    // Đồng bộ bảng Stock cho Chi nhánh 1
+    // Đồng bộ bảng Stock cho chi nhánh tạo (mặc định '1')
     if (this.stockRepository?.findOne && saved?.id) {
       const existingStock = await this.stockRepository.findOne({
-        where: { branchId: '1', ingredientId: saved.id },
+        where: { branchId, ingredientId: saved.id },
       });
       if (!existingStock) {
         await this.stockRepository.save(
           this.stockRepository.create({
-            branchId: '1',
+            branchId,
             ingredientId: saved.id,
             currentQuantity: initStock,
           }),
@@ -311,8 +324,18 @@ export class InventoryService implements OnModuleInit {
     return saved;
   }
 
-  async getIngredients(): Promise<Ingredient[]> {
-    return this.ingredientRepository.find();
+  async getIngredients(branchId?: string): Promise<Ingredient[]> {
+    const ingredients = await this.ingredientRepository.find();
+    if (!branchId || !this.stockRepository?.find) {
+      return ingredients;
+    }
+    const branchStocks = (await this.stockRepository.find({ where: { branchId } })) || [];
+    const stockMap = new Map(branchStocks.map((s) => [s.ingredientId, Number(s.currentQuantity)]));
+    return ingredients.map((ing) => ({
+      ...ing,
+      branchId,
+      currentStock: stockMap.has(ing.id) ? stockMap.get(ing.id)! : 0,
+    }));
   }
 
   async updateIngredient(id: string, dto: UpdateIngredientDto): Promise<Ingredient> {
@@ -383,8 +406,11 @@ export class InventoryService implements OnModuleInit {
     }
 
     const savedStock = await this.stockRepository.save(stock);
-    ingredient.currentStock = finalQty;
-    const savedIng = await this.ingredientRepository.save(ingredient);
+    let savedIng = ingredient;
+    if (branchId === (ingredient.branchId || '1')) {
+      ingredient.currentStock = finalQty;
+      savedIng = await this.ingredientRepository.save(ingredient);
+    }
 
     if (this.transactionRepository && delta !== 0) {
       await this.transactionRepository.save(

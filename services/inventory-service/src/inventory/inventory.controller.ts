@@ -53,8 +53,12 @@ export class InventoryController {
   }
 
   @MessagePattern('get_ingredients')
-  getIngredients() {
-    return this.inventoryService.getIngredients();
+  getIngredients(@Payload() payload?: any) {
+    const branchId =
+      typeof payload === 'object' && payload !== null && 'branchId' in payload
+        ? payload.branchId
+        : undefined;
+    return this.inventoryService.getIngredients(branchId);
   }
 
   @MessagePattern('update_ingredient')
