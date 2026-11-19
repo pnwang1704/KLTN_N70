@@ -335,3 +335,23 @@
   1. **Tích hợp `CloudinaryService` trong `product-service`:** Sử dụng `cloudinary`, `multer` và `streamifier` đẩy trực tiếp luồng `Buffer` ảnh lên thư mục `pos_n70/products` trên Cloudinary và lưu `secure_url` vào cột `imageUrl` của bảng `products` trên `product_db` (Neon Cloud).
   2. **Truyền tải Binary Lossless qua API Gateway:** `api-gateway` sử dụng `FileInterceptor('file')` đọc file `multipart/form-data`, mã hóa Base64 lossless qua RabbitMQ RPC (`upload_product_image`, `create_product`, `update_product`) sang `product-service` mà không làm hỏng cấu trúc binary của file ảnh.
   3. **Auto-Seed & Tự động Migrate Ảnh Mẫu:** Trong `onModuleInit` và script `scripts/sync-and-seed-neon.js`, nếu món ăn trong dữ liệu mẫu đang dùng đường dẫn ảnh local (`/products/...`) hoặc link ngoài và tài khoản Cloudinary đã được cấu hình, hệ thống tự động upload ảnh lên Cloudinary (`pos_n70/products`) và cập nhật lại `imageUrl` trong database.
+
+### Quyết định 30: Nâng cấp Hệ thống sang Mô hình Chuỗi Đa Chi nhánh (`branch-service`) & Cô lập Dữ liệu theo `branchId`
+* **Bối cảnh:** Để mở rộng từ 1 cửa hàng sang chuỗi nhiều chi nhánh mà không lẫn lộn đơn hàng, sơ đồ bàn, kho nguyên liệu hay thông báo bếp giữa các điểm bán, hệ thống cần một dịch vụ trung tâm quản lý danh mục chi nhánh/bàn và cơ chế cô lập dữ liệu xuyên suốt các microservices.
+* **Giải pháp Kỹ thuật:**
+  1. **Triển khai `branch-service` (Port `3003`, RabbitMQ `branch_queue`, Neon `branch_db`):** Quản lý 2 thực thể `Branch` (kèm thông tin địa chỉ, hotline, giờ mở cửa, tên/mật khẩu Wi-Fi in hóa đơn) và `BranchTable`, tự động seed 2 chi nhánh mẫu (`CN01 - Quận 1`, `CN02 - Bình Thạnh`) và 16 bàn mẫu.
+  2. **Cô lập Realtime & Tồn kho:** Chuẩn hóa room Socket.IO `branch_${branchId}` trên `order-service` (tự động rời room cũ khi chuyển chi nhánh); bổ sung cột `branchId` và tồn kho độc lập cho cả 2 chi nhánh tại `inventory-service`.
+  3. **Đồng bộ Toàn bộ Frontend:** Bổ sung Branch Switcher trên `pos-web`, màn hình `BranchManagement.tsx`, đồng bộ tên/địa chỉ/Wi-Fi lên `Receipt.tsx`, gắn đủ `branchId` & `tableId` vào mã QR (`TableQrModal.tsx`, `customer-web`), đồng bộ danh sách chi nhánh vào `TimesheetModal.tsx` (Nhân sự & Bảng công) và bộ chọn chi nhánh trên `kds-web`.
+
+### Quyết định 31: Triển khai `reporting-service` Tổng hợp Đa Service qua RabbitMQ & Dashboard Recharts + Xuất Excel `.xlsx`
+* **Bối cảnh:** Chủ chuỗi cần xem nhanh doanh thu thực thu, giá vốn nguyên liệu theo định lượng BOM, lợi nhuận gộp, tỷ lệ hủy/Void bill, khung giờ cao điểm và so sánh hiệu suất giữa các chi nhánh mà không phá vỡ nguyên tắc Database-per-Service.
+* **Giải pháp Kỹ thuật:**
+  1. **Tổng hợp chuẩn Microservices (RabbitMQ RPC):** `reporting-service` (Port `3005`, Neon `reporting_db`) gọi song song qua RabbitMQ tới `order-service`, `inventory-service` (tính COGS từ bảng `recipes` + `ingredients.costPerUnit`) và `branch-service`, chuẩn hóa múi giờ Việt Nam (`UTC+7`) và lưu vết vào bảng `report_snapshots`.
+  2. **Dashboard Trực quan & Xuất Excel (`ReportsDashboard.tsx`):** Sử dụng `recharts` hiển thị 4 thẻ KPI, biểu đồ cột + đường Doanh thu & Lợi nhuận, biểu đồ Donut PTTT, biểu đồ Khung giờ cao điểm, Top 10 món bán chạy và bảng So sánh chi nhánh; tích hợp `xlsx` xuất workbook nhiều sheet (`Tong_Quan`, `Top_Mon_Ban_Chay`, `So_Sanh_Chi_Nhanh`, `Chi_Tiet_Don_Hang`).
+
+### Quyết định 32: Tích hợp Trợ lý AI Phân tích Số liệu & AI Copilot Chat dùng Google Gemini API (`@google/genai`)
+* **Bối cảnh:** Các bảng biểu số liệu truyền thống đòi hỏi chủ quán tự đọc và đối chiếu thủ công để phát hiện bất thường (như chi nhánh không có đơn, tỷ lệ hủy đơn tăng cao hoặc món có biên lợi nhuận tốt).
+* **Giải pháp Kỹ thuật:**
+  1. **Tích hợp `@google/genai` với Multi-Model Fallback:** `AiAnalyticsService` đọc `GEMINI_API_KEY` từ biến môi trường, ưu tiên model tốc độ cao `gemini-3.5-flash-lite` và tự động chuyển dự phòng sang `gemini-3.1-flash-lite` → `gemini-3.8-flash` nếu gặp tình trạng cao tải tạm thời (503), đồng thời có bộ phân tích dự phòng cục bộ nếu chưa cấu hình khóa API.
+  2. **Tối ưu Chi phí & Độ trễ bằng Cache (`ai_report_cache`):** Lưu cache kết quả JSON phân tích theo khóa `(branchId, startDate, endDate)` trong 6 giờ trên Neon `reporting_db` (không lưu cache các lỗi tạm thời), hỗ trợ `forceRefresh: true` khi người dùng bấm *"Phân tích lại"* (timeout Axios riêng 60 giây).
+  3. **Trải nghiệm AI 2 Tầng (`AiReportAssistant.tsx`):** Khung **✨ AI Phân tích & Đề xuất Vận hành** ngay đầu trang Báo cáo (Điểm sáng, Cảnh báo rủi ro, 3 Gợi ý hành động) và **AI Copilot Drawer** chat nhiều lượt với 4 câu hỏi gợi ý nhanh gắn trực tiếp ngữ cảnh số liệu của kỳ đang xem.

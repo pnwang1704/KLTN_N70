@@ -608,6 +608,46 @@ WebSocket Server chạy trên `order-service` (Port `3004`) phụ trách đẩy 
 | `ITEM_READY` | Server -> POS Web | `branch_${branchId}` | Phát khi Đầu bếp bấm "Hoàn thành" một món trên KDS. POS Web hiển thị Toast thông báo nổi và lưu vào danh sách thông báo (Notification Dropdown). |
 | `order:paid` | Server -> POS Web | `branch_${branchId}` | Phát khi đơn hàng nhận được thanh toán thành công từ Webhook PayOS hoặc quẹt thẻ. POS Web lập tức đóng modal thanh toán và kích hoạt in hóa đơn. |
 | `table:completed` | Server -> Customer & POS Web | `branch_${branchId}` | Phát khi thu ngân hoàn tất thanh toán cho bàn. Payload: `{ branchId, tableId, orderId, orderIds }`. Customer Web tự động đóng modal tra cứu món và reset bàn; POS Web chuyển trạng thái bàn sang Bàn trống. |
+| `orderUpdated` | Server -> POS & KDS Web | `branch_${branchId}` | Phát khi thu ngân sửa món, thay đổi số lượng, ghi chú hoặc đổi bàn trên đơn đang phục vụ. |
+| `orderCancelled` | Server -> POS & KDS Web | `branch_${branchId}` | Phát khi thu ngân hủy đơn chưa thanh toán (`CANCELLED`) hoặc Void hóa đơn (`VOIDED`), giúp KDS gỡ thẻ đơn và sơ đồ bàn giải phóng bàn tức thời. |
+
+---
+
+## 4.5. Branch Service API (`/branches`) — Quản lý Chuỗi Đa Chi nhánh
+
+Được proxy qua `api-gateway` (Port `3000`) tới `branch-service` (HTTP Port `3003` & RabbitMQ `branch_queue`, kết nối Neon `branch_db`).
+
+| Method | Endpoint | Quyền | Mô tả |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/branches` | `@Public()` | Lấy danh sách toàn bộ chi nhánh kèm thông tin địa chỉ, hotline, giờ mở cửa, Wi-Fi in bill và danh sách bàn. |
+| `GET` | `/branches/:id` | `@Public()` | Lấy chi tiết 1 chi nhánh theo `id` (dùng cho `customer-web` khi quét QR). |
+| `POST` | `/branches` | `ADMIN`, `MANAGER` | Tạo chi nhánh mới (`code`, `name`, `address`, `phone`, `openTime`, `closeTime`, `wifiName`, `wifiPassword`, `isActive`). Tự động khởi tạo 6 bàn mẫu. |
+| `PATCH` / `PUT` | `/branches/:id` | `ADMIN`, `MANAGER` | Cập nhật thông tin chi nhánh và cấu hình Wi-Fi in hóa đơn. |
+| `DELETE` | `/branches/:id` | `ADMIN` | Xóa chi nhánh và toàn bộ bàn trực thuộc. |
+| `GET` | `/branches/:id/tables` | `@Public()` | Lấy danh sách bàn ăn của chi nhánh (`tableNumber`, `name`, `area`, `capacity`, `status`). |
+| `POST` | `/branches/:id/tables` | `ADMIN`, `MANAGER` | Thêm bàn mới vào chi nhánh. |
+| `PATCH` | `/branches/:id/tables/:tableId` | `ADMIN`, `MANAGER` | Sửa tên bàn, khu vực, sức chứa hoặc trạng thái (`AVAILABLE` / `OCCUPIED`). |
+| `DELETE` | `/branches/:id/tables/:tableId` | `ADMIN`, `MANAGER` | Xóa bàn khỏi chi nhánh. |
+
+---
+
+## 4.6. Reporting & AI Analytics Service API (`/reports`)
+
+Được proxy qua `api-gateway` (Port `3000`, yêu cầu quyền `ADMIN` hoặc `MANAGER`) tới `reporting-service` (HTTP Port `3005` & RabbitMQ `reporting_queue`, kết nối Neon `reporting_db` & Google Gemini API).
+
+Tất cả các endpoint `GET` hỗ trợ tham số lọc: `?branchId=ALL|<id>&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD`.
+
+| Method | Endpoint | Mô tả |
+| :--- | :--- | :--- |
+| `GET` | `/reports/overview` | Tổng hợp KPI: `netRevenue`, `totalOrders`, `aov`, `estimatedCogs` (tính từ BOM), `grossProfit`, `grossMarginPercent`, `voidedCount`, `voidedAmount`. Tự động lưu snapshot vào `report_snapshots`. |
+| `GET` | `/reports/revenue-chart` | Chuỗi dữ liệu doanh thu, giá vốn & lợi nhuận theo từng ngày (hoặc theo từng khung giờ 06:00–23:00 nếu lọc trong 1 ngày). |
+| `GET` | `/reports/payment-methods` | Cơ cấu doanh thu, số lượng đơn và tỷ lệ % theo phương thức thanh toán (`CASH`, `TRANSFER`, `QR`, `CARD`). |
+| `GET` | `/reports/top-products` | Top 10 món ăn/đồ uống bán chạy nhất kèm số lượng bán, doanh thu, giá vốn và lợi nhuận gộp. |
+| `GET` | `/reports/peak-hours` | Thống kê lượng đơn hàng và doanh thu theo từng khung giờ từ `06h-07h` đến `23h-24h`. |
+| `GET` | `/reports/branches-comparison` | So sánh doanh thu, lợi nhuận gộp, số đơn, AOV, số đơn hủy và tỷ lệ hủy (`cancelRate`) giữa các chi nhánh. |
+| `GET` | `/reports/export-orders` | Trả về danh sách chi tiết đơn hàng (kèm giá vốn & lợi nhuận) để `pos-web` xuất file Excel `.xlsx`. |
+| `POST` | `/reports/ai-summary` | Body: `{ branchId, startDate, endDate, forceRefresh? }`. Gọi Google Gemini (`@google/genai`) phân tích số liệu kỳ lọc, trả về `{ overview, highlights[], warnings[], actionableTips[], source, model }`. Cache kết quả 6 giờ trong bảng `ai_report_cache`. |
+| `POST` | `/reports/ai-chat` | Body: `{ question, branchId, startDate, endDate, history? }`. Trợ lý AI Copilot đính kèm toàn bộ ngữ cảnh số liệu kỳ lọc để trả lời câu hỏi của chủ quán bằng tiếng Việt có dẫn chứng con số cụ thể. |
 
 ---
 
