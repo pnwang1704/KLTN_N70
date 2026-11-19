@@ -9,6 +9,7 @@ import { OrderHistory } from './components/OrderHistory';
 import { OrderManagement } from './components/OrderManagement';
 import { InventoryManagement } from './components/InventoryManagement';
 import { BranchManagement, type BranchItem } from './components/BranchManagement';
+import { ReportsDashboard } from './components/ReportsDashboard';
 import { ShiftSelectModal, type ShiftSession } from './components/ShiftSelectModal';
 import { ShiftSummaryModal } from './components/ShiftSummaryModal';
 import { ExpenseModal } from './components/ExpenseModal';
@@ -23,7 +24,7 @@ import type { Product } from './types';
 
 function App() {
   const [user, setUser] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'POS' | 'VOID_BILL' | 'HISTORY' | 'INVENTORY' | 'BRANCHES'>('POS');
+  const [activeTab, setActiveTab] = useState<'POS' | 'VOID_BILL' | 'HISTORY' | 'INVENTORY' | 'BRANCHES' | 'REPORTS'>('POS');
   const [branches, setBranches] = useState<BranchItem[]>([]);
   const [activeBranchId, setActiveBranchId] = useState<string>(
     () => localStorage.getItem('pos_active_branch_id') || '1'
@@ -209,6 +210,15 @@ function App() {
               setActiveTab('POS');
             }}
             onBranchesChanged={fetchBranches}
+          />
+        )}
+
+      {activeTab === 'REPORTS' &&
+        (user?.role === 'ADMIN' || user?.role === 'MANAGER') && (
+          <ReportsDashboard
+            activeBranchId={branchId}
+            branches={branches}
+            user={user}
           />
         )}
 
