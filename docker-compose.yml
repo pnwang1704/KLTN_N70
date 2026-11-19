@@ -250,19 +250,22 @@ services:
     networks:
       - app-network
 
-  # Uncomment when service implementation is ready
-  # reporting-service:
-  #   build:
-  #     context: ./services/reporting-service
-  #   container_name: fnb_reporting_service
-  #   environment:
-  #     - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
-  #     - DATABASE_URL=postgres://postgres:password@postgres-reporting:5432/reporting_db
-  #   depends_on:
-  #     rabbitmq:
-  #       condition: service_healthy
-  #   networks:
-  #     - app-network
+  reporting-service:
+    build:
+      context: ./services/reporting-service
+    container_name: fnb_reporting_service
+    ports:
+      - '3005:3005'
+    environment:
+      - PORT=3005
+      - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
+      - DATABASE_URL=${REPORTING_DATABASE_URL}
+      - DATABASE_SSL=true
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - app-network
 
   # ==========================================
   # FRONTEND APPS

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wifi, WifiOff, LogOut, Bell, Clock, Menu, Store, History, BarChart3, Receipt, Warehouse, Users, X, Check, FileText, QrCode, FileEdit, Building2 } from 'lucide-react';
+import { Wifi, WifiOff, LogOut, Bell, Clock, Menu, Store, History, BarChart3, Receipt, Warehouse, Users, X, Check, FileText, QrCode, FileEdit, Building2, TrendingUp } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { NotificationItem } from '../hooks/useSocket';
 import type { ShiftSession } from './ShiftSelectModal';
@@ -482,6 +482,26 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="pt-4 pb-1 px-3 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                     Quản trị hệ thống
                   </div>
+
+                  {/* Báo cáo & Thống kê */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('REPORTS');
+                      setIsDrawerOpen(false);
+                    }}
+                    className={cn(
+                      "w-full px-3.5 py-2.5 rounded-xl flex items-center gap-3 text-left text-sm transition-all cursor-pointer",
+                      activeTab === 'REPORTS'
+                        ? "bg-blue-50 text-blue-700 font-bold border border-blue-200"
+                        : "text-zinc-700 hover:bg-blue-50 hover:text-blue-700 font-medium"
+                    )}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-700 flex items-center justify-center shrink-0 border border-blue-200">
+                      <TrendingUp size={16} />
+                    </div>
+                    <span className="flex-1">Báo cáo & Thống kê</span>
+                  </button>
 
                   {/* Quản lý Chi nhánh */}
                   <button

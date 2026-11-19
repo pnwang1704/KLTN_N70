@@ -13,6 +13,7 @@ import { PaymentController, WebhookController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { ProductController } from './product.controller';
 import { BranchController } from './branch.controller';
+import { ReportController } from './report.controller';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ClientsModule, Transport } from '@nestjs/microservices';
@@ -104,6 +105,7 @@ import { ClientsModule, Transport } from '@nestjs/microservices';
     WebhookController,
     ProductController,
     BranchController,
+    ReportController,
   ],
   providers: [
     AppService,
