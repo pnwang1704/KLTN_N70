@@ -1,20 +1,38 @@
 import { useState, useEffect } from 'react';
 import api from './lib/axios';
-import { Header } from './components/Header';
+import { Header, type KdsBranchItem } from './components/Header';
 import { OrderGrid } from './components/OrderGrid';
 import { LoginScreen } from './components/LoginScreen';
 import { useSocket } from './hooks/useSocket';
 
 function App() {
   const [user, setUser] = useState<any>(null);
+  const [branches, setBranches] = useState<KdsBranchItem[]>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(
+    () => localStorage.getItem('kds_branch_id') || '1'
+  );
 
   useEffect(() => {
     // Check if user is already logged in
     const storedUser = localStorage.getItem('kds_user');
     const token = localStorage.getItem('kds_token');
     if (storedUser && token) {
-      setUser(JSON.parse(storedUser));
+      const parsed = JSON.parse(storedUser);
+      setUser(parsed);
+      if (parsed?.branchId && !localStorage.getItem('kds_branch_id')) {
+        setSelectedBranchId(String(parsed.branchId));
+      }
     }
+
+    // Fetch branches for KDS selector
+    api
+      .get('/branches')
+      .then((res) => {
+        if (Array.isArray(res.data) && res.data.length > 0) {
+          setBranches(res.data);
+        }
+      })
+      .catch((err) => console.warn('Không tải được danh sách chi nhánh cho KDS:', err));
 
     // Listen for unauthorized event from Axios interceptor
     const handleUnauthorized = () => {
@@ -24,9 +42,14 @@ function App() {
     return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
   }, []);
 
-  const branchId = user?.branchId || '1';
+  const branchId = selectedBranchId || user?.branchId || '1';
   const [filter, setFilter] = useState('ALL');
   const { isConnected, orders, updateItemStatusState } = useSocket(branchId);
+
+  const handleChangeBranch = (newBranchId: string) => {
+    setSelectedBranchId(String(newBranchId));
+    localStorage.setItem('kds_branch_id', String(newBranchId));
+  };
 
   const handleUpdateItemStatus = async (orderId: string, itemId: string, status: string) => {
     try {
@@ -56,6 +79,9 @@ function App() {
         isConnected={isConnected}
         filter={filter}
         setFilter={setFilter}
+        branches={branches}
+        selectedBranchId={branchId}
+        onChangeBranch={handleChangeBranch}
       />
       <main className="flex-1 bg-zinc-950 overflow-y-auto">
         <OrderGrid 

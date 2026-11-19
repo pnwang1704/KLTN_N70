@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import api from '../lib/axios';
 import { detectSingleFaceDescriptor } from '../lib/faceApiUtil';
+import type { BranchItem } from './BranchManagement';
 
 export interface SystemUser {
   id: string;
@@ -67,6 +68,8 @@ interface TimesheetModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: any;
+  branchId?: string;
+  branches?: BranchItem[];
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -80,7 +83,22 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
   isOpen,
   onClose,
   user,
+  branchId,
+  branches = [],
 }) => {
+  const effectiveBranchId = String(branchId || user?.branchId || '1');
+  const [localBranches, setLocalBranches] = useState<BranchItem[]>(branches);
+  const branchList = branches.length > 0 ? branches : localBranches;
+
+  const getBranchLabel = (bId?: string | null) => {
+    if (!bId) return 'Toàn chuỗi';
+    const found = branchList.find((b) => String(b.id) === String(bId));
+    if (found) {
+      return `${found.code ? `${found.code} - ` : ''}${found.name}`;
+    }
+    return `Chi nhánh ${bId}`;
+  };
+
   const [activeTab, setActiveTab] = useState<'timesheet' | 'employees' | 'users'>('timesheet');
 
   // Timesheet Tab State
@@ -121,7 +139,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
     fullName: '',
     role: 'WAITER',
     pinCode: '1234',
-    branchId: user?.branchId || '1',
+    branchId: effectiveBranchId,
   });
   const [savingEmployee, setSavingEmployee] = useState<boolean>(false);
 
@@ -135,7 +153,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
     username: '',
     password: '',
     role: user?.role === 'MANAGER' ? 'CASHIER' : 'MANAGER',
-    branchId: user?.branchId || '1',
+    branchId: effectiveBranchId,
   });
   const [savingUser, setSavingUser] = useState<boolean>(false);
   const [confirmToggleUser, setConfirmToggleUser] = useState<{
@@ -169,7 +187,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
     setLoadingAttendances(true);
     api.get('/attendances/timesheet', {
       params: {
-        branchId: user?.branchId || '1',
+        branchId: effectiveBranchId,
         fromDate: filterFromDate,
         toDate: filterToDate,
         employeeId: filterEmployeeId || undefined,
@@ -189,7 +207,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
   const fetchEmployees = () => {
     setLoadingEmployees(true);
     api.get('/employees', {
-      params: { branchId: user?.branchId || '1' },
+      params: { branchId: effectiveBranchId },
     })
       .then(res => {
         setEmployees(Array.isArray(res.data) ? res.data : []);
@@ -205,7 +223,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
   const fetchUsers = () => {
     setLoadingUsers(true);
     api.get('/auth/users', {
-      params: { branchId: user?.role === 'MANAGER' ? user.branchId : '' },
+      params: { branchId: user?.role === 'MANAGER' ? effectiveBranchId : '' },
     })
       .then(res => {
         setUsers(Array.isArray(res.data) ? res.data : []);
@@ -222,7 +240,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
     setLoadingNextCode(true);
     try {
       const res = await api.get('/employees/next-code', {
-        params: { branchId: user?.branchId || '1' },
+        params: { branchId: effectiveBranchId },
       });
       if (res.data?.nextCode) {
         setNextEmployeeCode(res.data.nextCode);
@@ -250,11 +268,21 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
 
   useEffect(() => {
     if (!isOpen) return;
+    if (branches.length === 0) {
+      api
+        .get('/branches')
+        .then((res) => {
+          if (Array.isArray(res.data) && res.data.length > 0) {
+            setLocalBranches(res.data);
+          }
+        })
+        .catch(() => {});
+    }
     fetchAttendances();
     fetchEmployees();
     fetchUsers();
     fetchNextEmployeeCode();
-  }, [isOpen, filterFromDate, filterToDate, filterEmployeeId]);
+  }, [isOpen, effectiveBranchId, filterFromDate, filterToDate, filterEmployeeId]);
 
   // Handle Create System User
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -273,7 +301,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
         username: '',
         password: '',
         role: user?.role === 'MANAGER' ? 'CASHIER' : 'MANAGER',
-        branchId: user?.branchId || '1',
+        branchId: effectiveBranchId,
       });
       fetchUsers();
     } catch (err: any) {
@@ -545,7 +573,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                 </span>
               </div>
               <p className="text-blue-100 text-xs mt-0.5">
-                Chấm công tự động, hồ sơ sinh trắc học AI & tài khoản hệ thống
+                {getBranchLabel(effectiveBranchId)} • Chấm công tự động, hồ sơ sinh trắc học AI & tài khoản hệ thống
               </p>
             </div>
           </div>
@@ -825,7 +853,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                     fullName: '',
                     role: 'WAITER',
                     pinCode: '1234',
-                    branchId: user?.branchId || '1',
+                    branchId: effectiveBranchId,
                   });
                   setIsEmployeeFormOpen(true);
                 }}
@@ -855,7 +883,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 text-xs">
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <label className="block font-bold text-zinc-700">Mã nhân viên *</label>
@@ -930,6 +958,28 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       }
                       className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-mono font-bold text-zinc-800 focus:outline-none focus:border-blue-500"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block font-bold text-zinc-700 mb-1">Chi nhánh</label>
+                    <select
+                      value={employeeFormData.branchId}
+                      onChange={e =>
+                        setEmployeeFormData({ ...employeeFormData, branchId: e.target.value })
+                      }
+                      disabled={user?.role !== 'ADMIN'}
+                      className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-blue-500 disabled:opacity-60 cursor-pointer"
+                    >
+                      {branchList.length > 0 ? (
+                        branchList.map((b) => (
+                          <option key={b.id} value={String(b.id)}>
+                            {b.code ? `${b.code} - ` : ''}{b.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={effectiveBranchId}>Chi nhánh {effectiveBranchId}</option>
+                      )}
+                    </select>
                   </div>
                 </div>
 
@@ -1102,7 +1152,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       username: '',
                       password: '',
                       role: user?.role === 'MANAGER' ? 'CASHIER' : 'MANAGER',
-                      branchId: user?.branchId || '1',
+                      branchId: effectiveBranchId,
                     });
                     setIsUserFormOpen(true);
                   }}
@@ -1196,9 +1246,18 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                       disabled={user?.role !== 'ADMIN'}
                       className="w-full px-3 py-1.5 bg-white border border-zinc-200 rounded-xl font-bold text-zinc-800 focus:outline-none focus:border-blue-500 disabled:opacity-60 cursor-pointer"
                     >
-                      <option value="1">Chi nhánh 1</option>
-                      <option value="2">Chi nhánh 2</option>
-                      <option value="3">Chi nhánh 3</option>
+                      {userFormData.role === 'ADMIN' && (
+                        <option value="">Toàn chuỗi (Admin tổng)</option>
+                      )}
+                      {branchList.length > 0 ? (
+                        branchList.map((b) => (
+                          <option key={b.id} value={String(b.id)}>
+                            {b.code ? `${b.code} - ` : ''}{b.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value={effectiveBranchId}>Chi nhánh {effectiveBranchId}</option>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -1262,7 +1321,7 @@ export const TimesheetModal: React.FC<TimesheetModalProps> = ({
                           </span>
                         </td>
                         <td className="py-3 px-4 font-medium text-zinc-600">
-                          {u.branchId ? `Chi nhánh ${u.branchId}` : 'Toàn chuỗi'}
+                          {getBranchLabel(u.branchId)}
                         </td>
                         <td className="py-3 px-4 text-center">
                           {u.isActive ? (

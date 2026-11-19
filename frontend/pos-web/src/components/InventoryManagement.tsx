@@ -71,7 +71,7 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
     try {
       const [ingRes, stockRes, lowStockRes, txRes, recRes, prodRes] =
         await Promise.allSettled([
-          api.get('/inventory/ingredients'),
+          api.get(`/inventory/ingredients?branchId=${branchId}`),
           api.get(`/inventory/stocks/${branchId}`),
           api.get(`/inventory/stocks/${branchId}/low`),
           api.get(`/inventory/logs?branchId=${branchId}&limit=100`),
@@ -109,8 +109,8 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
 
     const socket = io(
       import.meta.env.VITE_SOCKET_URL ||
-        import.meta.env.VITE_API_GATEWAY_URL ||
-        'http://localhost:3000',
+      import.meta.env.VITE_API_GATEWAY_URL ||
+      'http://localhost:3000',
       { transports: ['websocket', 'polling'] },
     );
     socket.emit('joinBranchRoom', String(branchId));
@@ -535,8 +535,8 @@ export const InventoryManagement: React.FC<{ branchId: string }> = ({ branchId }
                           isOut
                             ? 'text-red-600'
                             : isLow
-                            ? 'text-amber-600'
-                            : 'text-zinc-900',
+                              ? 'text-amber-600'
+                              : 'text-zinc-900',
                         )}
                       >
                         {item.quantity.toLocaleString('vi-VN')}

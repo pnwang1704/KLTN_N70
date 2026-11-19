@@ -14,6 +14,7 @@ export const useSocket = (branchId: string) => {
 
   useEffect(() => {
     if (!branchId) return;
+    setOrders([]);
 
     const newSocket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
@@ -21,7 +22,7 @@ export const useSocket = (branchId: string) => {
     
     newSocket.on('connect', () => {
       setIsConnected(true);
-      newSocket.emit('joinBranchRoom', branchId);
+      newSocket.emit('joinBranchRoom', `branch_${String(branchId).replace(/^branch_/, '')}`);
     });
 
     newSocket.on('disconnect', () => {

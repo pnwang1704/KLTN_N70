@@ -105,7 +105,11 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({ orderId, orderData, 
   useEffect(() => {
     const userStr = localStorage.getItem('pos_user');
     const user = userStr ? JSON.parse(userStr) : null;
-    const branchId = user?.branchId || 1;
+    const branchId =
+      orderDataRef.current?.branchId ||
+      localStorage.getItem('pos_active_branch_id') ||
+      user?.branchId ||
+      '1';
     const socketUrl =
       import.meta.env.VITE_SOCKET_URL ||
       import.meta.env.VITE_API_GATEWAY_URL ||

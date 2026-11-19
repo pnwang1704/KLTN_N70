@@ -5,6 +5,7 @@ import { formatTableBadge } from '../hooks/useTableSession';
 
 interface HeaderProps {
   branchId: string;
+  branchName?: string;
   tableId: string;
   onOpenCart: () => void;
   onOpenActiveOrders?: () => void;
@@ -14,6 +15,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = ({
   branchId,
+  branchName,
   tableId,
   onOpenCart,
   onOpenActiveOrders,
@@ -28,8 +30,10 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center justify-between px-4 py-3">
         <div>
           <h1 className="text-xl font-black text-orange-600 tracking-tight">N70 Cafe</h1>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[11px] text-zinc-500 font-medium">CN {branchId || '1'}</span>
+          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+            <span className="text-[11px] text-zinc-600 font-semibold max-w-[160px] truncate">
+              {branchName || `Chi nhánh ${branchId || '1'}`}
+            </span>
             <span className="text-zinc-300 text-xs">•</span>
             {tableBadge ? (
               <button

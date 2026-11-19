@@ -1,8 +1,9 @@
 import React from 'react';
-import { Wifi, WifiOff, LogOut, Bell, Clock, Menu, Store, History, BarChart3, Receipt, Warehouse, Users, X, Check, FileText, QrCode, FileEdit } from 'lucide-react';
+import { Wifi, WifiOff, LogOut, Bell, Clock, Menu, Store, History, BarChart3, Receipt, Warehouse, Users, X, Check, FileText, QrCode, FileEdit, Building2 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { NotificationItem } from '../hooks/useSocket';
 import type { ShiftSession } from './ShiftSelectModal';
+import type { BranchItem } from './BranchManagement';
 import { useHeldOrders } from '../context/HeldOrdersContext';
 
 interface HeaderProps {
@@ -11,6 +12,9 @@ interface HeaderProps {
   onLogout: () => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  branches?: BranchItem[];
+  activeBranchId?: string;
+  onChangeBranch?: (branchId: string) => void;
   notifications?: NotificationItem[];
   onMarkAsRead?: () => void;
   currentShift?: ShiftSession | null;
@@ -30,6 +34,9 @@ export const Header: React.FC<HeaderProps> = ({
   onLogout, 
   activeTab, 
   setActiveTab, 
+  branches = [],
+  activeBranchId = '1',
+  onChangeBranch,
   notifications = [], 
   onMarkAsRead,
   currentShift,
@@ -42,6 +49,8 @@ export const Header: React.FC<HeaderProps> = ({
   pendingQrCount = 0,
   onOpenQrApproval,
 }) => {
+  const activeBranch = branches.find((b) => String(b.id) === String(activeBranchId));
+  const canSwitchBranch = user?.role === 'ADMIN' || user?.role === 'MANAGER' || !user?.branchId;
   const [showNotifications, setShowNotifications] = React.useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
@@ -159,8 +168,31 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
         </div>
 
-        {/* Right Section: Kiosk Button, Connection, Notifications, Logout */}
-        <div className="flex items-center gap-3">
+        {/* Right Section: Branch Switcher, Kiosk Button, Connection, Notifications, Logout */}
+        <div className="flex items-center gap-2.5">
+          {/* Branch Switcher */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50/90 border border-indigo-200 rounded-xl text-xs font-bold text-indigo-900 shadow-2xs">
+            <Building2 size={14} className="text-indigo-600 shrink-0" />
+            {canSwitchBranch && branches.length > 0 && onChangeBranch ? (
+              <select
+                value={String(activeBranchId)}
+                onChange={(e) => onChangeBranch(e.target.value)}
+                aria-label="Chọn chi nhánh làm việc"
+                className="bg-transparent text-xs font-bold text-indigo-900 focus:outline-none cursor-pointer pr-1 max-w-[190px] truncate"
+              >
+                {branches.map((b) => (
+                  <option key={b.id} value={String(b.id)}>
+                    {b.code ? `${b.code} - ` : ''}{b.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="max-w-[170px] truncate">
+                {activeBranch?.name || `Chi nhánh ${activeBranchId}`}
+              </span>
+            )}
+          </div>
+
           {/* Quick 1-touch Attendance Kiosk Button */}
           <button 
             type="button"
@@ -295,7 +327,7 @@ export const Header: React.FC<HeaderProps> = ({
                     {user?.fullName || user?.username || 'Thu ngân'}
                   </h2>
                   <p className="text-xs text-blue-100 font-medium truncate mt-0.5">
-                    Chi nhánh {user?.branchId || 1}
+                    {activeBranch?.name || `Chi nhánh ${activeBranchId || 1}`}
                   </p>
                 </div>
               </div>
@@ -450,6 +482,26 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="pt-4 pb-1 px-3 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
                     Quản trị hệ thống
                   </div>
+
+                  {/* Quản lý Chi nhánh */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('BRANCHES');
+                      setIsDrawerOpen(false);
+                    }}
+                    className={cn(
+                      "w-full px-3.5 py-2.5 rounded-xl flex items-center gap-3 text-left text-sm transition-all cursor-pointer",
+                      activeTab === 'BRANCHES'
+                        ? "bg-blue-50 text-blue-700 font-bold border border-blue-200"
+                        : "text-zinc-700 hover:bg-blue-50 hover:text-blue-700 font-medium"
+                    )}
+                  >
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-700 flex items-center justify-center shrink-0 border border-indigo-200">
+                      <Building2 size={16} />
+                    </div>
+                    <span className="flex-1">Quản lý Chi nhánh</span>
+                  </button>
 
                   {/* Quản lý kho */}
                   <button
