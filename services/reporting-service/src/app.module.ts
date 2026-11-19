@@ -4,6 +4,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ReportingModule } from './reporting/reporting.module';
 import { ReportSnapshot } from './reporting/entities/report-snapshot.entity';
+import { AiReportCache } from './reporting/entities/ai-report-cache.entity';
 
 const dbUrl =
   process.env.DATABASE_URL ||
@@ -19,7 +20,7 @@ const isSsl =
     TypeOrmModule.forRoot({
       type: 'postgres',
       url: dbUrl,
-      entities: [ReportSnapshot],
+      entities: [ReportSnapshot, AiReportCache],
       synchronize: true,
       ssl: isSsl ? { rejectUnauthorized: false } : false,
       extra: isSsl ? { ssl: { rejectUnauthorized: false } } : undefined,

@@ -1,10 +1,18 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { ReportingService, type ReportFilterQuery } from './reporting.service';
+import {
+  AiAnalyticsService,
+  type AiSummaryRequest,
+  type AiChatRequest,
+} from './ai-analytics.service';
 
 @Controller('reports')
 export class ReportingController {
-  constructor(private readonly reportingService: ReportingService) {}
+  constructor(
+    private readonly reportingService: ReportingService,
+    private readonly aiAnalyticsService: AiAnalyticsService,
+  ) {}
 
   // --- HTTP ENDPOINTS (Direct on port 3005) ---
   @Get('overview')
@@ -70,6 +78,16 @@ export class ReportingController {
     return this.reportingService.getExportOrders({ branchId, startDate, endDate });
   }
 
+  @Post('ai-summary')
+  getAiSummaryHttp(@Body() body: AiSummaryRequest) {
+    return this.aiAnalyticsService.generateAiSummary(body || {});
+  }
+
+  @Post('ai-chat')
+  getAiChatHttp(@Body() body: AiChatRequest) {
+    return this.aiAnalyticsService.chatWithAi(body || { question: '' });
+  }
+
   // --- RABBITMQ MESSAGE PATTERNS (Via API Gateway) ---
   @MessagePattern('report_overview')
   getOverviewRpc(@Payload() query: ReportFilterQuery) {
@@ -104,5 +122,15 @@ export class ReportingController {
   @MessagePattern('report_export_orders')
   getExportOrdersRpc(@Payload() query: ReportFilterQuery) {
     return this.reportingService.getExportOrders(query || {});
+  }
+
+  @MessagePattern('report_ai_summary')
+  getAiSummaryRpc(@Payload() body: AiSummaryRequest) {
+    return this.aiAnalyticsService.generateAiSummary(body || {});
+  }
+
+  @MessagePattern('report_ai_chat')
+  getAiChatRpc(@Payload() body: AiChatRequest) {
+    return this.aiAnalyticsService.chatWithAi(body || { question: '' });
   }
 }

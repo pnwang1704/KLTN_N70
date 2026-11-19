@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Query } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Post, Query } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { Roles } from './common/decorators/roles.decorator';
 
@@ -104,5 +104,34 @@ export class ReportController {
       startDate,
       endDate,
     });
+  }
+
+  @Roles('ADMIN', 'MANAGER')
+  @Post('ai-summary')
+  getAiSummary(
+    @Body()
+    body: {
+      branchId?: string;
+      startDate?: string;
+      endDate?: string;
+      forceRefresh?: boolean;
+    },
+  ) {
+    return this.reportingClient.send('report_ai_summary', body || {});
+  }
+
+  @Roles('ADMIN', 'MANAGER')
+  @Post('ai-chat')
+  getAiChat(
+    @Body()
+    body: {
+      question: string;
+      branchId?: string;
+      startDate?: string;
+      endDate?: string;
+      history?: Array<{ role: 'user' | 'model'; content: string }>;
+    },
+  ) {
+    return this.reportingClient.send('report_ai_chat', body || {});
   }
 }

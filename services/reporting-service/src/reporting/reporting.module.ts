@@ -2,14 +2,16 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ClientsModule, Transport } from '@nestjs/microservices';
 import { ReportSnapshot } from './entities/report-snapshot.entity';
+import { AiReportCache } from './entities/ai-report-cache.entity';
 import { ReportingService } from './reporting.service';
+import { AiAnalyticsService } from './ai-analytics.service';
 import { ReportingController } from './reporting.controller';
 
 const rmqUrl = process.env.RABBITMQ_URL || 'amqp://user:password@localhost:5672';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ReportSnapshot]),
+    TypeOrmModule.forFeature([ReportSnapshot, AiReportCache]),
     ClientsModule.register([
       {
         name: 'ORDER_SERVICE',
@@ -41,6 +43,6 @@ const rmqUrl = process.env.RABBITMQ_URL || 'amqp://user:password@localhost:5672'
     ]),
   ],
   controllers: [ReportingController],
-  providers: [ReportingService],
+  providers: [ReportingService, AiAnalyticsService],
 })
 export class ReportingModule {}

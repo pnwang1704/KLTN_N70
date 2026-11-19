@@ -261,6 +261,8 @@ services:
       - RABBITMQ_URL=amqp://user:password@rabbitmq:5672
       - DATABASE_URL=${REPORTING_DATABASE_URL}
       - DATABASE_SSL=true
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
     depends_on:
       rabbitmq:
         condition: service_healthy

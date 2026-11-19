@@ -33,6 +33,7 @@ import * as XLSX from 'xlsx';
 import api from '../lib/axios';
 import { formatCurrency, cn } from '../lib/utils';
 import type { BranchItem } from './BranchManagement';
+import { AiSummaryPanel, AiCopilotDrawer } from './AiReportAssistant';
 
 interface ReportsDashboardProps {
   activeBranchId: string;
@@ -380,7 +381,14 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({
       </div>
 
       {/* Main Scrollable Dashboard Body */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div className="flex-1 overflow-y-auto p-6 space-y-6 pb-20">
+        {/* AI SUMMARY & RECOMMENDATIONS PANEL */}
+        <AiSummaryPanel
+          branchId={selectedBranchId}
+          startDate={startDate}
+          endDate={endDate}
+        />
+
         {/* ROW 1: 4 KPI CARDS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {/* KPI 1: Net Revenue */}
@@ -749,6 +757,19 @@ export const ReportsDashboard: React.FC<ReportsDashboardProps> = ({
           </div>
         )}
       </div>
+
+      {/* Floating AI Copilot Chat Widget */}
+      <AiCopilotDrawer
+        branchId={selectedBranchId}
+        branchLabel={
+          selectedBranchId === 'ALL'
+            ? 'Tất cả chi nhánh'
+            : branches.find((b) => String(b.id) === String(selectedBranchId))?.name ||
+              `Chi nhánh ${selectedBranchId}`
+        }
+        startDate={startDate}
+        endDate={endDate}
+      />
     </div>
   );
 };

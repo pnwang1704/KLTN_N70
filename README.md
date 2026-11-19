@@ -77,6 +77,17 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
     1. *Tồn kho Nguyên liệu:* Theo dõi tồn kho thực tế, đơn giá vốn, cảnh báo sắp hết hàng và nút `+ Nhập thêm kho` (`PATCH /inventory/ingredients/:id/stock`).
     2. *Thiết lập Công thức (Định lượng món - BOM):* Chọn món ăn, thêm/xóa nguyên liệu định lượng, tự động tính nhẩm **Giá vốn (COGS)**, **Lãi gộp ước tính & % biên lợi nhuận** và lưu công thức (`PUT /inventory/recipes/:productId`).
     3. *Lịch sử Xuất - Nhập kho (`inventory_transactions`):* Ghi nhận realtime từng lượt **Xuất bán theo đơn (`ORDER_DEDUCT`)**, **Hoàn trả kho khi Hủy/Void đơn (`ORDER_RESTORE`)**, và **Nhập kho bổ sung (`MANUAL_IMPORT`)** với cơ chế Idempotency chống trừ/hoàn kho trùng lặp.
+- [x] **Quản lý Chuỗi Đa Chi nhánh (`branch-service` & Multi-Branch Architecture):**
+  - Microservice `branch-service` độc lập (HTTP port `3003` + RabbitMQ `branch_queue`) kết nối Neon `branch_db` (SSL) với 2 bảng `branches` và `branch_tables`, tự động seed 2 chi nhánh mẫu (*CN01 - Quận 1*, *CN02 - Bình Thạnh*) kèm 8 bàn/chi nhánh.
+  - **Cô lập dữ liệu theo `branchId`:** Socket.IO Gateway (`order-service`) chuẩn hóa room `branch_${branchId}` (tự động rời room cũ khi đổi chi nhánh); `inventory-service` quản lý và seed tồn kho nguyên liệu độc lập cho từng chi nhánh.
+  - **Frontend đa chi nhánh:** Thanh **Branch Switcher** trên Header `pos-web`, màn hình **Quản lý Chi nhánh & Sơ đồ Bàn** (`BranchManagement.tsx`), đồng bộ tên chi nhánh/địa chỉ/Wi-Fi lên hóa đơn in (`Receipt.tsx`), mã QR động luôn gắn cả `branchId` & `tableId`, đồng bộ danh sách chi nhánh vào **Quản lý Nhân sự & Bảng công** (`TimesheetModal.tsx`), hiển thị tên chi nhánh trên `customer-web` và bộ chọn chi nhánh trên `kds-web`.
+- [x] **Báo cáo & Thống kê Kinh doanh (`reporting-service` + Recharts + Xuất Excel `.xlsx`):**
+  - Microservice `reporting-service` độc lập (HTTP port `3005` + RabbitMQ `reporting_queue`) kết nối Neon `reporting_db` (`report_snapshots`, `ai_report_cache`), tổng hợp dữ liệu thời gian thực từ `order-service`, `inventory-service` (giá vốn BOM) và `branch-service`.
+  - Giao diện **Báo cáo & Thống kê** (`ReportsDashboard.tsx`) trong Menu chức năng `pos-web`: lọc theo chi nhánh (*Tất cả chi nhánh* / từng chi nhánh) & kỳ thời gian (*Hôm nay*, *7 ngày qua*, *Tháng này*, *Tùy chọn*), 4 thẻ KPI (Doanh thu thực thu, Lợi nhuận gộp & Giá vốn BOM, Tổng đơn & AOV, Đơn hủy/Void), biểu đồ Recharts (Xu hướng Doanh thu & Lợi nhuận, Cơ cấu PTTT Donut, Khung giờ cao điểm 06h–24h), bảng Top 10 món bán chạy, bảng So sánh hiệu suất chi nhánh và nút **Xuất báo cáo Excel (`.xlsx`)** nhiều sheet.
+- [x] **Trợ lý AI Phân tích Số liệu & AI Copilot Chat (Google Gemini API):**
+  - Tích hợp SDK `@google/genai` trong `reporting-service` với cơ chế tự động dự phòng chuỗi model (`gemini-3.5-flash-lite` → `gemini-3.1-flash-lite` → `gemini-3.8-flash`) và lưu cache 6 giờ trong bảng `ai_report_cache` (`reporting_db`).
+  - Khung **✨ AI Phân tích & Đề xuất Vận hành** (`POST /reports/ai-summary`) ngay đầu trang Báo cáo hiển thị Nhận xét tổng quan, Điểm sáng kinh doanh, Cảnh báo rủi ro và 3 Gợi ý hành động thực tế kèm nút *"Phân tích lại"*.
+  - Widget **Hỏi đáp AI về số liệu (AI Copilot)** (`POST /reports/ai-chat`) dạng Drawer chat nhiều lượt kèm 4 câu hỏi gợi ý nhanh, trả lời bằng tiếng Việt có dẫn chứng số liệu chính xác theo kỳ lọc.
 - [x] **Persistent Storage & Microservices:** Named Persistent Volumes cho 6 database PostgreSQL và RabbitMQ, đảm bảo dữ liệu luôn bền vững khi restart/rebuild container.
 - [x] **Cơ sở Dữ liệu Phân tán (Database-per-Service) & Đám mây Neon PostgreSQL:**
   - Tách biệt hoàn toàn các cơ sở dữ liệu PostgreSQL độc lập theo đúng chuẩn Microservices (`auth_db`, `product_db`, `order_db`, `inventory_db`, `branch_db`, `reporting_db`).
@@ -90,7 +101,7 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 ### Frontend Applications (`pos-web`, `customer-web`, `kds-web`)
 * **Core:** React 19, TypeScript, Vite
 * **Styling:** Tailwind CSS v4, Tailwind Merge, CLSX
-* **Icons & QR Generation:** Lucide React, `qrcode.react` (Render mã QR SVG độ nét cao cho tem bàn 80mm)
+* **Icons, Charts & Export:** Lucide React, `qrcode.react` (Render mã QR SVG cho tem bàn 80mm), **Recharts** (Biểu đồ Doanh thu, Lợi nhuận, Donut PTTT, Khung giờ cao điểm), **SheetJS (`xlsx`)** (Xuất báo cáo Excel nhiều sheet)
 * **AI & Computer Vision:** `@vladmandic/face-api` (^1.7.15) — Client-side Face Detection (SSD MobileNet V1), Face Landmarks (68 points), Face Recognition (128D embeddings vector), tính khoảng cách Euclid (Euclidean Distance).
 * **Networking & Realtime:** Axios (kèm header `ngrok-skip-browser-warning`), Socket.IO Client (^4.8.3)
 * **Web Server & Hosting:** Nginx Alpine (Multi-stage Docker builds) & Vercel Edge CDN (`vercel.json` SPA rewrites)
@@ -101,7 +112,7 @@ Dự án Hệ thống Quản lý Vận hành Bán hàng F&B (Food & Beverage) hi
 * **Message Broker:** RabbitMQ (RPC Request-Response patterns & Asynchronous Pub/Sub events)
 * **Realtime Server:** Socket.IO Server (Cổng 3004, phân tách Room theo từng `branchId`)
 * **Security & Auth:** Stateless JWT, Passport-JWT, Bcrypt, RBAC Guards (`RolesGuard`)
-* **Payment & Cloud Media Integration:** PayOS API SDK (VietQR động chuẩn Napas 247), **Cloudinary SDK (`cloudinary`, `multer`, `streamifier`)** lưu trữ ảnh thực đơn trên đám mây (`pos_n70/products`)
+* **Payment, AI & Cloud Media Integration:** PayOS API SDK (VietQR động chuẩn Napas 247), **Google Gemini API (`@google/genai`)** phân tích số liệu & AI Copilot Chat, **Cloudinary SDK (`cloudinary`, `multer`, `streamifier`)** lưu trữ ảnh thực đơn trên đám mây (`pos_n70/products`)
 * **DevOps & Containerization:** Docker, Docker Compose với Named Persistent Volumes
 
 ---
@@ -115,13 +126,15 @@ Toàn bộ hệ thống chạy ngầm trong một mạng nội bộ (`app-networ
 | **RabbitMQ Management** | RabbitMQ | `fnb_rabbitmq` | `15672` (UI), `5672` | 15672, 5672 | `rabbitmq_data` |
 | **API Gateway** | NestJS | `fnb_api_gateway` | **`3000`** | 3000 | - (Hỗ trợ REST API, Multipart Upload & WebSocket Proxy `/socket.io`) |
 | **Product Service** | NestJS | `fnb_product_service` | **`3002`** | 3002 | - (Kết nối Neon `product_db` & Cloudinary `pos_n70/products`) |
+| **Branch Service** | NestJS | `fnb_branch_service` | **`3003`** | 3003 | - (Kết nối Neon `branch_db`, CRUD Chi nhánh & Bàn) |
 | **Order Service (Socket)** | NestJS | `fnb_order_service` | **`3004`** | 3004 | - (Được proxy qua Gateway port 3000) |
+| **Reporting & AI Service** | NestJS | `fnb_reporting_service` | **`3005`** | 3005 | - (Kết nối Neon `reporting_db` & Google Gemini API) |
 | **Auth Database** | PostgreSQL | `fnb_postgres_auth` | `5432` | 5432 | `postgres_auth_data` |
 | **Product Database** | PostgreSQL | `fnb_postgres_product`| `5434` | 5432 | `postgres_product_data` |
 | **Order Database** | PostgreSQL | `fnb_postgres_order` | `5435` | 5432 | `postgres_order_data` |
 | **Inventory Database** | PostgreSQL| `fnb_postgres_inventory`| `5436` | 5432 | `postgres_inventory_data` |
-| **Branch DB** *(Pending)* | PostgreSQL | `fnb_postgres_branch` | `5437` | 5432 | `postgres_branch_data` |
-| **Reporting DB** *(Pending)*| PostgreSQL | `fnb_postgres_reporting`| `5438` | 5432 | `postgres_reporting_data` |
+| **Branch Database** | PostgreSQL | `fnb_postgres_branch` | `5437` | 5432 | `postgres_branch_data` |
+| **Reporting Database** | PostgreSQL | `fnb_postgres_reporting`| `5438` | 5432 | `postgres_reporting_data` |
 | **KDS Web** | React + Nginx | `fnb_kds_web` | **`5173`** | 80 | - |
 | **Customer QR Web** | React + Nginx | `fnb_customer_web` | **`5174`** | 80 | - |
 | **POS Web** | React + Nginx | `fnb_pos_web` | **`5175`** | 80 | - |
@@ -139,8 +152,8 @@ Dự án áp dụng mô hình **Database-per-Service**, mỗi Microservice sở 
 | **Tài khoản đăng nhập, Phân quyền hệ thống** | **`5432`** | **`auth_db`** | `users`, `roles` |
 | **Món ăn, Danh mục thực đơn, Topping** | **`5434`** | **`product_db`** | `products`, `categories`, `toppings` |
 | **Kho nguyên vật liệu, Định lượng, Xuất nhập** | **`5436`** | **`inventory_db`** | `ingredients`, `inventory_transactions`, `recipes` |
-| **Chi nhánh, Bàn ăn** | **`5437`** | **`branch_db`** | `branches`, `tables` |
-| **Báo cáo doanh thu & Thống kê** | **`5438`** | **`reporting_db`** | `revenue_reports`, `daily_summaries` |
+| **Chi nhánh, Bàn ăn** | **`5437`** | **`branch_db`** | `branches`, `branch_tables` |
+| **Báo cáo doanh thu, Thống kê & Cache AI** | **`5438`** | **`reporting_db`** | `report_snapshots`, `ai_report_cache` |
 
 > [!TIP]
 > **Hai chế độ kết nối Cơ sở Dữ liệu (Neon Cloud & Local Docker):**
